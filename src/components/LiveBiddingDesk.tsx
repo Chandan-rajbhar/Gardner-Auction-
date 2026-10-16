@@ -60,7 +60,7 @@ export const LiveBiddingDesk: React.FC<LiveBiddingDeskProps> = ({
                 {/* Lot Media Container */}
                 <div className="lot-card-media" onClick={() => onViewLot(lot)}>
                   <img src={lot.image} alt={lot.title} className="lot-img" />
-                  
+
                   {/* Overlay Badges */}
                   <div className="lot-badges-overlay">
                     <span className="lot-number-badge">
@@ -127,7 +127,7 @@ export const LiveBiddingDesk: React.FC<LiveBiddingDeskProps> = ({
                     onClick={() => onInstantBid(lot)}
                   >
                     <Zap size={15} />
-                    <span>⚡ INSTANT BID ${lot.nextBid.toLocaleString()}</span>
+                    <span>INSTANT BID ${lot.nextBid.toLocaleString()}</span>
                   </button>
                 </div>
               </div>

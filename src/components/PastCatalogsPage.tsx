@@ -23,6 +23,9 @@ import {
 } from 'lucide-react';
 import { PAST_AUCTIONS, ALL_PAST_LOTS } from '../data/pastCatalogsData';
 import type { PastAuction, PastLotItem } from '../data/pastCatalogsData';
+
+export { PAST_AUCTIONS, ALL_PAST_LOTS };
+export type { PastAuction, PastLotItem };
 import { PastAuctionDetailModal } from './PastAuctionDetailModal';
 import { PastLotDetailModal } from './PastLotDetailModal';
 import { ShadcnSelect } from './ui/ShadcnSelect';

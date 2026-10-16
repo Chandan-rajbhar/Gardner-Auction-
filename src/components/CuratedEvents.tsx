@@ -1,11 +1,11 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
-import { CURATED_EVENTS } from '../data/auctionData';
-import type { CuratedEvent } from '../data/auctionData';
+import { CURRENT_AUCTIONS } from '../data/currentAuctionData';
+import type { CurrentAuction } from '../data/currentAuctionData';
 
 interface CuratedEventsProps {
-  onEventClick: (event: CuratedEvent) => void;
-  onRequestCondition: (event: CuratedEvent) => void;
+  onEventClick: (event: CurrentAuction) => void;
+  onRequestCondition: (event: CurrentAuction) => void;
 }
 
 export const CuratedEvents: React.FC<CuratedEventsProps> = ({
@@ -33,7 +33,7 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
 
         {/* 3 Event Cards Grid */}
         <div className="events-grid">
-          {CURATED_EVENTS.map((event) => {
+          {CURRENT_AUCTIONS.map((event) => {
             const getBadgeClass = () => {
               if (event.badgeType === 'red') return 'badge-live-red';
               if (event.badgeType === 'green') return 'badge-status-green';
@@ -44,7 +44,14 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
               <div key={event.id} className="event-card">
                 {/* Event Image Box */}
                 <div className="event-card-media" onClick={() => onEventClick(event)}>
-                  <img src={event.image} alt={event.title} className="event-img" />
+                  <img
+                    src={event.image || '/images/hero_coin.jpg'}
+                    alt={event.title}
+                    className="event-img"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/images/hero_coin.jpg';
+                    }}
+                  />
                   
                   {/* Floating Badges */}
                   <div className="event-badges-overlay">

@@ -19,7 +19,7 @@ export const Hero: React.FC<HeroProps> = () => {
         {/* Left Column: Hero Copy & Credentials (Preserved Verbatim) */}
         <div className="hero-left-column">
           <div className="hero-est-badge">
-            <span className="gold-dash">——</span>
+
             <span className="badge-text">GARDNER AUCTION · EST. 1982</span>
           </div>
 

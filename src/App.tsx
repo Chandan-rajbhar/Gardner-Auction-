@@ -27,11 +27,13 @@ import { CatalogLotsPage } from './components/CatalogLotsPage';
 import { LotDetailPage } from './components/LotDetailPage';
 
 import {
-  SPOTLIGHT_LOT,
-  LIVE_LOTS,
-  CURATED_EVENTS
+  SPOTLIGHT_LOT
 } from './data/auctionData';
 import type { LotItem, CuratedEvent } from './data/auctionData';
+import {
+  CURRENT_AUCTIONS,
+  CURRENT_AUCTION_LOT_ITEMS
+} from './data/currentAuctionData';
 import { playBidSuccessSound } from './utils/sound';
 import {
   Bookmark,
@@ -69,7 +71,7 @@ export type AppRoute =
 export const App: React.FC = () => {
   // State: Lots & Live Data
   const [spotlightLot, setSpotlightLot] = useState<LotItem>(SPOTLIGHT_LOT);
-  const [liveLots, setLiveLots] = useState<LotItem[]>(LIVE_LOTS);
+  const [liveLots, setLiveLots] = useState<LotItem[]>(CURRENT_AUCTION_LOT_ITEMS);
   const [watchlist, setWatchlist] = useState<string[]>(['spotlight-104']);
 
   // Timers: seconds remaining map
@@ -77,7 +79,7 @@ export const App: React.FC = () => {
     const map: Record<string, number> = {
       [SPOTLIGHT_LOT.id]: SPOTLIGHT_LOT.timeRemainingSeconds
     };
-    LIVE_LOTS.forEach((l) => {
+    CURRENT_AUCTION_LOT_ITEMS.forEach((l) => {
       map[l.id] = l.timeRemainingSeconds;
     });
     return map;
@@ -168,6 +170,14 @@ export const App: React.FC = () => {
     if (clean.startsWith('auction?') || clean === 'auction') {
       const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
       const id = params.get('id') || '';
+      return { view: 'auction-details', auctionId: id };
+    }
+    if (clean.startsWith('past-auction-')) {
+      const id = clean.split(/[?#]/)[0];
+      return { view: 'auction-details', auctionId: id };
+    }
+    if (pathname.startsWith('/past-auction-')) {
+      const id = pathname.substring(1).split(/[?#]/)[0];
       return { view: 'auction-details', auctionId: id };
     }
 
@@ -380,20 +390,23 @@ export const App: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Filtered & Sorted Curated Events
+  // Filtered & Sorted Current Auction Events (from shared Current Auctions data source)
   const filteredEvents = useMemo(() => {
-    let result = CURATED_EVENTS.filter((event) => {
+    let result = CURRENT_AUCTIONS.filter((event) => {
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !q ||
         event.title.toLowerCase().includes(q) ||
         event.description.toLowerCase().includes(q) ||
-        event.typeTag.toLowerCase().includes(q);
+        event.typeTag.toLowerCase().includes(q) ||
+        (event.category && event.category.toLowerCase().includes(q)) ||
+        (event.location && event.location.toLowerCase().includes(q));
 
       const matchesCategory =
         selectedCategory === 'all' ||
         event.typeTag.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-        event.title.toLowerCase().includes(selectedCategory.toLowerCase());
+        event.title.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+        (event.category && event.category.toLowerCase().includes(selectedCategory.toLowerCase()));
 
       return matchesSearch && matchesCategory;
     });
@@ -648,17 +661,26 @@ export const App: React.FC = () => {
                           return 'badge-gold-gold';
                         };
 
+                        const handleEventNavigate = () => {
+                          window.location.hash = event.detailUrl || '#auctions';
+                        };
+
                         return (
                           <div key={event.id} className="event-card">
                             <div
                               className="event-card-media"
-                              onClick={() => {
-                                window.location.hash = '#auctions';
-                              }}
+                              onClick={handleEventNavigate}
                               role="button"
                               tabIndex={0}
                             >
-                              <img src={event.image} alt={event.title} className="event-img" />
+                              <img
+                                src={event.image || '/images/hero_coin.jpg'}
+                                alt={event.title}
+                                className="event-img"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = '/images/hero_coin.jpg';
+                                }}
+                              />
                               <div className="event-badges-overlay">
                                 <span className={`event-badge-pill ${getBadgeClass()}`}>{event.badge}</span>
                                 <span className="event-lots-pill">{event.lotsCount} LOTS</span>
@@ -669,9 +691,7 @@ export const App: React.FC = () => {
                               <div className="event-type-tag">{event.typeTag}</div>
                               <h3
                                 className="event-title"
-                                onClick={() => {
-                                  window.location.hash = '#auctions';
-                                }}
+                                onClick={handleEventNavigate}
                                 role="button"
                                 tabIndex={0}
                               >
@@ -690,9 +710,7 @@ export const App: React.FC = () => {
                                     <button
                                       type="button"
                                       className="btn-event-dark"
-                                      onClick={() => {
-                                        window.location.hash = '#auctions';
-                                      }}
+                                      onClick={handleEventNavigate}
                                     >
                                       <span>{event.buttonText}</span>
                                     </button>
@@ -701,9 +719,7 @@ export const App: React.FC = () => {
                                     <button
                                       type="button"
                                       className="btn-event-gold"
-                                      onClick={() => {
-                                        window.location.hash = '#auctions';
-                                      }}
+                                      onClick={handleEventNavigate}
                                     >
                                       <span>{event.buttonText}</span>
                                     </button>
@@ -976,6 +992,7 @@ export const App: React.FC = () => {
 
           {/* 5. Past Auctions Section: Catalogs & Realized Hammer Prices */}
           <PastAuctionsSection
+            onNavigate={handleNavigate}
             onInquirePast={(title) => {
               addToast('info', 'Catalog Archive Request', `Archive details and realized price sheet requested for ${title}.`);
             }}
