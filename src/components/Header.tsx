@@ -1,157 +1,213 @@
 import React, { useState } from 'react';
-import { Search, Bookmark, User, ShieldCheck, Phone, Mail, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 interface HeaderProps {
-  watchlistCount: number;
-  onOpenWatchlist: () => void;
-  onSearch: (term: string) => void;
-  onOpenAuth: () => void;
+  currentPath?: string;
+  activeSection?: string;
+  onNavigate?: (path: string) => void;
+  onOpenLogin?: () => void;
+  onOpenSignUp?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  watchlistCount,
-  onOpenWatchlist,
-  onSearch,
-  onOpenAuth
+  currentPath,
+  activeSection,
+  onNavigate,
+  onOpenLogin,
+  onOpenSignUp
 }) => {
-  const [navSearch, setNavSearch] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  // Determine active nav item based on route
+  const isHome =
+    currentPath === '/' ||
+    activeSection === 'home' ||
+    (!currentPath && !activeSection);
+
+  const isCurrentAuctions =
+    currentPath === '#auctions' ||
+    activeSection === 'auctions';
+
+  const isPastAuctions =
+    currentPath === '#catalogs' ||
+    activeSection === 'catalogs';
+
+  const isEmailList =
+    currentPath === '#email-list' ||
+    activeSection === 'email-list';
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
     e.preventDefault();
-    if (navSearch.trim()) {
-      onSearch(navSearch.trim());
+    setMobileMenuOpen(false);
+
+    if (path === '/') {
+      if (window.location.pathname !== '/' || window.location.hash) {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (onNavigate) {
+        onNavigate('/');
+      }
+    } else {
+      if (window.location.hash !== path) {
+        window.history.pushState(null, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      if (onNavigate) {
+        onNavigate(path);
+      }
     }
   };
 
   return (
-    <header className="site-header">
-      {/* Top Banner Ticker */}
-      <div className="top-ticker-bar">
-        <div className="top-ticker-content container-fluid">
-          <div className="ticker-left">
-            <span className="live-badge">
-              <span className="pulse-dot"></span> LIVE WEBCAST
-            </span>
-            <span className="ticker-text">
-              Live Webcast Bidding Active — PA Auctioneer Lic. # AY-002004 — Spring Continental Art &amp; Americana Session 1
-            </span>
+    <header className="site-header sticky-header" role="banner">
+      <div className="navbar-container container-fluid">
+        {/* Brand Logo with Primary Official Gardner Auction Identity */}
+        <a
+          href="/"
+          className="brand-logo"
+          aria-label="Gardner Auction Home"
+          onClick={(e) => handleLinkClick(e, '/')}
+        >
+          <img
+            src="/images/gardner_logo.png"
+            alt="Gardner Auction Since 1960"
+            className="site-logo-img"
+          />
+          <div className="brand-text">
+            <span className="brand-name">GARDNER AUCTION</span>
+            <span className="brand-sub">APPRAISERS &amp; AUCTIONEERS · SINCE 1960</span>
           </div>
-          
-          <div className="ticker-right">
-            <a href="tel:4125550199" className="ticker-contact-item">
-              <Phone size={13} className="ticker-icon" />
-              <span>(412) 555-0199</span>
-            </a>
-            <span className="ticker-divider">|</span>
-            <a href="mailto:info@gardnerauction.com" className="ticker-contact-item">
-              <Mail size={13} className="ticker-icon" />
-              <span>info@gardnerauction.com</span>
-            </a>
-            <span className="ticker-divider">|</span>
-            <div className="ticker-cert">
-              <ShieldCheck size={14} className="ticker-gold-icon" />
-              <span>Bonded Sterling $500,000+ Approved Tier A</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        </a>
 
-      {/* Main Navigation Bar */}
-      <div className="main-navbar">
-        <div className="navbar-container container-fluid">
-          {/* Brand Logo */}
-          <a href="#" className="brand-logo" aria-label="Gardner Auction Home">
-            <div className="brand-crest">
-              {/* Luxury Gold Monogram Crest SVG */}
-              <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="46" stroke="#cba135" strokeWidth="2.5" strokeDasharray="3 2" />
-                <circle cx="50" cy="50" r="40" stroke="#cba135" strokeWidth="1.5" />
-                <path d="M50 16L53 26H63L55 32L58 42L50 36L42 42L45 32L37 26H47L50 16Z" fill="#cba135" />
-                <path d="M34 52C34 43 41 37 50 37C59 37 66 43 66 52C66 62 58 68 50 68C45 68 39 65 36 60L42 56C44 59 47 61 50 61C54 61 58 57 58 52C58 47 54 44 50 44C46 44 42 47 42 52H52V58H34V52Z" fill="#15171e" />
-                <path d="M26 78H74" stroke="#cba135" strokeWidth="1.5" strokeLinecap="round" />
-                <circle cx="50" cy="78" r="2.5" fill="#cba135" />
-              </svg>
-            </div>
-            <div className="brand-text">
-              <span className="brand-name">GARDNER AUCTION</span>
-              <span className="brand-sub">APPRAISERS · SINCE 1982</span>
-            </div>
+        {/* Desktop Navigation: 4 Core Links in order + Login & Sign Up */}
+        <nav className="desktop-nav-links" role="navigation" aria-label="Main Navigation">
+          <a
+            href="/"
+            className={`nav-item ${isHome ? 'active' : ''}`}
+            onClick={(e) => handleLinkClick(e, '/')}
+            aria-current={isHome ? 'page' : undefined}
+          >
+            Home
+          </a>
+          <a
+            href="#auctions"
+            className={`nav-item ${isCurrentAuctions ? 'active' : ''}`}
+            onClick={(e) => handleLinkClick(e, '#auctions')}
+            aria-current={isCurrentAuctions ? 'page' : undefined}
+          >
+            Current Auctions
+          </a>
+          <a
+            href="#catalogs"
+            className={`nav-item ${isPastAuctions ? 'active' : ''}`}
+            onClick={(e) => handleLinkClick(e, '#catalogs')}
+            aria-current={isPastAuctions ? 'page' : undefined}
+          >
+            Past Auctions
+          </a>
+          <a
+            href="#email-list"
+            className={`nav-item ${isEmailList ? 'active' : ''}`}
+            onClick={(e) => handleLinkClick(e, '#email-list')}
+            aria-current={isEmailList ? 'page' : undefined}
+          >
+            Email List
           </a>
 
-          {/* Desktop Nav Links */}
-          <nav className="desktop-nav-links">
-            <a href="#auctions" className="nav-item active">CURRENT AUCTIONS</a>
-            <a href="#catalogs" className="nav-item">PAST CATALOGS</a>
-            <a href="#consign" className="nav-item">CONSIGN</a>
-            <a href="#valuations" className="nav-item">VALUATIONS</a>
-            <a href="#how-to-bid" className="nav-item">HOW TO BID</a>
-          </nav>
-
-          {/* Navbar Search Input */}
-          <form className="nav-search-form" onSubmit={handleSearchSubmit}>
-            <Search size={16} className="nav-search-icon" />
-            <input
-              type="text"
-              placeholder="Search by lot, artist, era, medium..."
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              aria-label="Search catalog lots"
-            />
-          </form>
-
-          {/* User & Actions Bar */}
-          <div className="nav-actions">
+          {/* Authentication Controls: Login & Sign Up */}
+          <div className="nav-auth-group">
             <button
-              className="watchlist-btn"
-              onClick={onOpenWatchlist}
-              title="View Watchlist / Registered Paddles"
-              aria-label="View Watchlist"
+              type="button"
+              className="nav-btn-login"
+              onClick={onOpenLogin}
+              aria-label="Log in to bidder account"
             >
-              <Bookmark size={18} />
-              <span className="watchlist-count">{watchlistCount}</span>
+              Login
             </button>
-
             <button
-              className="sign-in-btn"
-              onClick={onOpenAuth}
-              title="Sign In to Bid"
+              type="button"
+              className="nav-btn-signup"
+              onClick={onOpenSignUp}
+              aria-label="Sign up for auction paddle"
             >
-              <User size={17} />
-              <span>Sign In</span>
-            </button>
-
-            <a href="#live-bidding" className="explore-auctions-btn">
-              <span>EXPLORE AUCTIONS</span>
-            </a>
-
-            {/* Mobile Menu Toggle */}
-            <button
-              className="mobile-toggle-btn"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle navigation menu"
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              Sign Up
             </button>
           </div>
-        </div>
+        </nav>
 
-        {/* Mobile Dropdown Menu */}
-        {mobileMenuOpen && (
-          <div className="mobile-nav-drawer">
-            <a href="#auctions" onClick={() => setMobileMenuOpen(false)}>Current Auctions</a>
-            <a href="#catalogs" onClick={() => setMobileMenuOpen(false)}>Past Catalogs</a>
-            <a href="#consign" onClick={() => setMobileMenuOpen(false)}>Consign &amp; Appraise</a>
-            <a href="#valuations" onClick={() => setMobileMenuOpen(false)}>Valuations</a>
-            <a href="#how-to-bid" onClick={() => setMobileMenuOpen(false)}>How to Bid Guide</a>
-            <div className="mobile-drawer-footer">
-              <button className="sign-in-btn full-w" onClick={onOpenAuth}>
-                <User size={18} /> Sign In / Register to Bid
+        {/* Mobile Hamburger Toggle Button */}
+        <button
+          className="mobile-toggle-btn"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Mobile Drawer Navigation: 4 Core Links + Login & Sign Up */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav-drawer" role="dialog" aria-modal="true" aria-label="Mobile Navigation Menu">
+          <div className="mobile-nav-links">
+            <a
+              href="/"
+              className={`mobile-nav-item ${isHome ? 'active' : ''}`}
+              onClick={(e) => handleLinkClick(e, '/')}
+            >
+              Home
+            </a>
+            <a
+              href="#auctions"
+              className={`mobile-nav-item ${isCurrentAuctions ? 'active' : ''}`}
+              onClick={(e) => handleLinkClick(e, '#auctions')}
+            >
+              Current Auctions
+            </a>
+            <a
+              href="#catalogs"
+              className={`mobile-nav-item ${isPastAuctions ? 'active' : ''}`}
+              onClick={(e) => handleLinkClick(e, '#catalogs')}
+            >
+              Past Auctions
+            </a>
+            <a
+              href="#email-list"
+              className={`mobile-nav-item ${isEmailList ? 'active' : ''}`}
+              onClick={(e) => handleLinkClick(e, '#email-list')}
+            >
+              Email List
+            </a>
+
+            {/* Mobile Auth Buttons */}
+            <div className="mobile-nav-auth">
+              <button
+                type="button"
+                className="mobile-btn-login"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenLogin) onOpenLogin();
+                }}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                className="mobile-btn-signup"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenSignUp) onOpenSignUp();
+                }}
+              >
+                Sign Up
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 };

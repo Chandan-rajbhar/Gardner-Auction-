@@ -13,11 +13,11 @@ export const BiddingModal: React.FC<BiddingModalProps> = ({
   onClose,
   onConfirmBid
 }) => {
-  if (!lot) return null;
-
-  const [selectedBid, setSelectedBid] = useState<number>(lot.nextBid);
+  const [selectedBid, setSelectedBid] = useState<number>(lot?.nextBid || 0);
   const [agreedToTerms, setAgreedToTerms] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  if (!lot) return null;
 
   const buyersPremium = Math.round(selectedBid * 0.15);
   const totalSettlement = selectedBid + buyersPremium;

@@ -1,29 +1,22 @@
 import React from 'react';
-import { ArrowRight, LayoutGrid, Award, ShieldCheck, Zap, Bookmark, Clock, Eye } from 'lucide-react';
+import { ArrowRight, LayoutGrid, Award, ShieldCheck } from 'lucide-react';
 import type { LotItem } from '../data/auctionData';
 
 interface HeroProps {
-  spotlightLot: LotItem;
-  spotlightTimeFormatted: string;
-  isWatchlisted: boolean;
-  onToggleWatchlist: (lotId: string) => void;
-  onPlaceBid: (lot: LotItem) => void;
-  onViewLot: (lot: LotItem) => void;
+  spotlightLot?: LotItem;
+  spotlightTimeFormatted?: string;
+  isWatchlisted?: boolean;
+  onToggleWatchlist?: (lotId: string) => void;
+  onPlaceBid?: (lot: LotItem) => void;
+  onViewLot?: (lot: LotItem) => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({
-  spotlightLot,
-  spotlightTimeFormatted,
-  isWatchlisted,
-  onToggleWatchlist,
-  onPlaceBid,
-  onViewLot
-}) => {
+export const Hero: React.FC<HeroProps> = () => {
   return (
-    <section className="hero-section">
+    <section className="hero-section" id="home">
       <div className="hero-ambient-glow"></div>
       <div className="hero-container container-fluid">
-        {/* Left Column: Hero Copy & Credentials */}
+        {/* Left Column: Hero Copy & Credentials (Preserved Verbatim) */}
         <div className="hero-left-column">
           <div className="hero-est-badge">
             <span className="gold-dash">——</span>
@@ -42,12 +35,28 @@ export const Hero: React.FC<HeroProps> = ({
           </p>
 
           <div className="hero-cta-group">
-            <a href="#live-bidding" className="btn-gold-primary">
+            <a
+              href="#auctions"
+              className="btn-gold-primary"
+              onClick={(e) => {
+                e.preventDefault();
+                const el = document.getElementById('live-bidding') || document.getElementById('auctions');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
               <span>EXPLORE LIVE AUCTIONS</span>
               <ArrowRight size={18} />
             </a>
 
-            <a href="#departments" className="btn-dark-outline">
+            <a
+              href="#auctions"
+              className="btn-dark-outline"
+              onClick={(e) => {
+                e.preventDefault();
+                const el = document.getElementById('auctions');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
               <span>BROWSE ALL 1,420 LOTS</span>
               <LayoutGrid size={16} />
             </a>
@@ -76,94 +85,17 @@ export const Hero: React.FC<HeroProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Spotlight Lot Card */}
+        {/* Right Column: Large Premium Auction Photograph with Golden Radiance */}
         <div className="hero-right-column">
-          <div className="spotlight-card">
-            {/* Top Badges Header */}
-            <div className="spotlight-card-header">
-              <span className="badge-spotlight-lot">
-                {spotlightLot.lotNumber} – SPOTLIGHT
-              </span>
-              <span className="badge-closing-today">
-                <span className="pulse-dot-red"></span> CLOSING TODAY
-              </span>
-            </div>
-
-            {/* Spotlight Image Container */}
-            <div
-              className="spotlight-image-wrap"
-              onClick={() => onViewLot(spotlightLot)}
-              title="Click to view high-resolution specimen"
-            >
+          <div className="hero-image-glow-wrap">
+            <div className="hero-behind-glow" aria-hidden="true"></div>
+            <div className="hero-image-frame">
               <img
-                src={spotlightLot.image}
-                alt={spotlightLot.title}
-                className="spotlight-img"
+                src="/images/hero_auction_coins.jpg"
+                alt="Rare United States Gold &amp; Silver Numismatics and Historic Estate Auction Still Life"
+                className="hero-cinematic-img"
+                loading="eager"
               />
-              <div className="spotlight-image-hover-overlay">
-                <Eye size={20} />
-                <span>Inspect Specimen</span>
-              </div>
-            </div>
-
-            {/* Spotlight Metadata & Description */}
-            <div className="spotlight-content">
-              <span className="spotlight-category-tag">
-                {spotlightLot.categoryTag}
-              </span>
-              <h3
-                className="spotlight-title"
-                onClick={() => onViewLot(spotlightLot)}
-              >
-                {spotlightLot.title}
-              </h3>
-              <p className="spotlight-desc">
-                {spotlightLot.description}
-              </p>
-
-              {/* Bidding Summary Box */}
-              <div className="spotlight-bid-box">
-                <div className="bid-box-col">
-                  <span className="bid-label">CURRENT HIGH BID</span>
-                  <span className="bid-amount">
-                    ${spotlightLot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="estimate-text">
-                    Est. ${spotlightLot.estimateLow.toLocaleString()} – ${spotlightLot.estimateHigh.toLocaleString()}
-                  </span>
-                </div>
-
-                <div className="bid-box-col right">
-                  <span className="bid-label">TIME REMAINING</span>
-                  <div className="time-remaining-value">
-                    <Clock size={15} />
-                    <span>{spotlightTimeFormatted}</span>
-                  </div>
-                  <span className="reserve-tag">
-                    ✓ RESERVE MET
-                  </span>
-                </div>
-              </div>
-
-              {/* Spotlight Actions */}
-              <div className="spotlight-actions">
-                <button
-                  className="btn-place-bid-gold"
-                  onClick={() => onPlaceBid(spotlightLot)}
-                >
-                  <Zap size={18} />
-                  <span>PLACE BID (${spotlightLot.nextBid.toLocaleString()})</span>
-                </button>
-
-                <button
-                  className={`btn-watchlist-toggle ${isWatchlisted ? 'active' : ''}`}
-                  onClick={() => onToggleWatchlist(spotlightLot.id)}
-                  title={isWatchlisted ? "Remove from Watchlist" : "Add to Watchlist"}
-                  aria-label="Toggle Watchlist"
-                >
-                  <Bookmark size={20} fill={isWatchlisted ? "#cba135" : "none"} />
-                </button>
-              </div>
             </div>
           </div>
         </div>

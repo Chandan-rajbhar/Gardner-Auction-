@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCw, Clock, Zap, CheckCircle2, Bookmark } from 'lucide-react';
+import { Clock, Zap, CheckCircle2, Bookmark } from 'lucide-react';
 import type { LotItem } from '../data/auctionData';
 
 interface LiveBiddingDeskProps {
@@ -44,8 +44,8 @@ export const LiveBiddingDesk: React.FC<LiveBiddingDeskProps> = ({
             onClick={onManualRefresh}
             title="Refresh active bid feeds"
           >
-            <span>Auto-refreshing every 15s</span>
-            <RotateCw size={14} className="refresh-icon" />
+
+
           </button>
         </div>
 
@@ -60,7 +60,7 @@ export const LiveBiddingDesk: React.FC<LiveBiddingDeskProps> = ({
                 {/* Lot Media Container */}
                 <div className="lot-card-media" onClick={() => onViewLot(lot)}>
                   <img src={lot.image} alt={lot.title} className="lot-img" />
-                  
+
                   {/* Overlay Badges */}
                   <div className="lot-badges-overlay">
                     <span className="lot-number-badge">

@@ -5,19 +5,28 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (name: string) => void;
+  initialMode?: 'signin' | 'register';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
-  onLoginSuccess
+  onLoginSuccess,
+  initialMode = 'signin'
 }) => {
-  if (!isOpen) return null;
+  const [userMode, setUserMode] = useState<'signin' | 'register' | null>(null);
+  const mode = userMode ?? initialMode;
 
-  const [mode, setMode] = useState<'signin' | 'register'>('signin');
   const [email, setEmail] = useState('');
   const [paddleOrPass, setPaddleOrPass] = useState('');
   const [fullName, setFullName] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleClose = () => {
+    setUserMode(null);
+    onClose();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +36,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={handleClose}>
       <div className="modal-card auth-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header-titles">
@@ -36,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {mode === 'signin' ? 'Sign In to Your Bidder Account' : 'Register for Live Webcast Bidding'}
             </h3>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>
+          <button className="modal-close-btn" onClick={handleClose}>
             <X size={20} />
           </button>
         </div>
@@ -47,14 +56,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <button
               type="button"
               className={`auth-tab ${mode === 'signin' ? 'active' : ''}`}
-              onClick={() => setMode('signin')}
+              onClick={() => setUserMode('signin')}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
-              onClick={() => setMode('register')}
+              onClick={() => setUserMode('register')}
             >
               New Bidder Approval
             </button>

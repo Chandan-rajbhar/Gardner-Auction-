@@ -13,12 +13,12 @@ export const ConditionReportModal: React.FC<ConditionReportModalProps> = ({
   onClose,
   onSubmitReport
 }) => {
-  if (!event) return null;
-
   const [email, setEmail] = useState('');
   const [paddleNumber, setPaddleNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  if (!event) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
