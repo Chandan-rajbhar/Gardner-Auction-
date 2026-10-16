@@ -7,6 +7,11 @@ interface HeaderProps {
   onNavigate?: (path: string) => void;
   onOpenLogin?: () => void;
   onOpenSignUp?: () => void;
+  watchlistCount?: number;
+  onOpenWatchlist?: () => void;
+  onSearch?: (term: string) => void;
+  onOpenAuth?: () => void;
+  currentRoute?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,26 +19,32 @@ export const Header: React.FC<HeaderProps> = ({
   activeSection,
   onNavigate,
   onOpenLogin,
-  onOpenSignUp
+  onOpenSignUp,
+  onOpenAuth,
+  currentRoute
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Determine active nav item based on route
+  const effectiveRoute = currentPath || (currentRoute ? (currentRoute === 'home' ? '/' : `#${currentRoute}`) : '/');
+
   const isHome =
-    currentPath === '/' ||
+    effectiveRoute === '/' ||
     activeSection === 'home' ||
-    (!currentPath && !activeSection);
+    (!currentPath && !currentRoute && !activeSection);
 
   const isCurrentAuctions =
-    currentPath === '#auctions' ||
+    effectiveRoute === '#auctions' ||
     activeSection === 'auctions';
 
   const isPastAuctions =
-    currentPath === '#catalogs' ||
+    effectiveRoute === '#catalogs' ||
+    effectiveRoute.startsWith('#catalog') ||
+    effectiveRoute.startsWith('#auction') ||
     activeSection === 'catalogs';
 
   const isEmailList =
-    currentPath === '#email-list' ||
+    effectiveRoute === '#email-list' ||
     activeSection === 'email-list';
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
@@ -59,6 +70,16 @@ export const Header: React.FC<HeaderProps> = ({
         onNavigate(path);
       }
     }
+  };
+
+  const handleLoginClick = () => {
+    if (onOpenLogin) onOpenLogin();
+    else if (onOpenAuth) onOpenAuth();
+  };
+
+  const handleSignUpClick = () => {
+    if (onOpenSignUp) onOpenSignUp();
+    else if (onOpenAuth) onOpenAuth();
   };
 
   return (
@@ -122,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               className="nav-btn-login"
-              onClick={onOpenLogin}
+              onClick={handleLoginClick}
               aria-label="Log in to bidder account"
             >
               Login
@@ -130,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               className="nav-btn-signup"
-              onClick={onOpenSignUp}
+              onClick={handleSignUpClick}
               aria-label="Sign up for auction paddle"
             >
               Sign Up
@@ -189,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="mobile-btn-login"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  if (onOpenLogin) onOpenLogin();
+                  handleLoginClick();
                 }}
               >
                 Login
@@ -199,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="mobile-btn-signup"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  if (onOpenSignUp) onOpenSignUp();
+                  handleSignUpClick();
                 }}
               >
                 Sign Up

@@ -15,11 +15,16 @@ import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { AuthModal } from './components/AuthModal';
 import { Toast } from './components/Toast';
 import type { ToastMessage } from './components/Toast';
+
 import {
   AuctionSearchControls,
   type BrowsingMode,
   type DisplayMode
 } from './components/AuctionSearchControls';
+import { PastCatalogsPage } from './components/PastCatalogsPage';
+import { AuctionDetailsPage } from './components/AuctionDetailsPage';
+import { CatalogLotsPage } from './components/CatalogLotsPage';
+import { LotDetailPage } from './components/LotDetailPage';
 
 import {
   SPOTLIGHT_LOT,
@@ -48,6 +53,14 @@ const CATEGORIES = [
   'Americana & Antiques',
   'Fine Art & Prints'
 ];
+
+export type AppRoute =
+  | { view: 'home' }
+  | { view: 'email-list' }
+  | { view: 'catalogs' }
+  | { view: 'auction-details'; auctionId: string }
+  | { view: 'catalog-lots'; auctionId: string }
+  | { view: 'lot-detail'; lotId: string; auctionId?: string };
 
 export const App: React.FC = () => {
   // State: Lots & Live Data
@@ -99,23 +112,79 @@ export const App: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Canonical route resolution restoring exact original routes: /, #auctions, #catalogs, #email-list
-  const normalizeRoute = (pathOrPathname: string, hash: string): string => {
-    if (pathOrPathname === '#email-list' || hash === '#email-list') return '#email-list';
-    if (pathOrPathname === '#auctions' || hash === '#auctions') return '#auctions';
-    if (pathOrPathname === '#catalogs' || hash === '#catalogs') return '#catalogs';
-    return '/';
+  // Route resolution supporting both hash routing and top-level pages
+  const parseRoute = (pathname: string, hash: string): AppRoute => {
+    const clean = hash.replace(/^#\/?/, '').trim();
+
+    if (clean === 'email-list' || pathname === '/email-list') {
+      return { view: 'email-list' };
+    }
+
+    // 1. Lot details routing: e.g. #lot/:id or #catalog/:auctionId/lot/:lotId or #auction/:auctionId/lot/:lotId
+    if (clean.includes('/lot/')) {
+      const parts = clean.split('/lot/');
+      const rawAuctionPart = parts[0];
+      const lotId = parts[1].split(/[?#]/)[0];
+      let auctionId: string | undefined;
+      if (rawAuctionPart.startsWith('auction/')) {
+        auctionId = rawAuctionPart.substring('auction/'.length);
+      } else if (rawAuctionPart.startsWith('catalog/')) {
+        auctionId = rawAuctionPart.substring('catalog/'.length);
+      }
+      return { view: 'lot-detail', lotId, auctionId };
+    }
+
+    if (clean.startsWith('lot/')) {
+      const lotId = clean.substring('lot/'.length).split('/')[0].split(/[?#]/)[0];
+      return { view: 'lot-detail', lotId };
+    }
+
+    if (clean.startsWith('lot?') || clean === 'lot') {
+      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
+      const lotId = params.get('id') || params.get('lotId') || '';
+      const auctionId = params.get('auctionId') || undefined;
+      return { view: 'lot-detail', lotId, auctionId };
+    }
+
+    // 2. Auction details routing
+    if (clean.startsWith('auction/')) {
+      const id = clean.substring('auction/'.length).split(/[?#]/)[0];
+      return { view: 'auction-details', auctionId: id };
+    }
+    if (clean.startsWith('auction?') || clean === 'auction') {
+      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
+      const id = params.get('id') || '';
+      return { view: 'auction-details', auctionId: id };
+    }
+
+    // 3. Catalog lots routing
+    if (clean.startsWith('catalog/')) {
+      const id = clean.substring('catalog/'.length).split(/[?#]/)[0];
+      return { view: 'catalog-lots', auctionId: id };
+    }
+    if (clean.startsWith('catalog?') || clean === 'catalog') {
+      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
+      const id = params.get('id') || '';
+      return { view: 'catalog-lots', auctionId: id };
+    }
+
+    // 4. Past Catalogs main page
+    if (clean.startsWith('catalogs')) {
+      return { view: 'catalogs' };
+    }
+
+    return { view: 'home' };
   };
 
-  const [currentRoute, setCurrentRoute] = useState<string>(() => {
-    if (typeof window === 'undefined') return '/';
-    return normalizeRoute(window.location.pathname, window.location.hash);
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
+    if (typeof window === 'undefined') return { view: 'home' };
+    return parseRoute(window.location.pathname, window.location.hash);
   });
 
   // Listen to popstate and hashchange events for browser forward/back buttons and programmatic route pushes
   useEffect(() => {
     const handleLocationChange = () => {
-      const newRoute = normalizeRoute(window.location.pathname, window.location.hash);
+      const newRoute = parseRoute(window.location.pathname, window.location.hash);
       setCurrentRoute(newRoute);
     };
 
@@ -128,18 +197,18 @@ export const App: React.FC = () => {
   }, []);
 
   const handleNavigate = useCallback((path: string) => {
-    const normalized = normalizeRoute(path, '');
-    if (normalized === '/') {
+    if (path === '/') {
       if (window.location.hash || window.location.pathname !== '/') {
         window.history.pushState(null, '', '/');
       }
     } else {
-      if (window.location.hash !== normalized) {
-        window.history.pushState(null, '', normalized);
+      if (window.location.hash !== path) {
+        window.history.pushState(null, '', path);
       }
     }
-    setCurrentRoute(normalized);
-    window.scrollTo({ top: 0, behavior: normalized === '/' ? 'smooth' : 'instant' });
+    const newRoute = parseRoute(window.location.pathname, window.location.hash);
+    setCurrentRoute(newRoute);
+    window.scrollTo({ top: 0, behavior: path === '/' ? 'smooth' : 'instant' });
   }, []);
 
   // Real-time 1s Clock Countdown
@@ -377,7 +446,21 @@ export const App: React.FC = () => {
     <div className="app-root">
       {/* 1. Navbar with 4 Core Links in order + Login & Sign Up */}
       <Header
-        currentPath={currentRoute}
+        currentPath={
+          currentRoute.view === 'email-list'
+            ? '#email-list'
+            : currentRoute.view === 'catalogs'
+            ? '#catalogs'
+            : currentRoute.view === 'auction-details'
+            ? `#auction/${currentRoute.auctionId}`
+            : currentRoute.view === 'catalog-lots'
+            ? `#catalog/${currentRoute.auctionId}`
+            : currentRoute.view === 'lot-detail'
+            ? `#lot/${currentRoute.lotId}`
+            : window.location.hash === '#auctions'
+            ? '#auctions'
+            : '/'
+        }
         onNavigate={handleNavigate}
         onOpenLogin={() => {
           setAuthMode('signin');
@@ -387,9 +470,19 @@ export const App: React.FC = () => {
           setAuthMode('register');
           setIsAuthOpen(true);
         }}
+        watchlistCount={watchlist.length}
+        onOpenWatchlist={() => setIsWatchlistOpen(true)}
+        onSearch={(term) => {
+          setSearchTerm(term);
+          if (currentRoute.view === 'home') {
+            const el = document.getElementById('auctions');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }}
+        onOpenAuth={() => setIsAuthOpen(true)}
       />
 
-      {currentRoute === '#email-list' ? (
+      {currentRoute.view === 'email-list' ? (
         <EmailListPage
           onSubscribe={(email) => {
             addToast(
@@ -399,6 +492,28 @@ export const App: React.FC = () => {
             );
           }}
         />
+      ) : currentRoute.view === 'lot-detail' ? (
+        <LotDetailPage
+          lotId={currentRoute.lotId}
+          auctionId={currentRoute.auctionId}
+          onShowToast={addToast}
+          onPlaceBid={(lot) => setActiveBiddingLot(lot)}
+          onToggleWatchlist={handleToggleWatchlist}
+          isWatchlisted={watchlist.includes(currentRoute.lotId)}
+          liveTimeFormatted={timers[currentRoute.lotId]}
+        />
+      ) : currentRoute.view === 'auction-details' ? (
+        <AuctionDetailsPage
+          auctionId={currentRoute.auctionId}
+          onShowToast={addToast}
+        />
+      ) : currentRoute.view === 'catalog-lots' ? (
+        <CatalogLotsPage
+          auctionId={currentRoute.auctionId}
+          onShowToast={addToast}
+        />
+      ) : currentRoute.view === 'catalogs' ? (
+        <PastCatalogsPage onShowToast={addToast} />
       ) : (
         <main id="main-content">
           {/* 2. Hero Section: Refined, elegant, showcasing certified gold and silver numismatics */}
@@ -430,8 +545,7 @@ export const App: React.FC = () => {
                   title="Browse past completed auctions"
                   onClick={(e) => {
                     e.preventDefault();
-                    const el = document.getElementById('catalogs');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    window.location.hash = '#catalogs';
                   }}
                 >
                   <span>Browse Completed Catalogs</span>
@@ -824,12 +938,12 @@ export const App: React.FC = () => {
       )}
 
       {/* 8. Refined Compact Luxury Footer (rendered on Home and Email List only) */}
-      {(currentRoute === '/' || currentRoute === '#email-list') && (
+      {(currentRoute.view === 'home' || currentRoute.view === 'email-list') && (
         <Footer onNavigate={handleNavigate} />
       )}
 
       {/* Floating Watchlist Button for Easy Access (rendered on Home only) */}
-      {currentRoute === '/' && watchlist.length > 0 && (
+      {currentRoute.view === 'home' && watchlist.length > 0 && (
         <button
           className="floating-watchlist-pill"
           onClick={() => setIsWatchlistOpen(true)}
