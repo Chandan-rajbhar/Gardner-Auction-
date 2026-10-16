@@ -65,7 +65,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
               onClick={() => setUserMode('register')}
             >
-              New Bidder Approval
+              Signup
             </button>
           </div>
 
@@ -97,7 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div className="form-group">
             <label className="form-label">
-              {mode === 'signin' ? 'Password or Paddle PIN *' : 'Create Secure Password *'}
+              {mode === 'signin' ? 'Password *' : 'Create Secure Password *'}
             </label>
             <input
               type="password"
@@ -119,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="modal-actions" style={{ marginTop: '20px' }}>
             <button type="submit" className="btn-confirm-bid">
               <KeyRound size={17} />
-              <span>{mode === 'signin' ? 'ACCESS BIDDER CONSOLE' : 'REQUEST INSTANT APPROVAL'}</span>
+              <span>{mode === 'signin' ? 'Signin' : 'Create Account'}</span>
             </button>
           </div>
 
