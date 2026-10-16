@@ -25,27 +25,42 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Determine active nav item based on route
+  // Determine active nav item based on route in a mutually exclusive order
   const effectiveRoute = currentPath || (currentRoute ? (currentRoute === 'home' ? '/' : `#${currentRoute}`) : '/');
 
-  const isHome =
-    effectiveRoute === '/' ||
-    activeSection === 'home' ||
-    (!currentPath && !currentRoute && !activeSection);
+  let activeTab: 'home' | 'current-auctions' | 'past-auctions' | 'email-list' = 'home';
 
-  const isCurrentAuctions =
+  if (
     effectiveRoute === '#auctions' ||
-    activeSection === 'auctions';
-
-  const isPastAuctions =
+    effectiveRoute.startsWith('#auctions') ||
+    effectiveRoute === '#current-auction' ||
+    effectiveRoute.startsWith('#current-auction') ||
+    activeSection === 'auctions'
+  ) {
+    activeTab = 'current-auctions';
+  } else if (
     effectiveRoute === '#catalogs' ||
-    effectiveRoute.startsWith('#catalog') ||
-    effectiveRoute.startsWith('#auction') ||
-    activeSection === 'catalogs';
-
-  const isEmailList =
+    effectiveRoute.startsWith('#catalogs') ||
+    effectiveRoute.startsWith('#catalog/') ||
+    effectiveRoute.startsWith('#auction/') ||
+    effectiveRoute.startsWith('#lot/') ||
+    activeSection === 'catalogs'
+  ) {
+    activeTab = 'past-auctions';
+  } else if (
     effectiveRoute === '#email-list' ||
-    activeSection === 'email-list';
+    effectiveRoute.startsWith('#email-list') ||
+    activeSection === 'email-list'
+  ) {
+    activeTab = 'email-list';
+  } else {
+    activeTab = 'home';
+  }
+
+  const isHome = activeTab === 'home';
+  const isCurrentAuctions = activeTab === 'current-auctions';
+  const isPastAuctions = activeTab === 'past-auctions';
+  const isEmailList = activeTab === 'email-list';
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
     e.preventDefault();
