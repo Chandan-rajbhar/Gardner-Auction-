@@ -1,0 +1,112 @@
+/* Global Reset & Design Tokens */
+:root {
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-display: 'Cinzel', serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Color Palette */
+  --bg-dark: #0c0e12;
+  --bg-dark-card: #151821;
+  --bg-dark-card-hover: #1c202c;
+  --bg-page: #fbf9f5;
+  --bg-page-alt: #f4efe6;
+  --bg-white: #ffffff;
+
+  --gold-primary: #cba135;
+  --gold-light: #dfba52;
+  --gold-hover: #e5c364;
+  --gold-dim: #977726;
+  --gold-tint: rgba(203, 161, 53, 0.12);
+  --gold-border: rgba(203, 161, 53, 0.35);
+
+  --text-dark-primary: #15171e;
+  --text-dark-secondary: #575b66;
+  --text-dark-muted: #848995;
+
+  --text-light-primary: #f5f6f9;
+  --text-light-secondary: #b5b9c4;
+  --text-light-muted: #7e8392;
+
+  --border-light: #e5e0d6;
+  --border-light-subtle: #eee9e0;
+  --border-dark: #222633;
+
+  --red-live: #e02424;
+  --red-live-bg: rgba(224, 36, 36, 0.15);
+  --green-reserve: #059669;
+  --green-reserve-bg: rgba(5, 150, 105, 0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.1);
+  --shadow-gold: 0 4px 20px rgba(203, 161, 53, 0.25);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  background-color: var(--bg-page);
+  color: var(--text-dark-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--bg-page);
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  outline: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1ede4;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cba135;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b58d26;
+}
