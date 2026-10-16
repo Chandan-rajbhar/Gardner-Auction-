@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import './CurrentAuctionPage.css';
 import {
   Search, Heart, X, ChevronDown, Gavel, Diamond, Lock, Percent, FileCheck,
-  Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, Users, Phone, Truck, Crown
+  Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, Users, Phone, Truck, Crown,
+  Sun, Moon
 } from 'lucide-react';
 import type { EnrichedLotItem } from './types';
 
@@ -408,6 +409,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   const [bidError, setBidError] = useState<string | null>(null);
 
   // Interactive View Lot Terminal States
+  const [isLightTheme, setIsLightTheme] = useState<boolean>(true);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [activeThumb, setActiveThumb] = useState<'obverse' | 'reverse' | 'edge view' | 'full slab'>('obverse');
   const [activeDossierTab, setActiveDossierTab] = useState<'specs' | 'provenance' | 'condition' | 'vaulting'>('specs');
@@ -797,7 +799,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     const progressPercent = Math.min(100, Math.max(10, Math.round((activeDetailLot.currentBid / highEstimate) * 100)));
 
     return (
-      <div className="cap-curated-page-root cap-terminal-root">
+      <div className={`cap-curated-page-root cap-terminal-root ${isLightTheme ? 'cap-theme-light' : 'cap-theme-dark'}`}>
         <div className="cap-terminal-wrapper">
           {/* Top Bar: Sovereign Galleries, Terminal Connected, Paddle info, Audio, Close button */}
           <header className="cap-terminal-topbar">
@@ -826,6 +828,18 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                 <span className="cap-paddle-lbl">Approved Limit:</span>
                 <strong className="cap-paddle-val">$75,000</strong>
               </div>
+
+              {/* Light / Dark Mode Quick Switcher */}
+              <button
+                type="button"
+                className="cap-terminal-theme-btn"
+                onClick={() => setIsLightTheme(!isLightTheme)}
+                title={isLightTheme ? "Switch to Dark Theme" : "Switch to Light Theme"}
+                aria-label="Toggle Theme Mode"
+              >
+                {isLightTheme ? <Moon size={14} /> : <Sun size={14} />}
+                <span className="cap-theme-btn-text">{isLightTheme ? 'Dark Mode' : 'Light Mode'}</span>
+              </button>
 
               <button
                 type="button"

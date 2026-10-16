@@ -2048,48 +2048,815 @@
   color: #475569;
 }
 
-@media (max-width: 1050px) {
+/* ==========================================================================
+   6.10 Theme Toggle Button & Sovereign Galleries Light Theme System
+   ========================================================================== */
+.cap-terminal-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #171920;
+  border: 1px solid #2e3442;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cap-terminal-theme-btn:hover {
+  border-color: #dfba52;
+  color: #dfba52;
+  transform: translateY(-1px);
+}
+
+.cap-theme-btn-text {
+  font-size: 11.5px;
+}
+
+/* ==========================================================================
+   LIGHT THEME OVERRIDES (.cap-terminal-root.cap-theme-light)
+   High-end Christie's/Sotheby's Ivory & Alabaster Gallery Palette
+   ========================================================================== */
+.cap-terminal-root.cap-theme-light {
+  background: #f1f4f8;
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-topbar {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-gold-icon {
+  background: #fef9c3;
+  border: 1px solid rgba(223, 186, 82, 0.6);
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-gallery-name {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-session-name {
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-status-pill {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-status-bold {
+  color: #15803d;
+}
+
+.cap-terminal-root.cap-theme-light .cap-status-sep {
+  color: #94a3b8;
+}
+
+.cap-terminal-root.cap-theme-light .cap-status-muted {
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-paddle-badge {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-paddle-lbl {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-paddle-val {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-paddle-divider {
+  color: #cbd5e1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-theme-btn {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-theme-btn:hover {
+  background: #f1f5f9;
+  border-color: #b48616;
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-icon-btn,
+.cap-terminal-root.cap-theme-light .cap-terminal-close-btn {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-icon-btn:hover,
+.cap-terminal-root.cap-theme-light .cap-terminal-close-btn:hover {
+  background: #f1f5f9;
+  border-color: #b48616;
+  color: #0f172a;
+}
+
+/* Lot Header Banner (Dark Theme as requested) */
+.cap-terminal-root.cap-theme-light .cap-terminal-lot-header {
+  background: #101216;
+  border: 1px solid #232732;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.cap-terminal-root.cap-theme-light .cap-lot-pill-gold {
+  background: #dfba52;
+  color: #0c0d0e;
+  font-weight: 800;
+}
+
+.cap-terminal-root.cap-theme-light .cap-lot-cat-breadcrumb {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.cap-terminal-root.cap-theme-light .cap-reserve-met-badge {
+  background: #102619;
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #22c55e;
+}
+
+.cap-terminal-root.cap-theme-light .cap-shield-icon {
+  color: #22c55e;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-lot-title {
+  color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-lot-sub {
+  color: #f1f5f9;
+}
+
+.cap-terminal-root.cap-theme-light .cap-live-floor-box {
+  background: #2a1114;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.cap-terminal-root.cap-theme-light .cap-live-floor-label {
+  color: #ef4444;
+}
+
+.cap-terminal-root.cap-theme-light .cap-live-floor-timer {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-floor-cam-btn {
+  background: #14171d;
+  border: 1px solid #3b4252;
+  color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-floor-cam-btn:hover {
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+.cap-terminal-root.cap-theme-light .cap-cam-icon {
+  color: #dfba52;
+}
+
+/* Cards & Containers */
+.cap-terminal-root.cap-theme-light .cap-terminal-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+}
+
+/* Stage Viewport */
+.cap-terminal-root.cap-theme-light .cap-stage-viewport {
+  background: radial-gradient(circle at center, #ffffff 0%, #eef2f6 100%);
+}
+
+.cap-terminal-root.cap-theme-light .cap-pcgs-badge {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(180, 134, 22, 0.5);
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-cert-pill {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-stage-tool-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.cap-terminal-root.cap-theme-light .cap-stage-tool-btn:hover {
+  border-color: #b48616;
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-drag-hint,
+.cap-terminal-root.cap-theme-light .cap-nfc-tag {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-stage-sub-bar {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-view-thumb-pill {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.cap-terminal-root.cap-theme-light .cap-view-thumb-pill:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.cap-terminal-root.cap-theme-light .cap-view-thumb-pill.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-view-thumb-pill.active .cap-thumb-dot {
+  background: #dfba52;
+}
+
+.cap-terminal-root.cap-theme-light .cap-cac-title {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-cac-sub {
+  color: #64748b;
+}
+
+/* Dossier Card */
+.cap-terminal-root.cap-theme-light .cap-dossier-header {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-dossier-title {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-dossier-tab-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-dossier-tab-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-dossier-tab-btn.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-dossier-narrative {
+  color: #334155;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-label {
+  color: #64748b;
+  opacity: 1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-val {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-val.cap-gold-accent {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-val.cap-green-accent {
+  color: #15803d;
+}
+
+.cap-terminal-root.cap-theme-light .cap-spec-sub {
+  color: #64748b;
+}
+
+/* Progression Chart Card */
+.cap-terminal-root.cap-theme-light .cap-chart-heading {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-chart-subheading {
+  color: #64748b;
+  opacity: 1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-chart-est-badge {
+  background: #fef9c3;
+  border: 1px solid rgba(223, 186, 82, 0.5);
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-chart-x-axis {
+  color: #64748b;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-now-point {
+  color: #b48616;
+}
+
+/* Live Bidding Console */
+.cap-terminal-root.cap-theme-light .cap-console-lbl {
+  color: #64748b;
+  opacity: 1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-price {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-winning-floor-pill {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.cap-terminal-root.cap-theme-light .cap-inc-val {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-estimate-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-txt {
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-range-val {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-progress-track {
+  background: #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-marker {
+  border-color: #ffffff;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-sub-row {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-est-highlight {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-sec-title {
+  color: #64748b;
+  opacity: 1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-quick-inc-btn {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.cap-terminal-root.cap-theme-light .cap-quick-inc-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.cap-terminal-root.cap-theme-light .cap-quick-inc-btn.active {
+  background: #fef9c3;
+  border-color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-inc-add {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-inc-total {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-quick-inc-btn.active .cap-inc-add,
+.cap-terminal-root.cap-theme-light .cap-quick-inc-btn.active .cap-inc-total {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-number-input {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-number-input:focus {
+  border-color: #b48616;
+  box-shadow: 0 0 0 3px rgba(180, 134, 22, 0.18);
+}
+
+.cap-terminal-root.cap-theme-light .cap-input-dollar-sign {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-console-totals-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-total-row {
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-total-row strong {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-total-row.highlight {
+  border-top: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-hammer-val {
+  color: #b48616 !important;
+}
+
+.cap-terminal-root.cap-theme-light .cap-legal-disclaimer {
+  color: #64748b;
+}
+
+/* Recent Bids Feed */
+.cap-terminal-root.cap-theme-light .cap-feed-header {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-title {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-counter {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-item.winning {
+  background: #fffbeb;
+  border-color: rgba(180, 134, 22, 0.4);
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-paddle {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-time {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-amount {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-feed-amount.gold {
+  color: #b48616;
+}
+
+/* Protocol Banner & Meta Footer */
+.cap-terminal-root.cap-theme-light .cap-terminal-protocol-banner {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+}
+
+.cap-terminal-root.cap-theme-light .cap-protocol-lead {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-protocol-body {
+  color: #475569;
+}
+
+.cap-terminal-root.cap-theme-light .cap-proto-badge {
+  color: #334155;
+  background: #f8fafc;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.cap-terminal-root.cap-theme-light .cap-badge-ico {
+  color: #b48616;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-meta-footer {
+  color: #64748b;
+}
+
+.cap-terminal-root.cap-theme-light .cap-terminal-meta-footer strong {
+  color: #0f172a;
+}
+
+.cap-terminal-root.cap-theme-light .cap-meta-pipe {
+  color: #cbd5e1;
+}
+
+/* ==========================================================================
+   6.11 Complete Responsive System Across All Devices
+   ========================================================================== */
+
+/* Laptop / Medium Desktop (max-width: 1200px) */
+@media (max-width: 1200px) {
+  .cap-terminal-wrapper {
+    max-width: 100%;
+    padding: 0 8px;
+  }
+  
+  .cap-terminal-lot-title {
+    font-size: 28px;
+  }
+  
+  .cap-console-price {
+    font-size: 28px;
+  }
+}
+
+/* Tablet & iPad Landscape (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .cap-terminal-root {
+    padding: 14px 16px 44px 16px;
+  }
+
   .cap-terminal-grid {
     grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .cap-terminal-col-left,
+  .cap-terminal-col-right {
+    width: 100%;
+  }
+
+  .cap-stage-viewport {
+    height: 380px;
   }
 
   .cap-dossier-metrics-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 }
 
-@media (max-width: 700px) {
+/* Tablet Portrait & Small Tablet (max-width: 768px) */
+@media (max-width: 768px) {
   .cap-terminal-topbar {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    gap: 12px;
+  }
+
+  .cap-terminal-brand {
+    order: 1;
+  }
+
+  .cap-terminal-top-actions {
+    order: 2;
+    margin-left: auto;
   }
 
   .cap-terminal-status-pill {
+    order: 3;
     width: 100%;
     justify-content: center;
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  .cap-terminal-lot-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .cap-terminal-lot-title {
+    font-size: 24px;
+  }
+
+  .cap-lot-header-right {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .cap-stage-viewport {
-    height: 300px;
+    height: 330px;
   }
 
-  .cap-dossier-metrics-grid {
-    grid-template-columns: 1fr;
+  .cap-stage-sub-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cap-view-thumbs-list {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .cap-cac-verified-badge {
+    justify-content: center;
+  }
+
+  .cap-dossier-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .cap-dossier-tabs {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cap-dossier-tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .cap-quick-increments-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .cap-quick-inc-btn {
+    padding: 8px 4px;
+  }
+
+  .cap-inc-add {
+    font-size: 10px;
+  }
+
+  .cap-inc-total {
+    font-size: 12px;
   }
 
   .cap-terminal-protocol-banner {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cap-protocol-badges-row {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .cap-proto-badge {
+    font-size: 10.5px;
+  }
+}
+
+/* Mobile Phones (max-width: 540px) */
+@media (max-width: 540px) {
+  .cap-terminal-root {
+    padding: 8px 8px 36px 8px;
+  }
+
+  .cap-terminal-topbar {
+    padding: 10px;
+  }
+
+  .cap-terminal-gallery-name {
+    font-size: 11px;
+  }
+
+  .cap-terminal-session-name {
+    font-size: 10px;
+  }
+
+  .cap-terminal-paddle-badge {
+    font-size: 10.5px;
+    padding: 4px 8px;
+  }
+
+  .cap-paddle-lbl {
+    display: none;
+  }
+
+  .cap-terminal-theme-btn .cap-theme-btn-text {
+    display: none;
+  }
+
+  .cap-terminal-theme-btn {
+    padding: 6px 8px;
+  }
+
+  .cap-terminal-lot-header {
+    padding: 12px;
+  }
+
+  .cap-terminal-lot-title {
+    font-size: 20px;
+  }
+
+  .cap-terminal-lot-sub {
+    font-size: 12px;
+  }
+
+  .cap-stage-viewport {
+    height: 260px;
+  }
+
+  .cap-terminal-main-image {
+    max-width: 90%;
+    max-height: 90%;
+  }
+
+  .cap-dossier-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cap-spec-box {
+    padding: 10px;
+  }
+
+  .cap-spec-val {
+    font-size: 13px;
+  }
+
+  .cap-console-card {
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .cap-console-price {
+    font-size: 24px;
+  }
+
+  .cap-console-cta-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cap-bid-input-container {
+    width: 100%;
+  }
+
+  .cap-console-number-input {
+    height: 46px;
+    font-size: 15px;
+  }
+
+  .cap-place-live-bid-btn {
+    width: 100%;
+    height: 48px;
+    font-size: 13.5px;
+  }
+
+  .cap-chart-x-axis {
+    font-size: 9.5px;
   }
 
   .cap-terminal-meta-footer {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .cap-meta-pipe {
+    display: none;
   }
 }
 
