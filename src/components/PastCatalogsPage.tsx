@@ -18,7 +18,8 @@ import {
   Calendar,
   X,
   RotateCcw,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowLeft
 } from 'lucide-react';
 import { PAST_AUCTIONS, ALL_PAST_LOTS } from '../data/pastCatalogsData';
 import type { PastAuction, PastLotItem } from '../data/pastCatalogsData';
@@ -272,11 +273,17 @@ export const PastCatalogsPage: React.FC<PastCatalogsPageProps> = ({
       {/* 1. Page Header & Breadcrumbs Banner */}
       <section className="past-catalogs-hero">
         <div className="container-fluid">
-          <nav className="breadcrumbs-nav" aria-label="Breadcrumb">
-            <a href="#auctions" className="breadcrumb-link">Home</a>
-            <span className="breadcrumb-separator">/</span>
-            <span className="breadcrumb-current">Past Catalogs</span>
-          </nav>
+          <div className="past-catalogs-top-nav-bar">
+            <a href="#auctions" className="btn-back-catalogs large" title="Return to Homepage">
+              <ArrowLeft size={18} />
+              <span>Back to Home</span>
+            </a>
+            <nav className="breadcrumbs-nav" aria-label="Breadcrumb">
+              <a href="#auctions" className="breadcrumb-link">Home</a>
+              <span className="breadcrumb-separator">/</span>
+              <span className="breadcrumb-current">Past Catalogs</span>
+            </nav>
+          </div>
 
           <div className="past-catalogs-hero-content">
             <div className="hero-eyebrow">
@@ -547,6 +554,11 @@ export const PastCatalogsPage: React.FC<PastCatalogsPageProps> = ({
                         <div className="auction-card-type-sub">
                           <Globe size={13} className="header-type-icon" />
                           <span>{auction.auctionType}</span>
+                          <span className="strip-divider">·</span>
+                          <span className="auction-header-status-badge">
+                            <Lock size={11} />
+                            <span>Concluded</span>
+                          </span>
                         </div>
                       </div>
                       <div className="header-realized-tag">
@@ -570,6 +582,10 @@ export const PastCatalogsPage: React.FC<PastCatalogsPageProps> = ({
                               className="auction-featured-img"
                               loading="lazy"
                             />
+                            <div className="auction-closed-flag">
+                              <Lock size={11} />
+                              <span>Concluded</span>
+                            </div>
                           </a>
                         </div>
                         <button
@@ -629,7 +645,7 @@ export const PastCatalogsPage: React.FC<PastCatalogsPageProps> = ({
                       <div className="auction-body-right">
                         <div className="attribute-badge status-closed-badge">
                           <Lock size={15} className="attr-icon" />
-                          <span>{auction.status}</span>
+                          <span>Status: <strong>Concluded</strong></span>
                         </div>
 
                         <div className="attribute-badge type-badge">

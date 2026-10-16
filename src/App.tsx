@@ -986,8 +986,14 @@ export const App: React.FC = () => {
         </main>
       )}
 
-      {/* 8. Refined Compact Luxury Footer (rendered on Home, Current Auction, and Email List) */}
-      {(currentRoute.view === 'home' || currentRoute.view === 'current-auction' || currentRoute.view === 'email-list') && (
+      {/* 8. Refined Compact Luxury Footer (rendered on Home, Current Auction, Email List, and Past Auctions pages) */}
+      {(currentRoute.view === 'home' ||
+        currentRoute.view === 'current-auction' ||
+        currentRoute.view === 'email-list' ||
+        currentRoute.view === 'catalogs' ||
+        currentRoute.view === 'auction-details' ||
+        currentRoute.view === 'catalog-lots' ||
+        currentRoute.view === 'lot-detail') && (
         <Footer onNavigate={handleNavigate} />
       )}
 

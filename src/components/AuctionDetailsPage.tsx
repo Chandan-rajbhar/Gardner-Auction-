@@ -98,8 +98,8 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
       <section className="auction-details-header-strip">
         <div className="container-fluid">
           <div className="auction-details-nav-row">
-            <a href="#catalogs" className="btn-back-catalogs" title="Return to past catalogs directory">
-              <ArrowLeft size={16} />
+            <a href="#catalogs" className="btn-back-catalogs large" title="Return to past catalogs directory">
+              <ArrowLeft size={18} />
               <span>Back to Past Catalogs</span>
             </a>
 
@@ -125,7 +125,15 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
                 <div className="auction-type-strip">
                   <Globe size={13} className="globe-icon" />
                   <span>{auction.auctionType}</span>
+                  <span className="strip-divider">·</span>
+                  <span className="auction-header-status-badge">
+                    <Lock size={12} />
+                    <span>Concluded</span>
+                  </span>
                 </div>
+              </div>
+              <div className="header-realized-tag">
+                <span>Total Realized: <strong>{auction.totalRealized}</strong></span>
               </div>
             </header>
 
@@ -219,7 +227,7 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
               <div className="auction-body-right">
                 <div className="attribute-badge status-closed-badge">
                   <Lock size={15} className="attr-icon" />
-                  <span>{auction.status}</span>
+                  <span>Status: <strong>Concluded</strong></span>
                 </div>
 
                 <div className="attribute-badge type-badge">

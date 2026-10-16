@@ -151,11 +151,11 @@ export const LotDetailPage: React.FC<LotDetailPageProps> = ({
           <div className="hibid-top-nav-inner">
             <button
               type="button"
-              className="hibid-back-btn"
+              className="hibid-back-btn large"
               onClick={handleBackToCatalog}
               title="Return to the auction catalog"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={18} />
               <span>Back to Catalog</span>
             </button>
 
@@ -602,44 +602,43 @@ export const LotDetailPage: React.FC<LotDetailPageProps> = ({
           </div>
 
           {/* 4. Lot-to-Lot Navigation Strip at Bottom */}
-          {(prevLot || nextLot) && (
-            <div className="hibid-bottom-lot-nav-strip">
-              {prevLot ? (
-                <a
-                  href={`#lot/${prevLot.id}`}
-                  className="hibid-lot-nav-arrow-btn prev"
-                  title={`Previous Lot: ${prevLot.lotNumber}`}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Previous Lot ({prevLot.lotNumber})</span>
-                </a>
-              ) : (
-                <div className="nav-spacer"></div>
-              )}
-
-              <button
-                type="button"
-                className="hibid-return-catalog-center-btn"
-                onClick={handleBackToCatalog}
+          <div className="hibid-bottom-lot-nav-strip">
+            {prevLot ? (
+              <a
+                href={`#lot/${prevLot.id}`}
+                className="hibid-lot-nav-arrow-btn prev"
+                title={`Previous Lot: ${prevLot.lotNumber}`}
               >
-                <BookOpen size={15} />
-                <span>Return to Catalog</span>
-              </button>
+                <ChevronLeft size={16} />
+                <span>Previous Lot ({prevLot.lotNumber})</span>
+              </a>
+            ) : (
+              <div className="nav-spacer"></div>
+            )}
 
-              {nextLot ? (
-                <a
-                  href={`#lot/${nextLot.id}`}
-                  className="hibid-lot-nav-arrow-btn next"
-                  title={`Next Lot: ${nextLot.lotNumber}`}
-                >
-                  <span>Next Lot ({nextLot.lotNumber})</span>
-                  <ChevronRight size={16} />
-                </a>
-              ) : (
-                <div className="nav-spacer"></div>
-              )}
-            </div>
-          )}
+            <button
+              type="button"
+              className="hibid-return-catalog-center-btn large"
+              onClick={handleBackToCatalog}
+              title="Return to Catalog"
+            >
+              <ArrowLeft size={18} />
+              <span>Back to Catalog</span>
+            </button>
+
+            {nextLot ? (
+              <a
+                href={`#lot/${nextLot.id}`}
+                className="hibid-lot-nav-arrow-btn next"
+                title={`Next Lot: ${nextLot.lotNumber}`}
+              >
+                <span>Next Lot ({nextLot.lotNumber})</span>
+                <ChevronRight size={16} />
+              </a>
+            ) : (
+              <div className="nav-spacer"></div>
+            )}
+          </div>
         </div>
       </section>
 
