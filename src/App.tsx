@@ -46,6 +46,9 @@ import {
   ArrowRight
 } from 'lucide-react';
 
+import { CurrentAuctionPage } from './components/CurrentAuction/CurrentAuctionPage';
+import type { EnrichedLotItem } from './components/CurrentAuction/types';
+
 const CATEGORIES = [
   'Coins & Currency',
   'Gold & Bullion',
@@ -56,6 +59,7 @@ const CATEGORIES = [
 
 export type AppRoute =
   | { view: 'home' }
+  | { view: 'current-auction' }
   | { view: 'email-list' }
   | { view: 'catalogs' }
   | { view: 'auction-details'; auctionId: string }
@@ -118,6 +122,16 @@ export const App: React.FC = () => {
 
     if (clean === 'email-list' || pathname === '/email-list') {
       return { view: 'email-list' };
+    }
+
+    if (
+      clean === 'auctions' ||
+      clean === 'current-auction' ||
+      clean.startsWith('current-auction') ||
+      pathname === '/current-auction' ||
+      pathname === '/auctions'
+    ) {
+      return { view: 'current-auction' };
     }
 
     // 1. Lot details routing: e.g. #lot/:id or #catalog/:auctionId/lot/:lotId or #auction/:auctionId/lot/:lotId
@@ -447,7 +461,9 @@ export const App: React.FC = () => {
       {/* 1. Navbar with 4 Core Links in order + Login & Sign Up */}
       <Header
         currentPath={
-          currentRoute.view === 'email-list'
+          currentRoute.view === 'current-auction'
+            ? '#auctions'
+            : currentRoute.view === 'email-list'
             ? '#email-list'
             : currentRoute.view === 'catalogs'
             ? '#catalogs'
@@ -457,8 +473,6 @@ export const App: React.FC = () => {
             ? `#catalog/${currentRoute.auctionId}`
             : currentRoute.view === 'lot-detail'
             ? `#lot/${currentRoute.lotId}`
-            : window.location.hash === '#auctions'
-            ? '#auctions'
             : '/'
         }
         onNavigate={handleNavigate}
@@ -482,7 +496,34 @@ export const App: React.FC = () => {
         onOpenAuth={() => setIsAuthOpen(true)}
       />
 
-      {currentRoute.view === 'email-list' ? (
+      {currentRoute.view === 'current-auction' ? (
+        <main>
+          {/* Dedicated Current Auction / Live Auction Page Experience */}
+          <CurrentAuctionPage
+            watchlist={watchlist}
+            searchQuery={searchTerm}
+            onToggleWatchlist={handleToggleWatchlist}
+            onOpenAuth={() => setIsAuthOpen(true)}
+            onRequestConditionDossier={(lot: EnrichedLotItem) => {
+              setActiveConditionEvent({
+                id: lot.id,
+                badge: 'SPECIMEN REPORT',
+                badgeType: 'gold',
+                lotsCount: 1,
+                typeTag: lot.categoryTag,
+                title: `${lot.lotNumber}: ${lot.title}`,
+                description: lot.description,
+                estimate: `Est. $${lot.estimateLow.toLocaleString()} – $${lot.estimateHigh.toLocaleString()}`,
+                dateLabel: 'OFFICIAL DOSSIER',
+                buttonText: 'SUBMIT REQUEST',
+                buttonVariant: 'gold',
+                image: lot.images[0]?.url || '/images/hero_coin.jpg'
+              });
+            }}
+            onAddToast={addToast}
+          />
+        </main>
+      ) : currentRoute.view === 'email-list' ? (
         <EmailListPage
           onSubscribe={(email) => {
             addToast(
@@ -611,7 +652,9 @@ export const App: React.FC = () => {
                           <div key={event.id} className="event-card">
                             <div
                               className="event-card-media"
-                              onClick={() => addToast('info', event.title, `Opening auction catalog for ${event.title}.`)}
+                              onClick={() => {
+                                window.location.hash = '#auctions';
+                              }}
                               role="button"
                               tabIndex={0}
                             >
@@ -626,7 +669,9 @@ export const App: React.FC = () => {
                               <div className="event-type-tag">{event.typeTag}</div>
                               <h3
                                 className="event-title"
-                                onClick={() => addToast('info', event.title, `Opening auction catalog for ${event.title}.`)}
+                                onClick={() => {
+                                  window.location.hash = '#auctions';
+                                }}
                                 role="button"
                                 tabIndex={0}
                               >
@@ -645,7 +690,9 @@ export const App: React.FC = () => {
                                     <button
                                       type="button"
                                       className="btn-event-dark"
-                                      onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
+                                      onClick={() => {
+                                        window.location.hash = '#auctions';
+                                      }}
                                     >
                                       <span>{event.buttonText}</span>
                                     </button>
@@ -654,7 +701,9 @@ export const App: React.FC = () => {
                                     <button
                                       type="button"
                                       className="btn-event-gold"
-                                      onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
+                                      onClick={() => {
+                                        window.location.hash = '#auctions';
+                                      }}
                                     >
                                       <span>{event.buttonText}</span>
                                     </button>
@@ -937,8 +986,8 @@ export const App: React.FC = () => {
         </main>
       )}
 
-      {/* 8. Refined Compact Luxury Footer (rendered on Home and Email List only) */}
-      {(currentRoute.view === 'home' || currentRoute.view === 'email-list') && (
+      {/* 8. Refined Compact Luxury Footer (rendered on Home, Current Auction, and Email List) */}
+      {(currentRoute.view === 'home' || currentRoute.view === 'current-auction' || currentRoute.view === 'email-list') && (
         <Footer onNavigate={handleNavigate} />
       )}
 
