@@ -13,20 +13,20 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
   onRequestCondition
 }) => {
   return (
-    <section id="auctions" className="curated-events-section" aria-label="Explore Our Auctions">
+    <section id="auctions" className="curated-events-section">
       <div className="section-container container-fluid">
         {/* Section Header */}
         <div className="section-header-row">
           <div className="section-header-left">
-            <span className="section-eyebrow">FEATURED SESSIONS</span>
-            <h2 className="section-main-title">Explore Our Auctions</h2>
+            <span className="section-eyebrow">CURATED BIDDER EVENTS</span>
+            <h2 className="section-main-title">Auctions Worth Discovering</h2>
             <p className="section-subtitle">
-              Active and upcoming auctions featuring authenticated rare coins, fine silver, investment bullion, and estate collections.
+              Explore upcoming events and exceptional curated regional estate collections.
             </p>
           </div>
 
-          <a href="#catalogs" className="view-calendar-link" title="Browse past completed auctions">
-            <span>Browse Completed Auctions</span>
+          <a href="#all-events" className="view-calendar-link">
+            <span>VIEW FULL AUCTION CALENDAR</span>
             <ArrowRight size={16} />
           </a>
         </div>
@@ -43,18 +43,7 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
             return (
               <div key={event.id} className="event-card">
                 {/* Event Image Box */}
-                <div
-                  className="event-card-media"
-                  onClick={() => onEventClick(event)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onEventClick(event);
-                    }
-                  }}
-                >
+                <div className="event-card-media" onClick={() => onEventClick(event)}>
                   <img src={event.image} alt={event.title} className="event-img" />
                   
                   {/* Floating Badges */}
@@ -74,12 +63,7 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
                     {event.typeTag}
                   </div>
 
-                  <h3
-                    className="event-title"
-                    onClick={() => onEventClick(event)}
-                    role="button"
-                    tabIndex={0}
-                  >
+                  <h3 className="event-title" onClick={() => onEventClick(event)}>
                     {event.title}
                   </h3>
 
@@ -97,7 +81,6 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
                     <div className="event-cta-btn-wrap">
                       {event.buttonVariant === 'dark' && (
                         <button
-                          type="button"
                           className="btn-event-dark"
                           onClick={() => onEventClick(event)}
                         >
@@ -107,7 +90,6 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
 
                       {event.buttonVariant === 'gold' && (
                         <button
-                          type="button"
                           className="btn-event-gold"
                           onClick={() => onEventClick(event)}
                         >
@@ -117,7 +99,6 @@ export const CuratedEvents: React.FC<CuratedEventsProps> = ({
 
                       {event.buttonVariant === 'outline' && (
                         <button
-                          type="button"
                           className="btn-event-outline"
                           onClick={() => onRequestCondition(event)}
                         >

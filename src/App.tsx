@@ -7,7 +7,6 @@ import { LiveBiddingDesk } from './components/LiveBiddingDesk';
 import { PastAuctionsSection } from './components/PastAuctionsSection';
 import { TrustSection } from './components/TrustSection';
 import { EmailListPage } from './components/EmailListPage';
-import { RoutePendingView } from './components/RoutePendingView';
 import { Footer } from './components/Footer';
 import { BiddingModal } from './components/BiddingModal';
 import { LotDetailModal } from './components/LotDetailModal';
@@ -400,447 +399,437 @@ export const App: React.FC = () => {
             );
           }}
         />
-      ) : currentRoute === '#auctions' ? (
-        <RoutePendingView
-          routeTitle="Current Auctions"
-          routePath="#auctions"
-          onNavigateHome={() => handleNavigate('/')}
-        />
-      ) : currentRoute === '#catalogs' ? (
-        <RoutePendingView
-          routeTitle="Past Auctions"
-          routePath="#catalogs"
-          onNavigateHome={() => handleNavigate('/')}
-        />
       ) : (
         <main id="main-content">
-        {/* 2. Hero Section: Refined, elegant, showcasing certified gold and silver numismatics */}
-        <Hero
-          spotlightLot={spotlightLot}
-          spotlightTimeFormatted={spotlightTimeFormatted}
-          isWatchlisted={watchlist.includes(spotlightLot.id)}
-          onToggleWatchlist={handleToggleWatchlist}
-          onPlaceBid={(lot) => setActiveBiddingLot(lot)}
-          onViewLot={(lot) => setActiveDetailLot(lot)}
-        />
+          {/* 2. Hero Section: Refined, elegant, showcasing certified gold and silver numismatics */}
+          <Hero
+            spotlightLot={spotlightLot}
+            spotlightTimeFormatted={spotlightTimeFormatted}
+            isWatchlisted={watchlist.includes(spotlightLot.id)}
+            onToggleWatchlist={handleToggleWatchlist}
+            onPlaceBid={(lot) => setActiveBiddingLot(lot)}
+            onViewLot={(lot) => setActiveDetailLot(lot)}
+          />
 
-        {/* 3. Featured Auction Preview: Explore Our Auctions with Full Search, Filter, Sort, View Controls */}
-        <section id="auctions" className="curated-events-section" aria-label="Explore Our Auctions">
-          <div className="section-container container-fluid">
-            {/* Section Header */}
-            <div className="section-header-row">
-              <div className="section-header-left">
-                <span className="section-eyebrow">CATALOG EXPLORER &amp; LIVE SESSIONS</span>
-                <h2 className="section-main-title">Explore Current Auctions</h2>
-                <p className="section-subtitle">
-                  Browse certified signature sales, search live inventory, and inspect rare specimens closing today.
-                </p>
+          {/* 3. Featured Auction Preview: Explore Our Auctions with Full Search, Filter, Sort, View Controls */}
+          <section id="auctions" className="curated-events-section" aria-label="Explore Our Auctions">
+            <div className="section-container container-fluid">
+              {/* Section Header */}
+              <div className="section-header-row">
+                <div className="section-header-left">
+                  <span className="section-eyebrow">CATALOG EXPLORER &amp; LIVE SESSIONS</span>
+                  <h2 className="section-main-title">Explore Current Auctions</h2>
+                  <p className="section-subtitle">
+                    Browse certified signature sales, search live inventory, and inspect rare specimens closing today.
+                  </p>
+                </div>
+
+                <a
+                  href="#catalogs"
+                  className="view-calendar-link"
+                  title="Browse past completed auctions"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const el = document.getElementById('catalogs');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  <span>Browse Completed Catalogs</span>
+                  <ArrowRight size={16} />
+                </a>
               </div>
 
-              <a
-                href="#catalogs"
-                className="view-calendar-link"
-                title="Browse past completed auctions"
-                onClick={(e) => {
-                  e.preventDefault();
-                  const el = document.getElementById('catalogs');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+              {/* Auction Search & View Controls (Row 1, Row 2, Row 3) */}
+              <AuctionSearchControls
+                searchTerm={searchTerm}
+                onSearchChange={handleSearchChange}
+                onSearchSubmit={() => {
+                  addToast('info', 'Search Filter Applied', `Showing results for "${searchTerm || 'all items'}"`);
                 }}
-              >
-                <span>Browse Completed Catalogs</span>
-                <ArrowRight size={16} />
-              </a>
-            </div>
+                onClearSearch={handleClearSearch}
+                selectedCategory={selectedCategory}
+                onCategoryChange={handleCategoryChange}
+                categories={CATEGORIES}
+                browsingMode={browsingMode}
+                onBrowsingModeChange={handleBrowsingModeChange}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
+                displayMode={displayMode}
+                onDisplayModeChange={setDisplayMode}
+                resultCount={browsingMode === 'auctions' ? filteredEvents.length : paginatedLots.length}
+                totalCount={totalCount}
+                itemsPerPage={itemsPerPage}
+                onItemsPerPageChange={handleItemsPerPageChange}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
 
-            {/* Auction Search & View Controls (Row 1, Row 2, Row 3) */}
-            <AuctionSearchControls
-              searchTerm={searchTerm}
-              onSearchChange={handleSearchChange}
-              onSearchSubmit={() => {
-                addToast('info', 'Search Filter Applied', `Showing results for "${searchTerm || 'all items'}"`);
-              }}
-              onClearSearch={handleClearSearch}
-              selectedCategory={selectedCategory}
-              onCategoryChange={handleCategoryChange}
-              categories={CATEGORIES}
-              browsingMode={browsingMode}
-              onBrowsingModeChange={handleBrowsingModeChange}
-              sortOrder={sortOrder}
-              onSortChange={handleSortChange}
-              displayMode={displayMode}
-              onDisplayModeChange={setDisplayMode}
-              resultCount={browsingMode === 'auctions' ? filteredEvents.length : paginatedLots.length}
-              totalCount={totalCount}
-              itemsPerPage={itemsPerPage}
-              onItemsPerPageChange={handleItemsPerPageChange}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
+              {/* Active View: AUCTIONS */}
+              {browsingMode === 'auctions' && (
+                <>
+                  {filteredEvents.length === 0 ? (
+                    <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
+                      <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
+                        No auction sessions match your current search and category criteria.
+                      </p>
+                      <button
+                        type="button"
+                        className="btn-event-gold"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setSelectedCategory('all');
+                        }}
+                      >
+                        Reset Filter Criteria
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="events-grid">
+                      {filteredEvents.map((event) => {
+                        const getBadgeClass = () => {
+                          if (event.badgeType === 'red') return 'badge-live-red';
+                          if (event.badgeType === 'green') return 'badge-status-green';
+                          return 'badge-gold-gold';
+                        };
 
-            {/* Active View: AUCTIONS */}
-            {browsingMode === 'auctions' && (
-              <>
-                {filteredEvents.length === 0 ? (
-                  <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
-                    <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
-                      No auction sessions match your current search and category criteria.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn-event-gold"
-                      onClick={() => {
-                        setSearchTerm('');
-                        setSelectedCategory('all');
-                      }}
-                    >
-                      Reset Filter Criteria
-                    </button>
-                  </div>
-                ) : (
-                  <div className="events-grid">
-                    {filteredEvents.map((event) => {
-                      const getBadgeClass = () => {
-                        if (event.badgeType === 'red') return 'badge-live-red';
-                        if (event.badgeType === 'green') return 'badge-status-green';
-                        return 'badge-gold-gold';
-                      };
-
-                      return (
-                        <div key={event.id} className="event-card">
-                          <div
-                            className="event-card-media"
-                            onClick={() => addToast('info', event.title, `Opening auction catalog for ${event.title}.`)}
-                            role="button"
-                            tabIndex={0}
-                          >
-                            <img src={event.image} alt={event.title} className="event-img" />
-                            <div className="event-badges-overlay">
-                              <span className={`event-badge-pill ${getBadgeClass()}`}>{event.badge}</span>
-                              <span className="event-lots-pill">{event.lotsCount} LOTS</span>
-                            </div>
-                          </div>
-
-                          <div className="event-card-body">
-                            <div className="event-type-tag">{event.typeTag}</div>
-                            <h3
-                              className="event-title"
+                        return (
+                          <div key={event.id} className="event-card">
+                            <div
+                              className="event-card-media"
                               onClick={() => addToast('info', event.title, `Opening auction catalog for ${event.title}.`)}
                               role="button"
                               tabIndex={0}
                             >
-                              {event.title}
-                            </h3>
-                            <p className="event-description">{event.description}</p>
-
-                            <div className="event-card-footer">
-                              <div className="event-estimate-meta">
-                                <span className="estimate-label">{event.dateLabel}</span>
-                                <span className="estimate-val">{event.estimate}</span>
-                              </div>
-
-                              <div className="event-cta-btn-wrap">
-                                {event.buttonVariant === 'dark' && (
-                                  <button
-                                    type="button"
-                                    className="btn-event-dark"
-                                    onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
-                                  >
-                                    <span>{event.buttonText}</span>
-                                  </button>
-                                )}
-                                {event.buttonVariant === 'gold' && (
-                                  <button
-                                    type="button"
-                                    className="btn-event-gold"
-                                    onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
-                                  >
-                                    <span>{event.buttonText}</span>
-                                  </button>
-                                )}
-                                {event.buttonVariant === 'outline' && (
-                                  <button
-                                    type="button"
-                                    className="btn-event-outline"
-                                    onClick={() => setActiveConditionEvent(event)}
-                                  >
-                                    <span>{event.buttonText}</span>
-                                  </button>
-                                )}
+                              <img src={event.image} alt={event.title} className="event-img" />
+                              <div className="event-badges-overlay">
+                                <span className={`event-badge-pill ${getBadgeClass()}`}>{event.badge}</span>
+                                <span className="event-lots-pill">{event.lotsCount} LOTS</span>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
 
-            {/* Active View: LOTS (Grid or List Layout) */}
-            {browsingMode === 'lots' && (
-              <>
-                {paginatedLots.length === 0 ? (
-                  <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
-                    <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
-                      No individual lots match your current search and category criteria.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn-event-gold"
-                      onClick={() => {
-                        setSearchTerm('');
-                        setSelectedCategory('all');
-                      }}
-                    >
-                      Reset Filter Criteria
-                    </button>
-                  </div>
-                ) : displayMode === 'grid' ? (
-                  <div className="lots-grid" style={{ marginTop: '24px' }}>
-                    {paginatedLots.map((lot) => {
-                      const isWatchlisted = watchlist.includes(lot.id);
-                      const timeRemaining = timers[lot.id] || 'Closing Soon';
+                            <div className="event-card-body">
+                              <div className="event-type-tag">{event.typeTag}</div>
+                              <h3
+                                className="event-title"
+                                onClick={() => addToast('info', event.title, `Opening auction catalog for ${event.title}.`)}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                {event.title}
+                              </h3>
+                              <p className="event-description">{event.description}</p>
 
-                      return (
-                        <div key={lot.id} className="lot-card">
-                          <div className="lot-card-media" onClick={() => setActiveDetailLot(lot)}>
-                            <img src={lot.image} alt={lot.title} className="lot-img" />
-                            <div className="lot-badges-overlay">
-                              <span className="lot-number-badge">{lot.lotNumber}</span>
-                              <span className="lot-timer-badge">
-                                <Clock size={12} />
-                                <span>{timeRemaining}</span>
-                              </span>
-                            </div>
-                            <button
-                              className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleWatchlist(lot.id);
-                              }}
-                              title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                              aria-label="Bookmark Lot"
-                            >
-                              <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
-                            </button>
-                          </div>
-
-                          <div className="lot-card-body">
-                            <span className="lot-category-tag">{lot.categoryTag}</span>
-                            <h3 className="lot-title" onClick={() => setActiveDetailLot(lot)}>
-                              {lot.title}
-                            </h3>
-                            <p className="lot-brief-note">{lot.description}</p>
-
-                            <div className="lot-bid-details">
-                              <div className="bid-data-row">
-                                <div className="current-bid-wrap">
-                                  <span className="bid-label-micro">CURRENT BID</span>
-                                  <span className="current-bid-val">
-                                    ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
+                              <div className="event-card-footer">
+                                <div className="event-estimate-meta">
+                                  <span className="estimate-label">{event.dateLabel}</span>
+                                  <span className="estimate-val">{event.estimate}</span>
                                 </div>
-                                <div className="reserve-wrap">
-                                  <span className="reserve-met-badge">
-                                    <CheckCircle2 size={11} /> RESERVE MET
-                                  </span>
+
+                                <div className="event-cta-btn-wrap">
+                                  {event.buttonVariant === 'dark' && (
+                                    <button
+                                      type="button"
+                                      className="btn-event-dark"
+                                      onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
+                                    >
+                                      <span>{event.buttonText}</span>
+                                    </button>
+                                  )}
+                                  {event.buttonVariant === 'gold' && (
+                                    <button
+                                      type="button"
+                                      className="btn-event-gold"
+                                      onClick={() => addToast('info', event.title, `Opening catalog for ${event.title}.`)}
+                                    >
+                                      <span>{event.buttonText}</span>
+                                    </button>
+                                  )}
+                                  {event.buttonVariant === 'outline' && (
+                                    <button
+                                      type="button"
+                                      className="btn-event-outline"
+                                      onClick={() => setActiveConditionEvent(event)}
+                                    >
+                                      <span>{event.buttonText}</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
-                              <div className="bids-count-meta">
-                                <span>{lot.bidsCount} Bids Placed</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Active View: LOTS (Grid or List Layout) */}
+              {browsingMode === 'lots' && (
+                <>
+                  {paginatedLots.length === 0 ? (
+                    <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
+                      <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
+                        No individual lots match your current search and category criteria.
+                      </p>
+                      <button
+                        type="button"
+                        className="btn-event-gold"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setSelectedCategory('all');
+                        }}
+                      >
+                        Reset Filter Criteria
+                      </button>
+                    </div>
+                  ) : displayMode === 'grid' ? (
+                    <div className="lots-grid" style={{ marginTop: '24px' }}>
+                      {paginatedLots.map((lot) => {
+                        const isWatchlisted = watchlist.includes(lot.id);
+                        const timeRemaining = timers[lot.id] || 'Closing Soon';
+
+                        return (
+                          <div key={lot.id} className="lot-card">
+                            <div className="lot-card-media" onClick={() => setActiveDetailLot(lot)}>
+                              <img src={lot.image} alt={lot.title} className="lot-img" />
+                              <div className="lot-badges-overlay">
+                                <span className="lot-number-badge">{lot.lotNumber}</span>
+                                <span className="lot-timer-badge">
+                                  <Clock size={12} />
+                                  <span>{timeRemaining}</span>
+                                </span>
                               </div>
+                              <button
+                                className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleWatchlist(lot.id);
+                                }}
+                                title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                                aria-label="Bookmark Lot"
+                              >
+                                <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
+                              </button>
                             </div>
 
-                            <button
-                              className="btn-instant-bid"
-                              onClick={() => handleInstantBidDirect(lot)}
-                            >
-                              <Zap size={15} />
-                              <span>⚡ INSTANT BID ${lot.nextBid.toLocaleString()}</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="lots-list-view">
-                    {paginatedLots.map((lot) => {
-                      const isWatchlisted = watchlist.includes(lot.id);
-                      const timeRemaining = timers[lot.id] || 'Closing Soon';
-
-                      return (
-                        <div key={lot.id} className="lot-list-card">
-                          <div className="list-card-media" onClick={() => setActiveDetailLot(lot)}>
-                            <img src={lot.image} alt={lot.title} className="list-card-img" />
-                            <div className="lot-badges-overlay">
-                              <span className="lot-number-badge">{lot.lotNumber}</span>
-                              <span className="lot-timer-badge">
-                                <Clock size={12} />
-                                <span>{timeRemaining}</span>
-                              </span>
-                            </div>
-                            <button
-                              className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleWatchlist(lot.id);
-                              }}
-                              title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                              aria-label="Bookmark Lot"
-                            >
-                              <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
-                            </button>
-                          </div>
-
-                          <div className="list-card-body">
-                            <div className="list-info-col">
-                              <span className="list-lot-tag">{lot.categoryTag}</span>
-                              <h3 className="list-lot-title" onClick={() => setActiveDetailLot(lot)}>
+                            <div className="lot-card-body">
+                              <span className="lot-category-tag">{lot.categoryTag}</span>
+                              <h3 className="lot-title" onClick={() => setActiveDetailLot(lot)}>
                                 {lot.title}
                               </h3>
-                              <p className="list-lot-desc">{lot.description}</p>
-                              <div className="list-lot-provenance">Provenance: {lot.provenance}</div>
-                            </div>
+                              <p className="lot-brief-note">{lot.description}</p>
 
-                            <div className="list-actions-col">
-                              <div className="list-bid-data">
-                                <span className="list-bid-label">CURRENT HIGH BID</span>
-                                <span className="list-bid-val">
-                                  ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <span className="list-bids-count">{lot.bidsCount} bids · Reserve Met</span>
+                              <div className="lot-bid-details">
+                                <div className="bid-data-row">
+                                  <div className="current-bid-wrap">
+                                    <span className="bid-label-micro">CURRENT BID</span>
+                                    <span className="current-bid-val">
+                                      ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                  <div className="reserve-wrap">
+                                    <span className="reserve-met-badge">
+                                      <CheckCircle2 size={11} /> RESERVE MET
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="bids-count-meta">
+                                  <span>{lot.bidsCount} Bids Placed</span>
+                                </div>
                               </div>
 
-                              <div className="list-btn-group">
-                                <button
-                                  type="button"
-                                  className="btn-list-instant"
-                                  onClick={() => handleInstantBidDirect(lot)}
-                                >
-                                  <Zap size={14} />
-                                  <span>INSTANT BID ${lot.nextBid.toLocaleString()}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-list-inspect"
-                                  onClick={() => setActiveDetailLot(lot)}
-                                >
-                                  <Eye size={13} />
-                                  <span>INSPECT SPECIMEN</span>
-                                </button>
+                              <button
+                                className="btn-instant-bid"
+                                onClick={() => handleInstantBidDirect(lot)}
+                              >
+                                <Zap size={15} />
+                                <span>⚡ INSTANT BID ${lot.nextBid.toLocaleString()}</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="lots-list-view">
+                      {paginatedLots.map((lot) => {
+                        const isWatchlisted = watchlist.includes(lot.id);
+                        const timeRemaining = timers[lot.id] || 'Closing Soon';
+
+                        return (
+                          <div key={lot.id} className="lot-list-card">
+                            <div className="list-card-media" onClick={() => setActiveDetailLot(lot)}>
+                              <img src={lot.image} alt={lot.title} className="list-card-img" />
+                              <div className="lot-badges-overlay">
+                                <span className="lot-number-badge">{lot.lotNumber}</span>
+                                <span className="lot-timer-badge">
+                                  <Clock size={12} />
+                                  <span>{timeRemaining}</span>
+                                </span>
+                              </div>
+                              <button
+                                className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleWatchlist(lot.id);
+                                }}
+                                title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                                aria-label="Bookmark Lot"
+                              >
+                                <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
+                              </button>
+                            </div>
+
+                            <div className="list-card-body">
+                              <div className="list-info-col">
+                                <span className="list-lot-tag">{lot.categoryTag}</span>
+                                <h3 className="list-lot-title" onClick={() => setActiveDetailLot(lot)}>
+                                  {lot.title}
+                                </h3>
+                                <p className="list-lot-desc">{lot.description}</p>
+                                <div className="list-lot-provenance">Provenance: {lot.provenance}</div>
+                              </div>
+
+                              <div className="list-actions-col">
+                                <div className="list-bid-data">
+                                  <span className="list-bid-label">CURRENT HIGH BID</span>
+                                  <span className="list-bid-val">
+                                    ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                  <span className="list-bids-count">{lot.bidsCount} bids · Reserve Met</span>
+                                </div>
+
+                                <div className="list-btn-group">
+                                  <button
+                                    type="button"
+                                    className="btn-list-instant"
+                                    onClick={() => handleInstantBidDirect(lot)}
+                                  >
+                                    <Zap size={14} />
+                                    <span>INSTANT BID ${lot.nextBid.toLocaleString()}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-list-inspect"
+                                    onClick={() => setActiveDetailLot(lot)}
+                                  >
+                                    <Eye size={13} />
+                                    <span>INSPECT SPECIMEN</span>
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
 
-            {/* Active View: SALESROOM MAP */}
-            {browsingMode === 'map' && (
-              <div className="salesroom-map-card">
-                <div className="map-card-header">
-                  <div>
-                    <h3 className="map-title">Salesroom Floorplan &amp; Exhibition Galleries</h3>
-                    <div className="map-address-banner">
-                      <MapPin size={16} color="#cba135" />
-                      <span>4200 Commercial Boulevard, Suite 100, Pittsburgh, PA 15201</span>
+              {/* Active View: SALESROOM MAP */}
+              {browsingMode === 'map' && (
+                <div className="salesroom-map-card">
+                  <div className="map-card-header">
+                    <div>
+                      <h3 className="map-title">Salesroom Floorplan &amp; Exhibition Galleries</h3>
+                      <div className="map-address-banner">
+                        <MapPin size={16} color="#cba135" />
+                        <span>4200 Commercial Boulevard, Suite 100, Pittsburgh, PA 15201</span>
+                      </div>
+                    </div>
+                    <div className="past-auctions-meta-tag">
+                      <Building size={14} />
+                      <span>Security Cleared Facilities</span>
                     </div>
                   </div>
-                  <div className="past-auctions-meta-tag">
-                    <Building size={14} />
-                    <span>Security Cleared Facilities</span>
-                  </div>
-                </div>
 
-                <div className="floorplan-zones-grid">
-                  <div className="zone-box">
-                    <span className="zone-num">ZONE 01 · SECURE SALOON</span>
-                    <h4 className="zone-heading">Vault &amp; Certified Numismatics Gallery</h4>
-                    <p className="zone-desc">
-                      Climate-controlled museum cases with 10x-30x stereo binocular microscopes, PCGS &amp; NGC slab verification terminals, and investment gold bullion weighing scales.
-                    </p>
-                  </div>
-
-                  <div className="zone-box">
-                    <span className="zone-num">ZONE 02 · PRIVATE SALON</span>
-                    <h4 className="zone-heading">Fine Jewelry &amp; Horology Exhibition</h4>
-                    <p className="zone-desc">
-                      Diamond colorimeter, refractometer inspection desks, vintage pocket watch timing counters, and private collector viewing booths for estate silver services.
-                    </p>
-                  </div>
-
-                  <div className="zone-box">
-                    <span className="zone-num">ZONE 03 · MAIN AMPHITHEATER</span>
-                    <h4 className="zone-heading">Main Podium &amp; Live Clerking Desk</h4>
-                    <p className="zone-desc">
-                      Tiered gallery seating, dual HD projection screens, telephone clerk bank, and fast-track paddle registration desk for certified in-person bidders.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="map-visitation-bar">
-                  <div className="visit-info-left">
-                    <div className="visit-meta-item">
-                      <Clock size={15} />
-                      <span>Inspection Hours: <strong>Mon–Fri 9am–5pm</strong> (Auction Day from 8am)</span>
+                  <div className="floorplan-zones-grid">
+                    <div className="zone-box">
+                      <span className="zone-num">ZONE 01 · SECURE SALOON</span>
+                      <h4 className="zone-heading">Vault &amp; Certified Numismatics Gallery</h4>
+                      <p className="zone-desc">
+                        Climate-controlled museum cases with 10x-30x stereo binocular microscopes, PCGS &amp; NGC slab verification terminals, and investment gold bullion weighing scales.
+                      </p>
                     </div>
-                    <div className="visit-meta-item">
-                      <Phone size={15} />
-                      <span>Concierge Desk: <strong>(412) 555-0199</strong></span>
+
+                    <div className="zone-box">
+                      <span className="zone-num">ZONE 02 · PRIVATE SALON</span>
+                      <h4 className="zone-heading">Fine Jewelry &amp; Horology Exhibition</h4>
+                      <p className="zone-desc">
+                        Diamond colorimeter, refractometer inspection desks, vintage pocket watch timing counters, and private collector viewing booths for estate silver services.
+                      </p>
+                    </div>
+
+                    <div className="zone-box">
+                      <span className="zone-num">ZONE 03 · MAIN AMPHITHEATER</span>
+                      <h4 className="zone-heading">Main Podium &amp; Live Clerking Desk</h4>
+                      <p className="zone-desc">
+                        Tiered gallery seating, dual HD projection screens, telephone clerk bank, and fast-track paddle registration desk for certified in-person bidders.
+                      </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn-directions"
-                    onClick={() => addToast('info', 'Driving Directions', 'Navigation coordinates sent: 4200 Commercial Blvd, Pittsburgh, PA.')}
-                  >
-                    <Compass size={15} />
-                    <span>GET DRIVING DIRECTIONS</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
 
-        {/* 4. Live Bidding Desk: Real-time closing soon lots (featured when browsing auctions) */}
-        {browsingMode === 'auctions' && (
-          <LiveBiddingDesk
-            lots={filteredSortedLots.slice(0, 4)}
-            timers={timers}
-            watchlist={watchlist}
-            onToggleWatchlist={handleToggleWatchlist}
-            onInstantBid={handleInstantBidDirect}
-            onViewLot={(lot) => setActiveDetailLot(lot)}
-            onManualRefresh={triggerRefresh}
-            isRefreshing={isRefreshing}
+                  <div className="map-visitation-bar">
+                    <div className="visit-info-left">
+                      <div className="visit-meta-item">
+                        <Clock size={15} />
+                        <span>Inspection Hours: <strong>Mon–Fri 9am–5pm</strong> (Auction Day from 8am)</span>
+                      </div>
+                      <div className="visit-meta-item">
+                        <Phone size={15} />
+                        <span>Concierge Desk: <strong>(412) 555-0199</strong></span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-directions"
+                      onClick={() => addToast('info', 'Driving Directions', 'Navigation coordinates sent: 4200 Commercial Blvd, Pittsburgh, PA.')}
+                    >
+                      <Compass size={15} />
+                      <span>GET DRIVING DIRECTIONS</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* 4. Live Bidding Desk: Real-time closing soon lots (featured when browsing auctions) */}
+          {browsingMode === 'auctions' && (
+            <LiveBiddingDesk
+              lots={filteredSortedLots.slice(0, 4)}
+              timers={timers}
+              watchlist={watchlist}
+              onToggleWatchlist={handleToggleWatchlist}
+              onInstantBid={handleInstantBidDirect}
+              onViewLot={(lot) => setActiveDetailLot(lot)}
+              onManualRefresh={triggerRefresh}
+              isRefreshing={isRefreshing}
+            />
+          )}
+
+          {/* 5. Past Auctions Section: Catalogs & Realized Hammer Prices */}
+          <PastAuctionsSection
+            onInquirePast={(title) => {
+              addToast('info', 'Catalog Archive Request', `Archive details and realized price sheet requested for ${title}.`);
+            }}
           />
-        )}
 
-        {/* 5. Past Auctions Section: Catalogs & Realized Hammer Prices */}
-        <PastAuctionsSection
-          onInquirePast={(title) => {
-            addToast('info', 'Catalog Archive Request', `Archive details and realized price sheet requested for ${title}.`);
-          }}
-        />
-
-        {/* 6. Understated Trust Section: 3 Verified Legitimacy Points */}
-        <TrustSection />
-      </main>
+          {/* 6. Understated Trust Section: 3 Verified Legitimacy Points */}
+          <TrustSection />
+        </main>
       )}
 
-      {/* 8. Refined Compact Luxury Footer */}
-      <Footer onNavigate={handleNavigate} />
+      {/* 8. Refined Compact Luxury Footer (rendered on Home and Email List only) */}
+      {(currentRoute === '/' || currentRoute === '#email-list') && (
+        <Footer onNavigate={handleNavigate} />
+      )}
 
-      {/* Floating Watchlist Button for Easy Access */}
-      {watchlist.length > 0 && (
+      {/* Floating Watchlist Button for Easy Access (rendered on Home only) */}
+      {currentRoute === '/' && watchlist.length > 0 && (
         <button
           className="floating-watchlist-pill"
           onClick={() => setIsWatchlistOpen(true)}
