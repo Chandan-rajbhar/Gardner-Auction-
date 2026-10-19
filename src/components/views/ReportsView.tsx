@@ -54,13 +54,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ auction, lots }) => {
             Auction Intelligence & Realization Reports
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Price realization curves, hammer vs estimate ratios, and AF360 syndication export
+            Price realization curves, hammer vs estimate ratios, and syndication export
           </p>
         </div>
 
         <button className="btn btn-gold" onClick={handleExportCSV}>
           <Download size={16} />
-          <span>Export AF360 CSV Telemetry</span>
+          <span>Export Realization CSV</span>
         </button>
       </div>
 
@@ -170,7 +170,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ auction, lots }) => {
                 <strong>12.6%</strong>
               </div>
               <div style={{ height: 8, background: 'var(--bg-darkest)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: '12.6%', height: '100%', background: '#10b981' }}></div>
+                <div style={{ width: '12.6%', height: '100%', background: '#f59e0b' }}></div>
               </div>
             </div>
 
@@ -188,19 +188,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ auction, lots }) => {
 
         <div className="syndication-card">
           <h3 className="font-serif" style={{ fontSize: 16, marginBottom: 14 }}>
-            AF360 Settlement Readiness
+            Settlement Readiness
           </h3>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 16 }}>
             Settlement data is prepared for export to QuickBooks, HiBid batch payment export, and Gardner certified consignor disbursement checks.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
               <CheckCircle2 size={14} /> Tax calculations compliant with Montana zero general state sales tax + out-of-state marketplace nexus
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
               <CheckCircle2 size={14} /> 15% Wire / 18% Credit Card Premium separation validated
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
               <CheckCircle2 size={14} /> Consignor reserve integrity confirmed
             </div>
           </div>

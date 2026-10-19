@@ -111,7 +111,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
             Bidder & Consignor Registry
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Paddle management, credit card verifications, and AF360 synchronized bidder limits
+            Paddle management, credit card verifications, and synchronized bidder limits
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 </td>
                 <td>
                   {user.creditCardAuthorized ? (
-                    <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500 }}>
+                    <span style={{ color: '#d97706', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600 }}>
                       <ShieldCheck size={14} /> Authorized (••{user.cardLast4})
                     </span>
                   ) : (
@@ -249,7 +249,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         <div className="modal-overlay" onClick={() => setSelectedUser(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="font-serif">Bidder Profile & AF360 Authorization</h3>
+              <h3 className="font-serif">Bidder Profile & Authorization</h3>
               <button className="icon-btn" onClick={() => setSelectedUser(null)}>
                 <X size={18} />
               </button>
@@ -422,7 +422,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <option value="Floor Walk-in">Floor Saleroom Walk-in</option>
                       <option value="Telephone Desk">Telephone Bidding Desk</option>
                       <option value="gardner-auction.com (Direct)">Direct Website</option>
-                      <option value="HiBid Network">HiBid AF360 Portal</option>
+                      <option value="HiBid Network">HiBid Portal</option>
                     </select>
                   </div>
                 </div>

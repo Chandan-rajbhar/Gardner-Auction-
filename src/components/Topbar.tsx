@@ -1,14 +1,14 @@
 import React from 'react';
 import { 
   Menu, 
-  RefreshCw, 
   Bell, 
   HelpCircle,
   Radio
 } from 'lucide-react';
-import { Auction } from '../types';
+import { Auction, NavigationSection } from '../types';
 
 interface TopbarProps {
+  currentSection?: NavigationSection;
   auctions: Auction[];
   selectedAuctionId: string;
   onSelectAuction: (id: string) => void;
@@ -20,17 +20,14 @@ interface TopbarProps {
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
+  currentSection = 'overview',
   auctions,
   selectedAuctionId,
   onSelectAuction,
   onOpenMobileMenu,
-  onTriggerHiBidSync,
-  isSyncing,
   unreadLogsCount,
   onOpenNotifications
 }) => {
-  const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
-
   return (
     <header className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -42,42 +39,41 @@ export const Topbar: React.FC<TopbarProps> = ({
           <Menu size={20} />
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
-          <span>Dashboard</span>
-          <span style={{ color: '#cbd5e1' }}>/</span>
-          <strong style={{ color: 'var(--text-main)', fontWeight: 600 }}>AF360 Auction Overview</strong>
-        </div>
-
-        <div className="auction-selector-wrapper">
-          <div className="auction-select-badge">
-            <Radio size={14} color="#b48316" />
-            <select 
-              value={selectedAuctionId} 
-              onChange={(e) => onSelectAuction(e.target.value)}
-              title="Select Active Auction"
-            >
-              {auctions.map(a => (
-                <option key={a.id} value={a.id} style={{ background: '#ffffff', color: '#0f172a' }}>
-                  {a.code} — {a.title} ({a.status.toUpperCase()})
-                </option>
-              ))}
-            </select>
+        {/* Show active auction selector dropdown ONLY on Overview / Dashboard Overview page per user request */}
+        {currentSection === 'overview' && (
+          <div className="auction-selector-wrapper">
+            <div className="auction-select-badge">
+              <Radio size={14} color="#b48316" className="auction-radio-pulse" />
+              <select 
+                value={selectedAuctionId} 
+                onChange={(e) => onSelectAuction(e.target.value)}
+                title="Select Active Auction"
+              >
+                {auctions.map(a => (
+                  <option key={a.id} value={a.id} style={{ background: '#ffffff', color: '#0f172a' }}>
+                    {a.code} — {a.title} ({a.status.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="topbar-right">
+        {/* Supabase Edge & HiBid indicators (Commented out per user request) */}
+        {/* 
         <div 
           className="status-indicator" 
-          style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)', cursor: 'default' }}
+          style={{ background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)', cursor: 'default' }}
           title="Supabase Connected: rzacpssumjahxndmqnxm.supabase.co (Edge Runtime Active)"
         >
-          <span className="status-dot" style={{ background: '#10b981', boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)' }}></span>
-          <span style={{ color: '#10b981', fontWeight: 600 }}>Supabase Edge</span>
+          <span className="status-dot" style={{ background: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)' }}></span>
+          <span style={{ color: '#d97706', fontWeight: 600 }}>Supabase Edge</span>
         </div>
 
         <div className="status-indicator">
-          <span className="status-dot"></span>
+          <span className="status-dot" style={{ background: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)' }}></span>
           <span>HiBid AF360 Online</span>
         </div>
 
@@ -90,6 +86,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
           <span>{isSyncing ? 'Syncing...' : 'Sync HiBid'}</span>
         </button>
+        */}
 
         <button 
           className="icon-btn" 
@@ -102,8 +99,8 @@ export const Topbar: React.FC<TopbarProps> = ({
 
         <button 
           className="icon-btn" 
-          title="AF360 Clerking Guide & Help"
-          onClick={() => alert('AF360 Admin Help: Use the Live Clerking block during auction day to capture floor and HiBid bids. Invoicing automatically computes 15% wire / 18% credit card premiums.')}
+          title="Admin Clerking Guide & Help"
+          onClick={() => alert('Admin Help: Use the Live Clerking block during auction day to capture bids and manage gavel knock-down. Invoicing automatically computes 15% wire / 18% credit card premiums.')}
         >
           <HelpCircle size={18} />
         </button>

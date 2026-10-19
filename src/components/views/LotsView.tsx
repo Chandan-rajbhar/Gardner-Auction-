@@ -13,7 +13,10 @@ import {
   Check, 
   X,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  Bookmark,
+  Zap,
+  CheckCircle2
 } from 'lucide-react';
 
 interface LotsViewProps {
@@ -182,71 +185,96 @@ export const LotsView: React.FC<LotsViewProps> = ({
       {/* Lots Grid View */}
       {viewMode === 'grid' ? (
         <div className="lots-grid">
-          {filteredLots.map(lot => (
-            <div key={lot.id} className="lot-card">
-              <div className="lot-image-box">
-                <img src={lot.image} alt={lot.title} />
-                <div className="lot-number-tag">
-                  LOT #{lot.lotNumber}
-                </div>
-                <div className="lot-cert-tag">
-                  {lot.certification} {lot.grade}
-                </div>
-              </div>
-
-              <div className="lot-info">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="lot-category">{lot.category}</div>
-                  <span className={`badge badge-${lot.status === 'on_block' ? 'live' : lot.status === 'sold' ? 'gold' : 'preview'}`}>
-                    {lot.status === 'on_block' ? 'ON BLOCK' : lot.status}
-                  </span>
-                </div>
-
-                <h3 className="lot-title">{lot.title}</h3>
-
-                <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {lot.conditionReport}
-                </p>
-
-                <div className="lot-financials">
-                  <div className="financial-item">
-                    <div className="label">Estimate</div>
-                    <div className="val">{formatCurrency(lot.estimateLow)} – {formatCurrency(lot.estimateHigh)}</div>
+          {filteredLots.map(lot => {
+            const isReserveMet = lot.currentBid >= lot.reservePrice;
+            const currentAmount = lot.status === 'sold' && lot.hammerPrice ? lot.hammerPrice : lot.currentBid;
+            return (
+              <div key={lot.id} className="lot-card">
+                <div className="lot-image-box">
+                  <img src={lot.image} alt={lot.title} />
+                  <div className="lot-number-tag">
+                    LOT #{lot.lotNumber}
                   </div>
-                  <div className="financial-item" style={{ textAlign: 'right' }}>
-                    <div className="label">
-                      {lot.status === 'sold' ? 'Hammer Price' : 'Current Bid'}
-                    </div>
-                    <div className="val current-high">
-                      {formatCurrency(lot.status === 'sold' && lot.hammerPrice ? lot.hammerPrice : lot.currentBid)}
-                    </div>
+                  <div className="lot-cert-tag">
+                    {lot.certification} {lot.grade}
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button 
-                    className="btn btn-secondary" 
-                    style={{ flex: 1, fontSize: 12, padding: '7px 10px' }}
-                    onClick={() => setSelectedLot(lot)}
+                    className="lot-card-bookmark-btn" 
+                    title="Bookmark Lot" 
+                    aria-label="Bookmark Lot"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    View Details
+                    <Bookmark size={14} />
                   </button>
+                </div>
 
-                  {lot.status !== 'sold' && (
+                <div className="lot-info">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="lot-category">{lot.category}</div>
+                    <span className={`badge badge-${lot.status === 'on_block' ? 'live' : lot.status === 'sold' ? 'gold' : 'preview'}`}>
+                      {lot.status === 'on_block' ? 'ON BLOCK' : lot.status}
+                    </span>
+                  </div>
+
+                  <h3 className="lot-title">{lot.title}</h3>
+
+                  <p className="lot-brief-note">
+                    {lot.conditionReport}
+                  </p>
+
+                  <div className="lot-bid-details">
+                    <div className="bid-data-row">
+                      <div className="current-bid-wrap">
+                        <span className="bid-label-micro">
+                          {lot.status === 'sold' ? 'HAMMER PRICE' : 'CURRENT BID'}
+                        </span>
+                        <span className="current-bid-val">
+                          {formatCurrency(currentAmount)}
+                        </span>
+                      </div>
+                      <div className="reserve-wrap">
+                        {isReserveMet ? (
+                          <span className="reserve-met-badge">
+                            <CheckCircle2 size={11} /> RESERVE MET
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            Reserve: {formatCurrency(lot.reservePrice)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bids-count-meta">
+                      <span>{lot.bidsCount || 0} Bids Placed</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button 
-                      className="btn btn-gold" 
-                      style={{ fontSize: 12, padding: '7px 12px' }}
-                      onClick={() => onSendToBlock(lot)}
-                      title="Send Lot to Clerking Block"
+                      className="btn btn-secondary" 
+                      style={{ flex: 1, fontSize: 12, padding: '9px 10px' }}
+                      onClick={() => setSelectedLot(lot)}
                     >
-                      <Radio size={14} />
-                      <span>{lot.status === 'on_block' ? 'Active' : 'Send Block'}</span>
+                      View Details
                     </button>
-                  )}
+
+                    {lot.status !== 'sold' && (
+                      <button 
+                        className="btn btn-gold" 
+                        style={{ fontSize: 12, padding: '9px 14px' }}
+                        onClick={() => onSendToBlock(lot)}
+                        title="Send Lot to Clerking Block"
+                      >
+                        <Zap size={14} />
+                        <span>{lot.status === 'on_block' ? 'On Block' : 'Send Block'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         /* Table View */

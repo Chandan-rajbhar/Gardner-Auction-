@@ -30,7 +30,8 @@ import {
   UserCheck,
   AlertCircle,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 
 interface LiveClerkingViewProps {
@@ -223,7 +224,11 @@ export const LiveClerkingView: React.FC<LiveClerkingViewProps> = ({
   const lastWinningBid = bids.find(b => b.isWinning) || bids[0];
   const highBidSource: LiveBid['source'] = lastWinningBid?.source || 'Floor';
 
-  // Count remaining upcoming lots
+  // Count remaining upcoming lots and upcoming lot reference
+  const currentIndex = allLots.findIndex(l => l.id === currentLot.id);
+  const upcomingLot = (currentIndex !== -1 && allLots[currentIndex + 1]) || 
+                      allLots.find(l => l.status === 'upcoming' && l.id !== currentLot.id) ||
+                      allLots.find(l => l.id !== currentLot.id);
   const remainingUpcomingCount = allLots.filter(l => l.status === 'upcoming' && l.id !== currentLot.id).length;
 
   // --- Handlers: Placing Bids ---
@@ -378,88 +383,10 @@ export const LiveClerkingView: React.FC<LiveClerkingViewProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* =======================================================================
-          TOP STATUS BAR & ROSTRUM HEADER
-          ======================================================================= */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        background: '#ffffff', 
-        padding: '14px 24px', 
-        borderRadius: 'var(--radius-lg)', 
-        border: '1px solid var(--border-subtle)',
-        boxShadow: 'var(--shadow-card)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* Status Badge */}
-          {clerkingState === 'READY' && (
-            <span className="badge badge-ready" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <Radio size={14} /> ROSTRUM READY
-            </span>
-          )}
-          {clerkingState === 'LIVE' && (
-            <span className="badge badge-live" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <span className="status-dot"></span> LIVE BIDDING
-            </span>
-          )}
-          {clerkingState === 'GOING_ONCE' && (
-            <span className="badge badge-going-once" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <AlertTriangle size={14} /> GOING ONCE
-            </span>
-          )}
-          {clerkingState === 'GOING_TWICE' && (
-            <span className="badge badge-going-twice" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <AlertTriangle size={14} /> GOING TWICE
-            </span>
-          )}
-          {clerkingState === 'PAUSED' && (
-            <span className="badge badge-paused" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <Pause size={14} /> ROSTRUM PAUSED
-            </span>
-          )}
-          {clerkingState === 'SOLD' && (
-            <span className="badge badge-live" style={{ padding: '6px 14px', fontSize: 12, background: '#ecfdf5', color: '#047857' }}>
-              <CheckCircle2 size={14} /> HAMMER DOWN — SOLD
-            </span>
-          )}
-          {clerkingState === 'UNSOLD' && (
-            <span className="badge badge-unsold" style={{ padding: '6px 14px', fontSize: 12 }}>
-              <XCircle size={14} /> LOT PASSED / UNSOLD
-            </span>
-          )}
-
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Auctioneer in Chair: <strong style={{ color: 'var(--text-main)' }}>Todd Gardner</strong> (AF360 Master Console)
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Cadence Timer */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', background: '#f8fafc', padding: '6px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <Clock size={15} color={clerkingState === 'GOING_TWICE' ? '#dc2626' : clerkingState === 'GOING_ONCE' ? '#d97706' : 'var(--gold-primary)'} />
-            <span>Cadence Timer: <strong style={{ color: clerkingState === 'GOING_TWICE' ? '#dc2626' : 'var(--text-main)', fontFamily: 'var(--font-mono)', fontSize: 14 }}>{countdown}s</strong></span>
-          </div>
-
-          {/* Gavel Audio Toggle */}
-          <button 
-            className="icon-btn" 
-            style={{ width: 36, height: 36 }}
-            onClick={() => {
-              setAudioEnabled(!audioEnabled);
-              if (!audioEnabled) playGavelStrike();
-            }}
-            title={audioEnabled ? 'Mute Gavel Strike Audio' : 'Enable Gavel Strike Audio'}
-          >
-            {audioEnabled ? <Volume2 size={17} color="var(--gold-primary)" /> : <VolumeX size={17} />}
-          </button>
-        </div>
-      </div>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Status or reset notification banner */}
       {statusNotification && (
-        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', padding: '10px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, boxShadow: 'var(--shadow-xs)' }}>
+        <div style={{ background: '#fefce8', border: '1px solid #fde047', color: '#b45309', padding: '10px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, boxShadow: 'var(--shadow-xs)' }}>
           <Sparkles size={16} />
           <span>{statusNotification}</span>
         </div>
@@ -480,18 +407,18 @@ export const LiveClerkingView: React.FC<LiveClerkingViewProps> = ({
       )}
 
       {/* =======================================================================
-          MAIN CONSOLE LAYOUT: BLOCK DISPLAY & TELEMETRY
+          MAIN CONSOLE LAYOUT: AUTHENTIC 3-STEP AF360 CLERKING ROSTRUM
           ======================================================================= */}
-      <div className="clerking-console">
-        {/* Left Column: Active Lot on Block */}
-        <div className={`block-display-card ${clerkingState === 'GOING_TWICE' ? 'animate-pulse' : ''}`} style={{ borderColor: clerkingState === 'GOING_TWICE' ? '#f43f5e' : clerkingState === 'GOING_ONCE' ? '#f59e0b' : 'var(--border-subtle)' }}>
+      <div className="clerking-layout-grid">
+        {/* Left Column: 3 Primary Cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
           
           {/* Sold Fanfare Overlay */}
           {soldFanfare && (
             <div style={{ 
               position: 'absolute', 
               inset: 0, 
-              background: 'rgba(16, 185, 129, 0.96)', 
+              background: 'rgba(217, 119, 6, 0.96)', 
               borderRadius: 'var(--radius-lg)', 
               display: 'flex', 
               flexDirection: 'column', 
@@ -511,418 +438,268 @@ export const LiveClerkingView: React.FC<LiveClerkingViewProps> = ({
             </div>
           )}
 
-          {/* Top Block Header: Lot #, Reserve Badge, Estimate */}
-          <div className="block-header-badge">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span className="badge badge-gold" style={{ fontSize: 13, padding: '5px 14px', background: '#0f172a', color: '#ffffff', border: 'none' }}>
-                ON BLOCK: LOT #{currentLot.lotNumber}
+          {/* CARD 1: ACTIVE LOT HERO CARD */}
+          <div className="clerking-lot-hero-card">
+            <div className="clerking-hero-top-row">
+              <span className="clerking-hero-item-pill">
+                ITEM #{currentLot.lotNumber}
               </span>
-
-              {/* Reserve Status Badge */}
-              {reserveInfo.status === 'met' && (
-                <span className="badge" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
-                  <ShieldCheck size={14} /> RESERVE MET
-                </span>
-              )}
-              {reserveInfo.status === 'not_met' && (
-                <span className="badge" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
-                  <ShieldAlert size={14} /> RESERVE NOT MET ({formatCurrency(reserveInfo.diff)} to reserve)
-                </span>
-              )}
-              {reserveInfo.status === 'not_set' && (
-                <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' }}>
-                  <ShieldCheck size={14} /> RESERVE NOT SET
-                </span>
-              )}
             </div>
 
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              Estimate: {formatCurrency(currentLot.estimateLow)} – {formatCurrency(currentLot.estimateHigh)}
-            </span>
-          </div>
-
-          {/* Lot Header & Visual */}
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 20, marginBottom: 20 }}>
-            <div style={{ height: 150, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)', background: '#f8fafc' }}>
-              <img src={currentLot.image} alt={currentLot.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--gold-primary)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
-                {currentLot.category} • {currentLot.certification} {currentLot.grade}
+            <div className="clerking-hero-body-row">
+              <div className="clerking-hero-thumbnail">
+                <img src={currentLot.image} alt={currentLot.title} />
               </div>
-              <h2 className="font-sans" style={{ fontSize: 20, color: 'var(--text-main)', margin: '6px 0 8px', fontWeight: 700, letterSpacing: '-0.01em' }}>
-                {currentLot.title}
-              </h2>
-              <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                Consignor: <strong style={{ color: 'var(--text-main)' }}>{currentLot.consignorName}</strong> • Opening Bid: <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(currentLot.startingBid)}</span>
+
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--gold-primary)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <span>{currentLot.category} • {currentLot.certification} {currentLot.grade}</span>
+                </div>
+
+                <h2 className="font-serif" style={{ fontSize: 21, color: 'var(--text-main)', margin: '4px 0 8px', fontWeight: 700 }}>
+                  {currentLot.title}
+                </h2>
+
+                <div className="clerking-hero-meta-row">
+                  <span>Started at <strong>{formatCurrency(currentLot.startingBid)}</strong></span>
+                  <span>•</span>
+                  <span>Total Bids placed: <strong>{bids.length} Bids</strong></span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Big Live Bid Banner */}
-          <div className="current-bid-banner" style={{ 
+          {/* CARD 2: CURRENT HIGHEST BID BANNER */}
+          <div className="current-bid-banner-hero" style={{ 
             background: clerkingState === 'GOING_TWICE' ? 'linear-gradient(135deg, #881337 0%, #1e1b4b 100%)' :
                         clerkingState === 'GOING_ONCE' ? 'linear-gradient(135deg, #78350f 0%, #0f172a 100%)' :
                         clerkingState === 'SOLD' ? 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)' :
-                        clerkingState === 'UNSOLD' ? 'linear-gradient(135deg, #334155 0%, #0f172a 100%)' :
-                        'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+                        'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
           }}>
-            <div className="label">
-              {clerkingState === 'GOING_TWICE' && '🚨 GOING TWICE — FAIR WARNING BEFORE FINAL GAVEL'}
-              {clerkingState === 'GOING_ONCE' && '⚠️ GOING ONCE — CALLING THE BID'}
-              {clerkingState === 'PAUSED' && '⏸️ ROSTRUM CALLING PAUSED — BIDS TEMPORARILY SUSPENDED'}
-              {clerkingState === 'SOLD' && '🔨 SOLD! HAMMER DOWN — FINAL SALE RECORDED'}
-              {clerkingState === 'UNSOLD' && '⏹️ LOT PASSED / UNSOLD — RESERVES NOT SATISFIED'}
-              {(clerkingState === 'LIVE' || clerkingState === 'READY') && 'CURRENT HIGH BID ON THE ROSTRUM'}
+            <div className="top-badge">
+              💡 CURRENT HIGHEST BID
             </div>
 
-            <div className="amount">
+            <div className="big-val">
               {formatCurrency(currentHigh)}
             </div>
 
-            <div className="bidder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {currentLot.highBidderPaddle ? (
-                <>
-                  <span>Holding Paddle: <strong style={{ color: '#38bdf8' }}>#{currentLot.highBidderPaddle}</strong> ({currentLot.highBidderName || 'Registered Bidder'})</span>
-                  <span style={{ opacity: 0.5 }}>•</span>
-                  <span className="badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', fontSize: 10 }}>
-                    Source: {highBidSource}
-                  </span>
-                </>
+            <div className="bottom-bidder-row">
+              <span>Leading Bidder</span>
+              <span className="bidder-pill">
+                👤 {currentLot.highBidderName || selectedBidder.name} (Bidder #{currentLot.highBidderPaddle || selectedPaddle})
+              </span>
+              <span style={{ opacity: 0.85 }}>bidding via {highBidSource.toLowerCase()}</span>
+            </div>
+          </div>
+
+          {/* ROSTRUM CALLING & SALE CONTROLS (Gardner Auction Luxury Theme) */}
+          <div className="rostrum-console-card">
+            <div className="rostrum-console-header">
+              <div>
+                <div className="rostrum-console-title">
+                  <Gavel size={16} color="var(--gold-primary)" />
+                  <span>Auction Rostrum Controls</span>
+                </div>
+                <div className="rostrum-console-subtitle">
+                  Monitor live website bidding, issue warnings, and finalize the gavel knock-down.
+                </div>
+              </div>
+
+              <span className="rostrum-status-pill" style={{ 
+                background: clerkingState === 'LIVE' ? '#ecfdf5' : clerkingState === 'GOING_ONCE' ? '#fefce8' : clerkingState === 'GOING_TWICE' ? '#fff7ed' : clerkingState === 'PAUSED' ? '#f1f5f9' : '#ecfdf5',
+                color: clerkingState === 'LIVE' ? '#047857' : clerkingState === 'GOING_ONCE' ? '#b45309' : clerkingState === 'GOING_TWICE' ? '#c2410c' : clerkingState === 'PAUSED' ? '#475569' : '#047857',
+                border: `1px solid ${clerkingState === 'LIVE' ? '#a7f3d0' : clerkingState === 'GOING_ONCE' ? '#fde047' : clerkingState === 'GOING_TWICE' ? '#fed7aa' : clerkingState === 'PAUSED' ? '#cbd5e1' : '#a7f3d0'}`
+              }}>
+                ● {clerkingState === 'LIVE' ? 'Bidding Open' : clerkingState === 'GOING_ONCE' ? 'Going Once' : clerkingState === 'GOING_TWICE' ? 'Going Twice (Final)' : clerkingState === 'PAUSED' ? 'Paused' : clerkingState === 'SOLD' ? 'Sold' : clerkingState}
+              </span>
+            </div>
+
+            <div className="rostrum-actions-grid">
+              {/* 1. Going Once */}
+              <button 
+                type="button"
+                className={`rostrum-call-btn once ${clerkingState === 'GOING_ONCE' ? 'active' : ''}`} 
+                onClick={handleGoingOnce} 
+                disabled={clerkingState === 'GOING_ONCE' || clerkingState === 'GOING_TWICE' || clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || clerkingState === 'PAUSED'}
+                title="Move lot to Going Once calling stage"
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  GOING ONCE...
+                </span>
+                <span style={{ fontSize: 11.5, opacity: 0.85 }}>Start warning online bidders</span>
+              </button>
+
+              {/* 2. Going Twice */}
+              <button 
+                type="button"
+                className={`rostrum-call-btn twice ${clerkingState === 'GOING_TWICE' ? 'active' : ''}`} 
+                onClick={handleGoingTwice} 
+                disabled={clerkingState !== 'GOING_ONCE'}
+                title={clerkingState === 'GOING_ONCE' ? 'Advance to Going Twice (Fair Warning)' : 'Enable only after Going Once'}
+              >
+                <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  GOING TWICE...
+                </span>
+                <span style={{ fontSize: 11.5, opacity: 0.85 }}>Last chance notice</span>
+              </button>
+
+              {/* 3. Sold / Hammer Down */}
+              <button 
+                type="button"
+                className="rostrum-call-btn sold" 
+                onClick={openHammerSoldDialog} 
+                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || currentHigh <= 0}
+                title="Finalize sale (Hammer Down)"
+              >
+                <span style={{ fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                  <Gavel size={18} /> SOLD! HAMMER DOWN
+                </span>
+                <span style={{ fontSize: 11.5, opacity: 0.92 }}>
+                  Sell to {currentLot.highBidderName || selectedBidder.name} for {formatCurrency(currentHigh)}
+                </span>
+              </button>
+            </div>
+
+            {/* Bottom Footer Control Buttons */}
+            <div className="rostrum-footer-links">
+              <button 
+                type="button"
+                className={`rostrum-footer-btn pause ${clerkingState === 'PAUSED' ? 'paused' : ''}`}
+                onClick={handleTogglePause} 
+                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD'}
+              >
+                {clerkingState === 'PAUSED' ? <><Play size={14} /> Resume Auction</> : <><Pause size={14} /> Pause Auction</>}
+              </button>
+
+              <button 
+                type="button"
+                className="rostrum-footer-btn pass" 
+                onClick={openPassLotDialog} 
+                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD'}
+              >
+                <XCircle size={14} /> Pass Item (Not Sold)
+              </button>
+
+              {(clerkingState === 'SOLD' || clerkingState === 'UNSOLD') && (
+                <button 
+                  type="button"
+                  className="rostrum-footer-btn reopen" 
+                  onClick={() => setIsReopenModalOpen(true)} 
+                >
+                  <RotateCcw size={14} /> Reopen Rostrum for This Lot
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Feeds & Next Lot */}
+        <div className="clerking-sidebar-col">
+          {/* Card 1: Recent Bids History */}
+          <div className="recent-bids-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 className="font-sans" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Flame size={16} color="var(--gold-primary)" /> Recent Bids History
+              </h3>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {bids.length} Total
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto' }}>
+              {bids.length === 0 ? (
+                <div style={{ padding: '24px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                  No bids placed on this lot yet.
+                </div>
               ) : (
-                <span>No bids yet logged on this lot • Ready for opening bid</span>
+                bids.map((b, idx) => (
+                  <div 
+                    key={b.id} 
+                    style={{ 
+                      background: idx === 0 ? '#ecfdf5' : '#ffffff', 
+                      border: idx === 0 ? '1.5px solid #6ee7b7' : '1px solid var(--border-subtle)', 
+                      borderRadius: 8, 
+                      padding: '10px 14px' 
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-mono)', color: idx === 0 ? '#059669' : 'var(--text-main)' }}>
+                        {formatCurrency(b.amount)}
+                      </span>
+                      {idx === 0 ? (
+                        <span className="badge" style={{ background: '#059669', color: '#ffffff', fontSize: 9, padding: '2px 7px' }}>
+                          HIGHEST BID
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {b.source} Bid
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, fontSize: 11.5, color: 'var(--text-muted)' }}>
+                      <span>{b.bidderName} (#{b.paddleNumber})</span>
+                      <span>{b.timestamp}</span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
 
-          {/* =======================================================================
-              NEXT VALID BID & BIDDER LIMIT CARDS (Directly beneath current high bid)
-              ======================================================================= */}
-          <div className="clerking-info-grid">
-            {/* Card 1: Next Valid Bid */}
-            <div className="clerking-info-card active-target">
-              <div className="clerking-info-card-header">
-                <span className="clerking-info-label">NEXT MINIMUM ACCEPTABLE BID</span>
-                <span className="badge" style={{ background: '#ecfdf5', color: '#047857', fontSize: 10 }}>
-                  +{formatCurrency(minIncrement)} step
-                </span>
-              </div>
-              <div className="clerking-info-val" style={{ color: '#047857' }}>
-                {formatCurrency(nextValidBid)}
-              </div>
-              <div className="clerking-info-subtext">
-                <span>Calculated via standard tiered increment ladder</span>
-                {clerkingState !== 'SOLD' && clerkingState !== 'UNSOLD' && clerkingState !== 'PAUSED' && (
-                  <button 
-                    onClick={() => handleExecuteBid(nextValidBid, selectedPaddle, selectedSource)}
-                    className="btn btn-secondary" 
-                    style={{ marginLeft: 'auto', padding: '3px 9px', fontSize: 11, background: '#ffffff' }}
-                    title="Advance directly to next valid increment"
-                  >
-                    Advance
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Card 2: Selected Bidder Limit */}
-            <div className={`clerking-info-card ${isSelectedBidderExceeding ? 'limit-warning' : ''}`}>
-              <div className="clerking-info-card-header">
-                <span className="clerking-info-label">PADDLE #{selectedPaddle} BIDDER CREDIT LIMIT</span>
-                {hasApprovedLimit ? (
-                  <span className="badge" style={{ 
-                    background: isSelectedBidderExceeding ? '#fee2e2' : '#ecfdf5', 
-                    color: isSelectedBidderExceeding ? '#b91c1c' : '#047857', 
-                    fontSize: 10 
-                  }}>
-                    {isSelectedBidderExceeding ? 'Exceeds Limit' : 'Within Limit'}
-                  </span>
-                ) : (
-                  <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontSize: 10 }}>
-                    Limit Unavailable
-                  </span>
-                )}
-              </div>
-
-              <div className="clerking-info-val" style={{ color: isSelectedBidderExceeding ? '#b91c1c' : 'var(--text-main)' }}>
-                {hasApprovedLimit ? formatCurrency(selectedBidder.bidLimit) : 'Limit Unavailable'}
-              </div>
-
-              <div className="clerking-info-subtext">
-                {hasApprovedLimit ? (
-                  <span>
-                    Remaining: <strong style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{formatCurrency(remainingLimit)}</strong> • {selectedBidder.name}
-                  </span>
-                ) : (
-                  <span>Verified ID & CC pre-auth on file • Standard floor limits apply</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* =======================================================================
-              BIDDING CONTROLS: PADDLE ASSIGNMENT, SOURCE, CUSTOM BID
-              ======================================================================= */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14, marginBottom: 18 }}>
-            <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>Floor / Phone Paddle Assignment</span>
-                <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 500 }}>
-                  {bidders.length} Registered Bidders
-                </span>
-              </label>
-              <select 
-                value={selectedPaddle} 
-                onChange={(e) => {
-                  setSelectedPaddle(e.target.value);
-                  setValidationError(null);
-                }}
-                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD'}
-              >
-                {bidders.map(b => (
-                  <option key={b.id} value={b.paddleNumber}>
-                    Paddle #{b.paddleNumber} — {b.name} ({b.siteOrigin}) {b.bidLimit > 0 ? `[Limit: ${formatCurrency(b.bidLimit)}]` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <form onSubmit={handleCustomBidSubmit} className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>Custom Bid Entry ($)</span>
-                <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 500 }}>
-                  Min valid: {formatCurrency(nextValidBid)}
-                </span>
-              </label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input 
-                  type="number" 
-                  placeholder={`≥ ${nextValidBid}`}
-                  value={customBidAmount}
-                  onChange={(e) => {
-                    setCustomBidAmount(e.target.value);
-                    setValidationError(null);
-                  }}
-                  disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || clerkingState === 'PAUSED'}
-                />
-                <button 
-                  type="submit" 
-                  className="btn btn-secondary" 
-                  style={{ padding: '0 18px', fontWeight: 700 }}
-                  disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || clerkingState === 'PAUSED'}
-                >
-                  Post Bid
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Source pill selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-              Incoming Source:
-            </span>
-            {(['Floor', 'HiBid Online', 'Phone', 'Gardner Web'] as const).map(src => (
-              <button
-                key={src}
-                type="button"
-                onClick={() => setSelectedSource(src)}
-                className={`filter-pill ${selectedSource === src ? 'active' : ''}`}
-                style={{ fontSize: 12, padding: '4px 12px' }}
-              >
-                {src}
-              </button>
-            ))}
-          </div>
-
-          {/* Quick Increment Buttons (AF360 Direct Action) */}
-          <div style={{ marginBottom: 10, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Quick Dynamic Increment Ladders (AF360 Direct Advance)</span>
-            <span style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'none' }}>
-              Next acceptable: {formatCurrency(nextValidBid)}
-            </span>
-          </div>
-
-          <div className="clerk-actions-grid">
-            {quickOptions.map((opt, i) => {
-              const targetBid = currentHigh + opt.increment;
-              const isExceeding = hasApprovedLimit && targetBid > selectedBidder.bidLimit;
-              const isDisabled = clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || clerkingState === 'PAUSED' || isExceeding;
-
-              return (
-                <button 
-                  key={i}
-                  className="bid-increment-btn"
-                  onClick={() => handleExecuteBid(targetBid, selectedPaddle, opt.source)}
-                  disabled={isDisabled}
-                  title={isExceeding ? `Exceeds Paddle #${selectedPaddle}'s approved limit` : `Advance bid to ${formatCurrency(targetBid)}`}
-                  style={{ opacity: isDisabled ? 0.5 : 1 }}
-                >
-                  <div style={{ fontSize: 16 }}>{opt.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gold-primary)', fontFamily: 'var(--font-mono)' }}>
-                    Total: {formatCurrency(targetBid)}
-                  </div>
-                  <span className="source">{opt.sublabel}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* =======================================================================
-              AUCTIONEER CALLING SEQUENCE (State Machine Buttons)
-              ======================================================================= */}
-          <div className="calling-sequence-container">
-            <div className="calling-sequence-label">
-              <span>Auctioneer Gavel & Calling Sequence Workflow</span>
-              <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'none' }}>
-                State: <strong>{clerkingState}</strong>
+          {/* Card 2: Coming Up Next */}
+          <div className="coming-up-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+                COMING UP NEXT
+              </span>
+              <span className="badge" style={{ background: '#eff6ff', color: '#2563eb', fontSize: 10 }}>
+                Item #{upcomingLot?.lotNumber || '—'}
               </span>
             </div>
 
-            <div className="calling-sequence-grid">
-              {/* 1. Going Once */}
-              <button
-                type="button"
-                className={`calling-btn calling-btn-once ${clerkingState === 'GOING_ONCE' ? 'active' : ''}`}
-                onClick={handleGoingOnce}
-                disabled={clerkingState === 'GOING_ONCE' || clerkingState === 'GOING_TWICE' || clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || clerkingState === 'PAUSED'}
-                title="Move lot to Going Once calling stage"
-              >
-                <AlertTriangle size={18} />
-                <span>Going Once</span>
-              </button>
-
-              {/* 2. Going Twice */}
-              <button
-                type="button"
-                className={`calling-btn calling-btn-twice ${clerkingState === 'GOING_TWICE' ? 'active' : ''}`}
-                onClick={handleGoingTwice}
-                disabled={clerkingState !== 'GOING_ONCE'}
-                title={clerkingState === 'GOING_ONCE' ? 'Advance to Going Twice (Fair Warning)' : 'Enable only after Going Once'}
-              >
-                <AlertTriangle size={18} />
-                <span>Going Twice</span>
-              </button>
-
-              {/* 3. Pause / Resume */}
-              <button
-                type="button"
-                className={`calling-btn calling-btn-pause ${clerkingState === 'PAUSED' ? 'active' : ''}`}
-                onClick={handleTogglePause}
-                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD'}
-                title="Pause or resume rostrum calling"
-              >
-                {clerkingState === 'PAUSED' ? <Play size={18} /> : <Pause size={18} />}
-                <span>{clerkingState === 'PAUSED' ? 'Resume' : 'Pause'}</span>
-              </button>
-
-              {/* 4. Hammer Down / Sold */}
-              <button
-                type="button"
-                className="calling-btn calling-btn-sold"
-                onClick={openHammerSoldDialog}
-                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD' || currentHigh <= 0}
-                title="Finalize sale (Hammer Down)"
-              >
-                <Gavel size={18} />
-                <span>Hammer Down</span>
-              </button>
-
-              {/* 5. Pass / Unsold */}
-              <button
-                type="button"
-                className="calling-btn calling-btn-pass"
-                onClick={openPassLotDialog}
-                disabled={clerkingState === 'SOLD' || clerkingState === 'UNSOLD'}
-                title="Pass this lot as unsold"
-              >
-                <XCircle size={18} />
-                <span>Pass Lot</span>
-              </button>
-            </div>
-
-            {/* Reopen Action (Available when lot is SOLD or UNSOLD) */}
-            {(clerkingState === 'SOLD' || clerkingState === 'UNSOLD') && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginTop: 8 }}>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  Lot is finalized as <strong>{clerkingState}</strong>. Bidding is closed.
-                </span>
-                <button 
-                  className="btn btn-secondary" 
-                  style={{ fontSize: 12, padding: '6px 14px' }}
-                  onClick={() => setIsReopenModalOpen(true)}
-                >
-                  <RotateCcw size={14} /> Reopen Rostrum for This Lot
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* =======================================================================
-            RIGHT COLUMN: REAL-TIME LIVE BID TELEMETRY & CATALOG ADVANCE
-            ======================================================================= */}
-        <div className="bid-feed-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h3 className="font-sans" style={{ fontSize: 16, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-              <Flame size={17} color="var(--gold-primary)" />
-              Live Bid Telemetry
-            </h3>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              {bids.length} Bids Logged
-            </span>
-          </div>
-
-          <div className="bid-history-list">
-            {bids.length === 0 ? (
-              <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                No live bids placed on this lot yet.<br />
-                Use quick increments or post a floor bid to start.
-              </div>
-            ) : (
-              bids.map((bid, index) => (
-                <div key={bid.id} className={`bid-item-row ${index === 0 ? 'winning' : ''}`}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: index === 0 ? '#059669' : 'var(--text-main)', fontSize: 15 }}>
-                        {formatCurrency(bid.amount)}
-                      </span>
-                      <span className="bid-source-pill">{bid.source}</span>
-                      {index === 0 && (
-                        <span className="badge" style={{ background: '#ecfdf5', color: '#047857', fontSize: 9, padding: '2px 6px' }}>
-                          High Bid
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Paddle #{bid.paddleNumber} • {bid.bidderName}
-                    </div>
+            {upcomingLot ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)', flexShrink: 0, background: '#f8fafc' }}>
+                    <img src={upcomingLot.image} alt={upcomingLot.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
-
-                  <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                    {bid.timestamp}
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.25 }}>
+                      {upcomingLot.title}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 3 }}>
+                      Est. Value: {formatCurrency(upcomingLot.estimateLow)} – {formatCurrency(upcomingLot.estimateHigh)}
+                    </div>
                   </div>
                 </div>
-              ))
+
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ width: '100%', padding: '10px 14px', fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} 
+                  onClick={handleNextLotClick}
+                >
+                  <span>GO TO NEXT ITEM</span>
+                  <ArrowRight size={14} />
+                </button>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                All catalog lots presented on rostrum.
+              </div>
             )}
           </div>
 
-          {/* Next Catalog Lot Footer Control */}
-          <div style={{ marginTop: 'auto', paddingTop: 18, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-              <span>Catalog Progression:</span>
-              <span style={{ fontWeight: 600 }}>{remainingUpcomingCount} Upcoming Lots</span>
+          {/* Card 3: Easy Step-by-Step Guide */}
+          <div className="easy-guide-card">
+            <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>💡</span> Live Clerking Rostrum Guide:
             </div>
-
-            <button 
-              className="btn btn-gold" 
-              style={{ width: '100%', padding: '12px 18px', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} 
-              onClick={handleNextLotClick}
-            >
-              <span>Next Catalog Lot</span>
-              <ArrowRight size={16} />
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div>• Online bids arrive automatically from the website in real-time</div>
+              <div>• When bidding slows down, click <strong>Going Once</strong>, then <strong>Going Twice</strong></div>
+              <div>• When no higher bids arrive, click <strong>SOLD! Hammer Down</strong> to finalize</div>
+            </div>
           </div>
         </div>
       </div>

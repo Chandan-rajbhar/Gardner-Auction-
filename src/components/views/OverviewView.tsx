@@ -59,7 +59,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div className="mock-notice">
         <AlertCircle size={16} />
         <span>
-          <strong>AF360 Demonstration Mode:</strong> Initial administrative interface populated with mock numismatic and auction data for client review. No real credit card or bank funds are processed.
+          <strong>Demonstration Mode:</strong> Initial administrative interface populated with mock numismatic and auction data for client review. No real credit card or bank funds are processed.
         </span>
       </div>
 
@@ -169,7 +169,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               </div>
             </div>
             <div className="metric-content">
-              <div className="metric-val" style={{ fontSize: 22, color: '#0284c7' }}>
+              <div className="metric-val" style={{ fontSize: 22, color: 'var(--text-main)' }}>
                 5 Nodes Live
               </div>
               <div className="metric-subtext">
@@ -288,7 +288,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ecfdf5', color: '#059669', padding: '6px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 700, border: '1px solid #a7f3d0' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', display: 'inline-block' }}></span>
-            <span>Live AF360 HiBid Feed</span>
+            <span>Live HiBid Feed</span>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div className="syndication-card">
         <div className="card-header-flex">
           <div className="card-title-group">
-            <h3>Multi-Site Syndication & Bidder Traffic (AF360 Portal Feed)</h3>
+            <h3>Multi-Site Syndication & Bidder Traffic</h3>
             <p>Real-time telemetry across HiBid syndication nodes and Gardner direct web saleroom</p>
           </div>
 
@@ -430,7 +430,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
 
           <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            AF360 Record Ref: {auction.code}
+            Record Ref: {auction.code}
           </span>
         </div>
 
@@ -506,7 +506,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       <td style={{ color: 'var(--text-muted)' }}>{b.siteOrigin}</td>
                       <td>
                         {b.creditCardAuthorized ? (
-                          <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                          <span style={{ color: '#d97706', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
                             <Shield size={12} /> Auth (••{b.cardLast4})
                           </span>
                         ) : (

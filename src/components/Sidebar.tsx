@@ -39,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     badge?: string | number;
     isLive?: boolean;
   }> = [
-    { id: 'overview', label: 'AF360 Dashboard', icon: LayoutDashboard },
+    { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'live_clerking', label: 'Live Clerking Block', icon: Radio, badge: 'LIVE', isLive: true },
     { id: 'lots', label: 'Lots & Catalog', icon: Layers, badge: liveLotsCount },
     { id: 'auctions', label: 'Auction Sales', icon: Gavel },
@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'payments', label: 'Settlement & Invoices', icon: Receipt },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
-    { id: 'settings', label: 'AF360 & Portal Config', icon: Settings },
+    { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
   ];
 
   return (
@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="brand-crest">G</div>
           <div className="brand-details">
             <h2>Gardner Auction</h2>
-            <p>Admin & AF360 Console</p>
+            <p>Admin Console</p>
           </div>
           <button 
             className="icon-btn mobile-menu-btn" 
@@ -119,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="sidebar-footer">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <ShieldCheck size={14} color="#10b981" /> AF360 v24.2 Linked
+              <ShieldCheck size={14} color="#f59e0b" /> Gardner v24.2 Linked
             </span>
             <a 
               href="https://gardner-auction.vercel.app/" 

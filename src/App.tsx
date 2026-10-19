@@ -292,6 +292,7 @@ export const App: React.FC = () => {
       {/* Main App Body */}
       <div className="main-wrapper">
         <Topbar 
+          currentSection={currentSection}
           auctions={auctions}
           selectedAuctionId={selectedAuctionId}
           onSelectAuction={setSelectedAuctionId}
@@ -397,7 +398,7 @@ export const App: React.FC = () => {
         <div className="modal-overlay" onClick={() => syncStep === 4 && setIsSyncModalOpen(false)}>
           <div className="modal-content" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="font-serif">HiBid AF360 Network Synchronization</h3>
+              <h3 className="font-serif">HiBid Network Synchronization</h3>
               {syncStep === 4 && (
                 <button className="icon-btn" onClick={() => setIsSyncModalOpen(false)}>
                   <X size={18} />
@@ -409,7 +410,7 @@ export const App: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: syncStep >= 1 ? 'var(--text-main)' : 'var(--text-dim)' }}>
                   {syncStep > 1 ? <CheckCircle2 size={16} color="#059669" /> : <RefreshCw size={16} className="animate-spin" color="var(--gold-primary)" />}
-                  <span>Connecting to AF360 HiBid API Gateway...</span>
+                  <span>Connecting to HiBid API Gateway...</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: syncStep >= 2 ? 'var(--text-main)' : 'var(--text-dim)' }}>
@@ -425,7 +426,7 @@ export const App: React.FC = () => {
                 {syncStep === 4 && (
                   <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', padding: 14, borderRadius: 8, marginTop: 8 }}>
                     <div style={{ color: '#059669', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <CheckCircle2 size={18} /> HiBid AF360 Synchronized Successfully!
+                      <CheckCircle2 size={18} /> HiBid Synchronized Successfully!
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                       All lots, reserve parameters, and bidder approvals are now live on HiBid network and Gardner Auction saleroom.

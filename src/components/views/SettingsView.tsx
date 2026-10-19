@@ -53,7 +53,7 @@ export const SettingsView: React.FC = () => {
       <div className="card-header-flex">
         <div>
           <h2 className="font-serif" style={{ fontSize: 22, color: 'var(--text-main)' }}>
-            System & AF360 Portal Configuration
+            System & Portal Configuration
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             Saleroom parameters, buyer's premium tiers, and Supabase Edge infrastructure
@@ -61,7 +61,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {savedNotice && (
-          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#34d399', padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
+          <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid #f59e0b', color: '#b45309', padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
             ✓ Configuration saved successfully!
           </div>
         )}
@@ -69,10 +69,10 @@ export const SettingsView: React.FC = () => {
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Supabase & Edge Function Infrastructure */}
-        <div className="syndication-card" style={{ border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%)' }}>
+        <div className="syndication-card" style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <h3 className="font-serif" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-              <Database size={18} color="#10b981" />
+              <Database size={18} color="#f59e0b" />
               Supabase Database & Edge Functions
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -84,11 +84,11 @@ export const SettingsView: React.FC = () => {
                 borderRadius: 20, 
                 fontSize: 12, 
                 fontWeight: 600,
-                background: supaStatus.connected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                color: supaStatus.connected ? '#34d399' : '#f87171',
-                border: `1px solid ${supaStatus.connected ? '#10b981' : '#ef4444'}`
+                background: supaStatus.connected ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.2)',
+                color: supaStatus.connected ? '#b45309' : '#f87171',
+                border: `1px solid ${supaStatus.connected ? '#f59e0b' : '#ef4444'}`
               }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: supaStatus.connected ? '#10b981' : '#ef4444' }}></span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: supaStatus.connected ? '#f59e0b' : '#ef4444' }}></span>
                 {supaStatus.connected ? 'Connected' : 'Offline'}
                 {supaStatus.latencyMs > 0 && ` (${supaStatus.latencyMs}ms)`}
               </span>
@@ -132,7 +132,7 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div style={{ marginTop: 12, fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <CheckCircle size={14} color="#10b981" />
+            <CheckCircle size={14} color="#f59e0b" />
             <span>Status details: {supaStatus.details}</span>
           </div>
         </div>
@@ -172,12 +172,12 @@ export const SettingsView: React.FC = () => {
         <div className="syndication-card">
           <h3 className="font-serif" style={{ fontSize: 17, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Globe size={18} color="var(--gold-primary)" />
-            HiBid AF360 Network Connection
+            HiBid Network Connection
           </h3>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div className="form-group">
-              <label>AF360 Master Gateway License Key</label>
+              <label>Master Gateway License Key</label>
               <input 
                 type="text" 
                 value={hibidKey}

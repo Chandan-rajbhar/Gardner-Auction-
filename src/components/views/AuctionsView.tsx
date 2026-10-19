@@ -114,7 +114,7 @@ export const AuctionsView: React.FC<AuctionsViewProps> = ({
             Auction Sales & Catalogs
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Schedule auctions, control catalog publishing, and manage HiBid AF360 syndication
+            Schedule auctions, control catalog publishing, and manage HiBid syndication
           </p>
         </div>
 
@@ -134,8 +134,8 @@ export const AuctionsView: React.FC<AuctionsViewProps> = ({
               className="syndication-card"
               style={{ 
                 borderColor: isSelected ? 'var(--gold-primary)' : 'var(--border-subtle)',
-                background: isSelected ? 'rgba(18, 22, 32, 0.95)' : 'var(--bg-card)',
-                boxShadow: isSelected ? 'var(--shadow-gold)' : 'var(--shadow-card)',
+                background: isSelected ? '#ffffff' : 'var(--bg-card)',
+                boxShadow: isSelected ? '0 0 0 2px var(--gold-primary), var(--shadow-card)' : 'var(--shadow-card)',
                 position: 'relative'
               }}
             >
@@ -198,7 +198,7 @@ export const AuctionsView: React.FC<AuctionsViewProps> = ({
                   </div>
 
                   <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                    HiBid Status: <strong style={{ color: auc.hibidSyncStatus === 'synced' ? '#10b981' : '#f59e0b' }}>{auc.hibidSyncStatus.toUpperCase()}</strong>
+                    HiBid Status: <strong style={{ color: auc.hibidSyncStatus === 'synced' ? '#d97706' : '#b48316' }}>{auc.hibidSyncStatus.toUpperCase()}</strong>
                   </span>
                 </div>
               </div>

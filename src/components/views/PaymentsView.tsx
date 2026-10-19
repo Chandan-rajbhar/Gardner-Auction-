@@ -66,7 +66,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <CheckCircle size={22} />
           </div>
           <div className="metric-content">
-            <div className="metric-val" style={{ color: '#34d399' }}>{formatCurrency(totalPaid)}</div>
+            <div className="metric-val" style={{ color: 'var(--green-reserve)' }}>{formatCurrency(totalPaid)}</div>
             <div className="metric-label">Settled / Wires Received</div>
           </div>
         </div>
@@ -76,7 +76,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <Clock size={22} />
           </div>
           <div className="metric-content">
-            <div className="metric-val" style={{ color: '#fbbf24' }}>{formatCurrency(totalPending)}</div>
+            <div className="metric-val" style={{ color: 'var(--gold-primary)' }}>{formatCurrency(totalPending)}</div>
             <div className="metric-label">Pending Cashiering</div>
           </div>
         </div>
@@ -276,7 +276,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                       Est. 1960 • 1960 Heritage Way, Suite 400 • Missoula, MT 59801
                     </p>
                     <p style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                      AF360 Licensed Numismatic Saleroom
+                      Licensed Numismatic Saleroom
                     </p>
                   </div>
 
@@ -288,7 +288,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                       Paddle Assigned: <strong style={{ color: 'var(--gold-primary)' }}>#{previewInvoice.paddleNumber}</strong>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                      Status: <strong style={{ color: '#10b981' }}>{previewInvoice.paymentStatus.toUpperCase()}</strong>
+                      Status: <strong style={{ color: '#d97706' }}>{previewInvoice.paymentStatus.toUpperCase()}</strong>
                     </div>
                   </div>
                 </div>
