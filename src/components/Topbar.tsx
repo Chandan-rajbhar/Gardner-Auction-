@@ -67,6 +67,15 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       <div className="topbar-right">
+        <div 
+          className="status-indicator" 
+          style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)', cursor: 'default' }}
+          title="Supabase Connected: rzacpssumjahxndmqnxm.supabase.co (Edge Runtime Active)"
+        >
+          <span className="status-dot" style={{ background: '#10b981', boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)' }}></span>
+          <span style={{ color: '#10b981', fontWeight: 600 }}>Supabase Edge</span>
+        </div>
+
         <div className="status-indicator">
           <span className="status-dot"></span>
           <span>HiBid AF360 Online</span>

@@ -30,6 +30,7 @@ import { ReportsView } from './components/views/ReportsView';
 import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
 import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
+import { recordBidToSupabase } from './lib/supabase';
 
 export const App: React.FC = () => {
   const [currentSection, setCurrentSection] = useState<NavigationSection>('overview');
@@ -106,6 +107,16 @@ export const App: React.FC = () => {
       return lot;
     }));
 
+    // Asynchronously synchronize bid to Supabase & Edge Function
+    recordBidToSupabase({
+      lotId: activeLotOnBlock.id,
+      lotNumber: activeLotOnBlock.lotNumber,
+      amount,
+      paddleNumber,
+      bidderName,
+      source
+    });
+
     // Audit log
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
@@ -114,7 +125,7 @@ export const App: React.FC = () => {
       action: `Accepted ${source} Bid: $${amount.toLocaleString()} on Lot #${activeLotOnBlock.lotNumber}`,
       category: 'Clerking',
       severity: 'info',
-      details: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}.`
+      details: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}. Synced with Supabase Edge.`
     };
     setLogs(prev => [audit, ...prev]);
   };

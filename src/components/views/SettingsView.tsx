@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Settings, Save, Shield, Globe, DollarSign, Building } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Save, Shield, Globe, DollarSign, Building, Database, Activity, CheckCircle, RefreshCw } from 'lucide-react';
+import { checkSupabaseConnection, SUPABASE_URL } from '../../lib/supabase';
 
 export const SettingsView: React.FC = () => {
   const [cashBP, setCashBP] = useState('15.0');
@@ -8,6 +9,37 @@ export const SettingsView: React.FC = () => {
   const [syncFreq, setSyncFreq] = useState('5');
   const [hibidKey, setHibidKey] = useState('AF360-GARDNER-PROD-9482910');
   const [savedNotice, setSavedNotice] = useState(false);
+
+  // Supabase Live Connection Telemetry
+  const [supaStatus, setSupaStatus] = useState<{
+    tested: boolean;
+    connecting: boolean;
+    connected: boolean;
+    latencyMs: number;
+    details: string;
+  }>({
+    tested: false,
+    connecting: false,
+    connected: true,
+    latencyMs: 0,
+    details: 'Embedded credentials loaded (Git-pull ready)',
+  });
+
+  const runConnectionCheck = async () => {
+    setSupaStatus(prev => ({ ...prev, connecting: true }));
+    const result = await checkSupabaseConnection();
+    setSupaStatus({
+      tested: true,
+      connecting: false,
+      connected: result.connected,
+      latencyMs: result.latencyMs,
+      details: result.details,
+    });
+  };
+
+  useEffect(() => {
+    runConnectionCheck();
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +56,7 @@ export const SettingsView: React.FC = () => {
             System & AF360 Portal Configuration
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Saleroom parameters, buyer's premium tiers, and HiBid API syndication endpoints
+            Saleroom parameters, buyer's premium tiers, and Supabase Edge infrastructure
           </p>
         </div>
 
@@ -36,6 +68,74 @@ export const SettingsView: React.FC = () => {
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Supabase & Edge Function Infrastructure */}
+        <div className="syndication-card" style={{ border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 className="font-serif" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <Database size={18} color="#10b981" />
+              Supabase Database & Edge Functions
+            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                padding: '4px 10px', 
+                borderRadius: 20, 
+                fontSize: 12, 
+                fontWeight: 600,
+                background: supaStatus.connected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                color: supaStatus.connected ? '#34d399' : '#f87171',
+                border: `1px solid ${supaStatus.connected ? '#10b981' : '#ef4444'}`
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: supaStatus.connected ? '#10b981' : '#ef4444' }}></span>
+                {supaStatus.connected ? 'Connected' : 'Offline'}
+                {supaStatus.latencyMs > 0 && ` (${supaStatus.latencyMs}ms)`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ padding: '4px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={runConnectionCheck}
+                disabled={supaStatus.connecting}
+              >
+                <RefreshCw size={12} className={supaStatus.connecting ? 'animate-spin' : ''} />
+                <span>{supaStatus.connecting ? 'Testing...' : 'Test Connection'}</span>
+              </button>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Bids, auctions, and telemetry are synchronized with Supabase Edge Runtime. Fallback credentials are built into the client, so anyone who pulls from Git can develop immediately without configuring a <code>.env</code> file.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="form-group">
+              <label>Project Endpoint URL</label>
+              <input type="text" value={SUPABASE_URL} readOnly />
+            </div>
+            <div className="form-group">
+              <label>Publishable Client Key</label>
+              <input type="text" value="sb_publishable_AtKdmtFDHhIa...-H0s" readOnly />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+            <div className="form-group">
+              <label>Active Edge Functions</label>
+              <input type="text" value="auction-edge, hibid-sync, stripe-checkout" readOnly />
+            </div>
+            <div className="form-group">
+              <label>Secret Key Storage</label>
+              <input type="text" value="Edge Runtime / Deno ctx.supabaseAdmin" readOnly />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <CheckCircle size={14} color="#10b981" />
+            <span>Status details: {supaStatus.details}</span>
+          </div>
+        </div>
         {/* Buyer's Premium Configuration */}
         <div className="syndication-card">
           <h3 className="font-serif" style={{ fontSize: 17, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
