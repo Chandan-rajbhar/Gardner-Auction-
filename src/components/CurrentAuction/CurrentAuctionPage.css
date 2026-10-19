@@ -409,40 +409,192 @@
 }
 
 /* ==========================================================================
-   5. Scrollable Products Container & 3-Column Lot Cards Grid
+/* ==========================================================================
+   5. Products Container & 3-Column Lot Cards Grid (Seamless Page Flow)
    ========================================================================== */
 .cap-products-scroll-wrapper {
-  max-height: 805px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 8px 16px 2px;
-  overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  max-height: none;
+  overflow: visible;
+  padding: 8px 0 16px 0;
+  width: 100%;
 }
 
-/* Custom Sleek Dark & Gold Scrollbar */
-.cap-products-scroll-wrapper::-webkit-scrollbar {
-  width: 6px;
+/* ==========================================================================
+   Pagination Controls (Centered Circular Numbered Navigation)
+   ========================================================================== */
+.cap-pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 36px;
+  margin-bottom: 20px;
+  width: 100%;
 }
 
-.cap-products-scroll-wrapper::-webkit-scrollbar-track {
+.cap-pagination-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   background: #141517;
-  border-radius: 4px;
+  padding: 8px 18px;
+  border-radius: 40px;
+  border: 1px solid #282a2e;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
 }
 
-.cap-products-scroll-wrapper::-webkit-scrollbar-thumb {
-  background: #2a2c32;
-  border-radius: 4px;
-  transition: background 0.2s ease;
+.cap-page-numbers-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.cap-products-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+.cap-page-number-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+  line-height: 1;
+}
+
+.cap-page-number-btn:hover:not(.active) {
+  color: #ffffff;
+  background: rgba(223, 186, 82, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Active Page Circle (Circular active design matching screenshot) */
+.cap-page-number-btn.active {
   background: #dfba52;
+  color: #0c0d0e;
+  font-weight: 700;
+  box-shadow: 0 3px 12px rgba(223, 186, 82, 0.35);
+  transform: scale(1.06);
 }
 
-.cap-products-scroll-wrapper {
-  scrollbar-width: thin;
-  scrollbar-color: #2a2c32 #141517;
+.cap-page-dots {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.cap-page-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: #dfba52;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cap-page-nav-btn:hover:not(:disabled) {
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.cap-page-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .cap-pagination-nav {
+    padding: 6px 12px;
+    gap: 6px;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .cap-page-numbers-list {
+    gap: 4px;
+  }
+
+  .cap-page-number-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .cap-page-nav-btn {
+    font-size: 11.5px;
+    padding: 6px 4px;
+  }
+}
+
+/* End of Catalog Bar */
+.cap-catalog-end-bar {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.cap-end-bar-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(223, 186, 82, 0.28), rgba(255, 255, 255, 0.08), transparent);
+}
+
+.cap-end-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.cap-end-bar-text {
+  font-size: 13px;
+  color: #8e96a4;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.cap-btn-back-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #18191b;
+  border: 1px solid #282a2e;
+  color: #dfba52;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cap-btn-back-top:hover {
+  background: #252016;
+  border-color: rgba(223, 186, 82, 0.5);
+  transform: translateY(-2px);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(223, 186, 82, 0.15);
 }
 
 .cap-products-grid {

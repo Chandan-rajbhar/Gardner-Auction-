@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import './CurrentAuctionPage.css';
 import {
-  Search, Heart, X, ChevronDown, Gavel, Diamond, Lock, Percent, FileCheck,
+  Search, Heart, X, ChevronDown, ChevronLeft, ChevronRight, Gavel, Diamond, Lock, Percent, FileCheck,
   Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, Users, Phone, Truck, Crown,
-  Sun, Moon
+  Sun, Moon, ArrowUp
 } from 'lucide-react';
 import type { EnrichedLotItem } from './types';
 
@@ -41,6 +41,10 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   const [activeTab, setActiveTab] = useState<'all' | 'ending' | 'featured'>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'price-asc' | 'price-desc' | 'bids'>('recommended');
   const [localSearch, setLocalSearch] = useState<string>('');
+
+  // Pagination State: 6 lots per page
+  const ITEMS_PER_PAGE = 6;
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Scroll container reference for smooth internal products scrolling
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
@@ -155,10 +159,17 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     }
   }, [activeDetailLotId]);
 
-  // Reset scroll position to top whenever filters change
+  // Reset currentPage to 1 and scroll position smoothly to catalog top whenever filters change
   useEffect(() => {
+    setCurrentPage(1);
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      const rect = scrollContainerRef.current.getBoundingClientRect();
+      if (rect.top < 80) {
+        window.scrollTo({
+          top: window.scrollY + rect.top - 100,
+          behavior: 'smooth'
+        });
+      }
     }
   }, [selectedCategory, activeTab, localSearch, searchQuery, sortBy]);
 
@@ -214,6 +225,55 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
 
     return result;
   }, [lots, selectedCategory, activeTab, effectiveSearch, sortBy]);
+
+  // Pagination calculations (6 lots per page)
+  const totalPages = Math.ceil(filteredLots.length / ITEMS_PER_PAGE);
+  const safeCurrentPage = totalPages > 0 ? Math.min(Math.max(1, currentPage), totalPages) : 1;
+
+  // Sliced lots to show only 6 cards per page
+  const paginatedLots = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLots.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredLots, safeCurrentPage]);
+
+  // Page change handler with smooth scroll to catalog top
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    if (scrollContainerRef.current) {
+      const rect = scrollContainerRef.current.getBoundingClientRect();
+      window.scrollTo({
+        top: window.scrollY + rect.top - 120,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Helper to generate pagination page numbers list (with ellipsis if large)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    if (safeCurrentPage <= 4) {
+      for (let i = 1; i <= 5; i++) pages.push(i);
+      pages.push('...');
+      pages.push(totalPages);
+    } else if (safeCurrentPage >= totalPages - 3) {
+      pages.push(1);
+      pages.push('...');
+      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push('...');
+      pages.push(safeCurrentPage - 1);
+      pages.push(safeCurrentPage);
+      pages.push(safeCurrentPage + 1);
+      pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
 
   // Handle Preset Click
   const handleSelectPreset = (inc: number, currentBid: number) => {
@@ -1180,7 +1240,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
             ) : (
               <div className="cap-products-scroll-wrapper" ref={scrollContainerRef}>
                 <div className="cap-products-grid">
-                  {filteredLots.map((lot) => {
+                  {paginatedLots.map((lot) => {
                     const isWatchlisted = watchlist.includes(lot.id);
 
                     return (
@@ -1253,6 +1313,87 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Pagination Controls when lots exceed 6 */}
+                {totalPages > 1 && (
+                  <div className="cap-pagination-container">
+                    <nav className="cap-pagination-nav" aria-label="Catalog lots pagination">
+                      <button
+                        type="button"
+                        className="cap-page-nav-btn cap-page-prev-btn"
+                        disabled={safeCurrentPage === 1}
+                        onClick={() => handlePageChange(safeCurrentPage - 1)}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                        <span>PREV</span>
+                      </button>
+
+                      <div className="cap-page-numbers-list">
+                        {getPageNumbers().map((pageNum, idx) => {
+                          if (pageNum === '...') {
+                            return (
+                              <span key={`dots-${idx}`} className="cap-page-dots">
+                                ...
+                              </span>
+                            );
+                          }
+                          const isCurrent = pageNum === safeCurrentPage;
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              className={`cap-page-number-btn ${isCurrent ? 'active' : ''}`}
+                              onClick={() => handlePageChange(Number(pageNum))}
+                              aria-current={isCurrent ? 'page' : undefined}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="cap-page-nav-btn cap-page-next-btn"
+                        disabled={safeCurrentPage === totalPages}
+                        onClick={() => handlePageChange(safeCurrentPage + 1)}
+                        aria-label="Next page"
+                      >
+                        <span>NEXT</span>
+                        <ChevronRight size={16} />
+                      </button>
+                    </nav>
+                  </div>
+                )}
+
+                {filteredLots.length > 0 && (
+                  <div className="cap-catalog-end-bar">
+                    <div className="cap-end-bar-line" />
+                    <div className="cap-end-bar-content">
+                      <span className="cap-end-bar-text">
+                        {totalPages > 1
+                          ? `Showing ${(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(
+                              safeCurrentPage * ITEMS_PER_PAGE,
+                              filteredLots.length
+                            )} of ${filteredLots.length} lots (Page ${safeCurrentPage} of ${totalPages})`
+                          : `Showing all ${filteredLots.length} ${filteredLots.length === 1 ? 'lot' : 'lots'} in this session`}
+                      </span>
+                      <button
+                        type="button"
+                        className="cap-btn-back-top"
+                        onClick={() => {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        title="Back to top"
+                        aria-label="Back to top"
+                      >
+                        <ArrowUp size={14} />
+                        <span>Back to top</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
