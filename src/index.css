@@ -108,9 +108,20 @@ input, select, textarea {
   outline: none;
 }
 
-img {
+img, video, canvas, svg {
   max-width: 100%;
+  height: auto;
   display: block;
+}
+
+/* Touch & Mobile UX Optimizations */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
 }
 
 /* Scrollbar Styling */
