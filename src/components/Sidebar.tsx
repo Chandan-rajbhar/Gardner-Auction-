@@ -1,0 +1,145 @@
+import React from 'react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Gavel, 
+  Layers, 
+  Radio, 
+  Receipt, 
+  BarChart3, 
+  Bell, 
+  Settings, 
+  ShieldCheck,
+  ExternalLink,
+  X
+} from 'lucide-react';
+import { NavigationSection } from '../types';
+
+interface SidebarProps {
+  currentSection: NavigationSection;
+  setCurrentSection: (section: NavigationSection) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  liveLotsCount: number;
+  pendingVerifications: number;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  currentSection,
+  setCurrentSection,
+  isOpen,
+  onClose,
+  liveLotsCount,
+  pendingVerifications
+}) => {
+  const navItems: Array<{
+    id: NavigationSection;
+    label: string;
+    icon: React.ElementType;
+    badge?: string | number;
+    isLive?: boolean;
+  }> = [
+    { id: 'overview', label: 'AF360 Dashboard', icon: LayoutDashboard },
+    { id: 'live_clerking', label: 'Live Clerking Block', icon: Radio, badge: 'LIVE', isLive: true },
+    { id: 'lots', label: 'Lots & Catalog', icon: Layers, badge: liveLotsCount },
+    { id: 'auctions', label: 'Auction Sales', icon: Gavel },
+    { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
+    { id: 'payments', label: 'Settlement & Invoices', icon: Receipt },
+    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+    { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
+    { id: 'settings', label: 'AF360 & Portal Config', icon: Settings },
+  ];
+
+  return (
+    <>
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <div className="brand-crest">G</div>
+          <div className="brand-details">
+            <h2>Gardner Auction</h2>
+            <p>Admin & AF360 Console</p>
+          </div>
+          <button 
+            className="icon-btn mobile-menu-btn" 
+            style={{ marginLeft: 'auto', border: 'none' }}
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="sidebar-nav">
+          <div className="nav-section-title">Auction Operations</div>
+          {navItems.slice(0, 5).map(item => {
+            const Icon = item.icon;
+            const isActive = currentSection === item.id;
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentSection(item.id);
+                  onClose();
+                }}
+              >
+                <Icon size={18} className="nav-icon" />
+                <span>{item.label}</span>
+                {item.badge !== undefined && (
+                  <span className={`nav-badge ${item.isLive ? 'live-pulse' : ''}`}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          <div className="nav-section-title">Finance & Intelligence</div>
+          {navItems.slice(5).map(item => {
+            const Icon = item.icon;
+            const isActive = currentSection === item.id;
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentSection(item.id);
+                  onClose();
+                }}
+              >
+                <Icon size={18} className="nav-icon" />
+                <span>{item.label}</span>
+                {item.badge !== undefined && (
+                  <span className="nav-badge">{item.badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="sidebar-footer">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <ShieldCheck size={14} color="#10b981" /> AF360 v24.2 Linked
+            </span>
+            <a 
+              href="https://gardner-auction.vercel.app/" 
+              target="_blank" 
+              rel="noreferrer" 
+              style={{ fontSize: 11, color: 'var(--gold-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              Public Site <ExternalLink size={11} />
+            </a>
+          </div>
+
+          <div className="operator-profile">
+            <div className="operator-avatar">TG</div>
+            <div className="operator-info">
+              <div className="operator-name">Todd Gardner</div>
+              <div className="operator-role">Owner & Master Auctioneer</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+};
