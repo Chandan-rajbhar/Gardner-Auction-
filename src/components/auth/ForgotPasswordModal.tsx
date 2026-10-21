@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, KeyRound, Mail, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, Info } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import toast from 'react-hot-toast';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -28,24 +29,39 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      setErrorMessage('Please enter your registered administrator or operator email address.');
+      const msg = 'Please enter your registered administrator or operator email address.';
+      setErrorMessage(msg);
+      toast.error('Please enter a valid email address.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid email address (e.g. name@gardner-auction.com).');
+      const msg = 'Please enter a valid email address (e.g. name@gardner-auction.com).';
+      setErrorMessage(msg);
+      toast.error('Please enter a valid email address.');
       return;
     }
 
     setIsSubmitting(true);
-    const result = await resetPassword(cleanEmail);
-    setIsSubmitting(false);
-
-    if (result.success) {
-      setSuccessMessage(result.message || 'If an account exists for this email, you will receive password reset instructions.');
-    } else {
-      setErrorMessage(result.error || 'Failed to dispatch password recovery link.');
+    try {
+      const result = await resetPassword(cleanEmail);
+      if (result.success) {
+        setSuccessMessage(result.message || 'If an account exists for this email, you will receive password reset instructions.');
+        toast.success('Password reset email sent. Please check your inbox.');
+      } else {
+        const errText = result.error || 'Failed to dispatch password recovery link.';
+        setErrorMessage(errText);
+        if (errText.toLowerCase().includes('fetch') || errText.toLowerCase().includes('network')) {
+          toast.error('Unable to connect. Please try again.');
+        } else {
+          toast.error(errText);
+        }
+      }
+    } catch (err: any) {
+      toast.error('Unable to connect. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -63,7 +79,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             <KeyRound size={22} color="#b48316" />
           </div>
           <div>
-            <h3 className="auth-modal-title">Reset AF360 Operator Access</h3>
+            <h3 className="auth-modal-title">Reset Operator Access</h3>
             <p className="auth-modal-subtitle">Recover administrator &amp; clerking rostrum credentials</p>
           </div>
           <button className="auth-modal-close" onClick={handleClose} type="button" aria-label="Close modal">

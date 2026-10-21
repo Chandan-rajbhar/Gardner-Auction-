@@ -1,30 +1,35 @@
 import React, { useState } from 'react';
-import { 
-  Lock, 
-  Mail, 
-  User, 
-  Eye, 
-  EyeOff, 
-  ArrowRight, 
-  ShieldCheck, 
-  UserPlus, 
-  CheckCircle2, 
-  AlertCircle, 
-  Check, 
-  X,
-  Layers,
-  FileText
+import {
+  Lock,
+  Mail,
+  User,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  UserPlus,
+  CheckCircle2,
+  AlertCircle,
+  Check,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import toast from 'react-hot-toast';
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
 }
 
+interface FormErrors {
+  fullName?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  terms?: string;
+}
+
 export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
   const { signup } = useAuth();
-  const { showToast } = useToast();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -33,7 +38,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -41,6 +46,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
 
   // Field touch tracking for clean inline validation
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
+  const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -60,101 +66,139 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    // Validate required fields
-    if (!fullName.trim()) {
-      const msg = 'Please enter your full legal name.';
-      setErrorMessage(msg);
-      showToast('warning', 'Missing Required Field', msg);
-      return;
+    const errors: FormErrors = {};
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim();
+
+    // 1. Full Name validation
+    if (!cleanName) {
+      errors.fullName = 'Please enter your full legal name.';
     }
 
-    if (!email.trim() || !isValidEmail) {
-      const msg = 'Please enter a valid saleroom email address.';
-      setErrorMessage(msg);
-      showToast('warning', 'Invalid Email Format', msg);
-      return;
+    // 2. Email Address validation
+    if (!cleanEmail) {
+      errors.email = 'Please enter a valid email address.';
+    } else if (!isValidEmail) {
+      errors.email = 'Please enter a valid email address.';
     }
 
+    // 3. Password validation
     if (!password) {
-      const msg = 'Please create a secure password for your account.';
-      setErrorMessage(msg);
-      showToast('warning', 'Password Required', msg);
-      return;
+      errors.password = 'Password is required.';
+    } else if (!hasMinLength || !hasUppercase || !hasNumber) {
+      errors.password = 'Password must meet all security requirements.';
     }
 
-    if (!hasMinLength) {
-      const msg = 'Password must be at least 8 characters long for administrative security.';
-      setErrorMessage(msg);
-      showToast('warning', 'Password Security Requirement', msg);
-      return;
+    // 4. Confirm Password validation
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match.';
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match.';
     }
 
-    if (password !== confirmPassword) {
-      const msg = 'Password and Confirm Password do not match. Please verify both fields.';
-      setErrorMessage(msg);
-      showToast('error', 'Password Mismatch', msg);
-      return;
-    }
-
+    // 5. Terms Checkbox validation
     if (!acceptTerms) {
-      const msg = 'You must acknowledge and accept the Gardner Auction Saleroom Authorization Policy.';
-      setErrorMessage(msg);
-      showToast('warning', 'Authorization Required', msg);
+      errors.terms = 'Please accept the authorization policy to continue.';
+    }
+
+    // If any validation errors exist, show inline errors & appropriate toast
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setTouched({
+        name: true,
+        email: true,
+        password: true,
+        confirmPassword: true,
+        terms: true
+      });
+
+      if (!cleanName || !cleanEmail || !password || !confirmPassword) {
+        toast.error('Please complete all required fields.');
+      } else if (!isValidEmail) {
+        toast.error('Please enter a valid email address.');
+      } else if (password !== confirmPassword) {
+        toast.error('Passwords do not match.');
+      } else if (!acceptTerms) {
+        toast.error('Please accept the authorization policy to continue.');
+      } else {
+        toast.error('Please complete all required fields.');
+      }
       return;
     }
 
     setIsLoading(true);
-    const result = await signup({
-      name: fullName.trim(),
-      email: email.trim(),
-      password
-    });
+    try {
+      const result = await signup({
+        name: cleanName,
+        email: cleanEmail,
+        password
+      });
 
-    setIsLoading(false);
+      if (!result.success) {
+        const errText = result.error || 'Account creation failed.';
+        setErrorMessage(errText);
 
-    if (!result.success) {
-      const errText = result.error || 'Failed to complete registration.';
-      setErrorMessage(errText);
-
-      if (errText.toLowerCase().includes('already exists') || errText.toLowerCase().includes('already registered')) {
-        showToast('error', 'Account Already Exists', 'An account with this email address already exists. Please sign in instead.');
+        const lower = errText.toLowerCase();
+        if (
+          lower.includes('already exists') ||
+          lower.includes('already registered') ||
+          lower.includes('user already exists')
+        ) {
+          toast.error('An account with this email already exists. Please sign in.');
+        } else if (lower.includes('fetch') || lower.includes('network') || lower.includes('connection')) {
+          toast.error('Unable to connect. Please try again.');
+        } else {
+          toast.error(errText);
+        }
       } else {
-        showToast('error', 'Registration Failed', errText);
+        if (result.requiresEmailConfirmation) {
+          setRequiresEmailConfirmation(true);
+          const confirmMsg = result.message || 'Please check your email to confirm your account.';
+          setSuccessMessage(confirmMsg);
+          toast(confirmMsg, { icon: '✉️' });
+        } else {
+          setSuccessMessage('Account created successfully.');
+          toast.success('Account created successfully.');
+          setTimeout(() => {
+            onSwitchToLogin();
+          }, 1200);
+        }
       }
-    } else {
-      if (result.requiresEmailConfirmation) {
-        setRequiresEmailConfirmation(true);
-        const confirmMsg = result.message || 'Registration received! Please check your email to confirm your account.';
-        setSuccessMessage(confirmMsg);
-        showToast('info', 'Confirmation Required', 'Account registered! Please check your email inbox to confirm your account before signing in.');
+    } catch (err: any) {
+      const errMsg = err?.message || '';
+      if (errMsg.toLowerCase().includes('fetch') || errMsg.toLowerCase().includes('network')) {
+        toast.error('Unable to connect. Please try again.');
       } else {
-        setSuccessMessage('Account created successfully! Redirecting to Sign In...');
-        showToast('success', 'Account Created Successfully', 'Your AF360 administrative account has been registered! Redirecting to Sign In...');
-        setTimeout(() => {
-          onSwitchToLogin();
-        }, 1400);
+        toast.error('Account creation failed. Please try again.');
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="auth-split-page">
       {/* =====================================================================
-          LEFT PANEL: Visual Branding, Auction Imagery & Feature Highlights
+          LEFT PANEL: Visual Branding, Auction Imagery & Gateway Status
           ===================================================================== */}
       <div className="auth-split-visual">
+        <img
+          src="/images/Login_Image.png"
+          alt=""
+          className="auth-visual-bg-img"
+          aria-hidden="true"
+        />
         <div className="auth-visual-overlay" />
 
         <div className="auth-visual-content">
           {/* Top Brand & Gateway Status */}
           <div className="auth-visual-top">
             <div className="auth-brand-logo-group">
-              <img 
-                src="/images/gardner_logo.png" 
-                alt="Gardner Auction Logo" 
+              <img
+                src="/images/gardner_logo.png"
+                alt="Gardner Auction Logo"
                 className="auth-brand-emblem"
                 onError={(e) => {
-                  // Graceful fallback to crest if image fails
                   e.currentTarget.style.display = 'none';
                   const next = e.currentTarget.nextElementSibling as HTMLElement;
                   if (next) next.style.display = 'flex';
@@ -165,67 +209,13 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
               </div>
               <div>
                 <h1 className="auth-brand-name">Gardner Auction</h1>
-                <p className="auth-brand-subtitle">AF360 Master Administrative Console</p>
+                <p className="auth-brand-subtitle">Master Administrative Console</p>
               </div>
             </div>
 
             <div className="auth-badge-pill">
               <span className="auth-status-dot" />
-              <span>Operator Onboarding</span>
-            </div>
-          </div>
-
-          {/* Middle: Headline, Description & 3 Concise Feature Highlights */}
-          <div className="auth-visual-middle">
-            <div className="auth-brand-licensure">
-              PA BUREAU OF OCCUPATIONAL AFFAIRS • LIC. #AY002377
-            </div>
-
-            <h2 className="auth-hero-title font-serif">
-              Join the Gardner Auction Operations
-            </h2>
-
-            <p className="auth-hero-desc">
-              Register your certified administrative account for real-time live rostrum clerking, multi-session catalog management, and secure buyer settlements.
-            </p>
-
-            {/* 3 Concise Feature Highlights */}
-            <div className="auth-features-list">
-              <div className="auth-feature-item">
-                <div className="auth-feature-icon">
-                  <ShieldCheck size={18} color="#d4af37" />
-                </div>
-                <div>
-                  <div className="auth-feature-title">Secure Administrative Access</div>
-                  <div className="auth-feature-text">
-                    Role-based permissions, automated super-admin provisioning, and multi-tier saleroom authorization.
-                  </div>
-                </div>
-              </div>
-
-              <div className="auth-feature-item">
-                <div className="auth-feature-icon">
-                  <Layers size={18} color="#10b981" />
-                </div>
-                <div>
-                  <div className="auth-feature-title">Auction &amp; Catalog Management</div>
-                  <div className="auth-feature-text">
-                    Comprehensive catalog creation, lot certification tracking, and HiBid node telemetry.
-                  </div>
-                </div>
-              </div>
-
-              <div className="auth-feature-item">
-                <div className="auth-feature-icon">
-                  <FileText size={18} color="#38bdf8" />
-                </div>
-                <div>
-                  <div className="auth-feature-title">Secure Activity Audit Trail</div>
-                  <div className="auth-feature-text">
-                    Immutable transaction logging, bid verification histories, and strict Pennsylvania fiduciary compliance.
-                  </div>
-                </div>
-              </div>
+              <span>Rostrum Active</span>
             </div>
           </div>
 
@@ -246,9 +236,9 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
         <div className="auth-form-inner" style={{ maxWidth: 440 }}>
           {/* Mobile Header (rendered when left visual panel is hidden) */}
           <div className="auth-mobile-brand">
-            <img 
-              src="/images/gardner_logo.png" 
-              alt="Gardner Auction Logo" 
+            <img
+              src="/images/gardner_logo.png"
+              alt="Gardner Auction Logo"
               style={{ height: 38, objectFit: 'contain' }}
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
@@ -256,13 +246,13 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
             />
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Gardner Auction</div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>AF360 Admin Console</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>Admin Console</div>
             </div>
           </div>
 
           <div className="auth-form-header">
             <div className="auth-tag">ADMINISTRATIVE ONBOARDING</div>
-            <h2 className="auth-title font-serif">Create AF360 Account</h2>
+            <h2 className="auth-title font-serif">Create Account</h2>
             <p className="auth-subtitle">
               Enter your credentials to join Gardner Auction saleroom and clerking operations.
             </p>
@@ -290,7 +280,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                 Check Your Email Inbox
               </h3>
               <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.5, marginBottom: 18 }}>
-                We have sent an authentication verification link to <strong>{email}</strong>. Once confirmed, you can sign in directly to your AF360 console.
+                We have sent an authentication verification link to <strong>{email}</strong>. Once confirmed, you can sign in directly to your console.
               </p>
               <button
                 type="button"
@@ -318,14 +308,19 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     autoComplete="name"
                     placeholder="e.g. Todd Gardner"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (fieldErrors.fullName) {
+                        setFieldErrors(prev => ({ ...prev, fullName: undefined }));
+                      }
+                    }}
                     onBlur={() => markTouched('name')}
-                    className={`auth-input ${touched.name && !fullName.trim() ? 'invalid-border' : ''}`}
+                    className={`auth-input ${(touched.name && !fullName.trim()) || fieldErrors.fullName ? 'invalid-border' : ''}`}
                     disabled={isLoading}
                   />
                 </div>
-                {touched.name && !fullName.trim() && (
-                  <span className="auth-field-error">Full name is required.</span>
+                {(fieldErrors.fullName || (touched.name && !fullName.trim())) && (
+                  <span className="auth-field-error">{fieldErrors.fullName || 'Please enter your full legal name.'}</span>
                 )}
               </div>
 
@@ -343,17 +338,28 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     autoComplete="email"
                     placeholder="name@gardner-auction.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (fieldErrors.email) {
+                        setFieldErrors(prev => ({ ...prev, email: undefined }));
+                      }
+                    }}
                     onBlur={() => markTouched('email')}
-                    className={`auth-input ${touched.email && (!email.trim() || !isValidEmail) ? 'invalid-border' : ''}`}
+                    className={`auth-input ${(touched.email && (!email.trim() || !isValidEmail)) || fieldErrors.email ? 'invalid-border' : ''}`}
                     disabled={isLoading}
                   />
                 </div>
-                {touched.email && !email.trim() && (
-                  <span className="auth-field-error">Email address is required.</span>
-                )}
-                {touched.email && email.trim() && !isValidEmail && (
-                  <span className="auth-field-error">Please enter a valid email format.</span>
+                {fieldErrors.email ? (
+                  <span className="auth-field-error">{fieldErrors.email}</span>
+                ) : (
+                  <>
+                    {touched.email && !email.trim() && (
+                      <span className="auth-field-error">Please enter a valid email address.</span>
+                    )}
+                    {touched.email && email.trim() && !isValidEmail && (
+                      <span className="auth-field-error">Please enter a valid email address.</span>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -371,9 +377,14 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     autoComplete="new-password"
                     placeholder="Minimum 8 characters"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (fieldErrors.password) {
+                        setFieldErrors(prev => ({ ...prev, password: undefined }));
+                      }
+                    }}
                     onBlur={() => markTouched('password')}
-                    className={`auth-input ${touched.password && !hasMinLength ? 'invalid-border' : ''}`}
+                    className={`auth-input ${(touched.password && !hasMinLength) || fieldErrors.password ? 'invalid-border' : ''}`}
                     disabled={isLoading}
                   />
                   <button
@@ -386,6 +397,9 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <span className="auth-field-error">{fieldErrors.password}</span>
+                )}
               </div>
 
               {/* Field 4: Confirm Password */}
@@ -402,9 +416,14 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     autoComplete="new-password"
                     placeholder="Re-enter password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (fieldErrors.confirmPassword) {
+                        setFieldErrors(prev => ({ ...prev, confirmPassword: undefined }));
+                      }
+                    }}
                     onBlur={() => markTouched('confirmPassword')}
-                    className={`auth-input ${touched.confirmPassword && (!passwordsMatch || !confirmPassword) ? 'invalid-border' : ''}`}
+                    className={`auth-input ${(touched.confirmPassword && (!passwordsMatch || !confirmPassword)) || fieldErrors.confirmPassword ? 'invalid-border' : ''}`}
                     disabled={isLoading}
                   />
                   <button
@@ -417,8 +436,8 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {touched.confirmPassword && confirmPassword && !passwordsMatch && (
-                  <span className="auth-field-error">Passwords do not match.</span>
+                {(fieldErrors.confirmPassword || (touched.confirmPassword && confirmPassword && !passwordsMatch)) && (
+                  <span className="auth-field-error">{fieldErrors.confirmPassword || 'Passwords do not match.'}</span>
                 )}
               </div>
 
@@ -450,7 +469,12 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                   <input
                     type="checkbox"
                     checked={acceptTerms}
-                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    onChange={(e) => {
+                      setAcceptTerms(e.target.checked);
+                      if (fieldErrors.terms) {
+                        setFieldErrors(prev => ({ ...prev, terms: undefined }));
+                      }
+                    }}
                     className="auth-checkbox"
                     id="signup-terms-check"
                     required
@@ -459,6 +483,11 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                     I acknowledge and accept the Gardner Auction Saleroom Authorization Policy and Pennsylvania Auctioneer Fiduciary Protocol (63 P.S. § 734).
                   </span>
                 </label>
+                {fieldErrors.terms && (
+                  <span className="auth-field-error" style={{ marginTop: 6 }}>
+                    {fieldErrors.terms}
+                  </span>
+                )}
               </div>
 
               {/* Primary Submit Button */}
@@ -476,7 +505,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
                 ) : (
                   <>
                     <UserPlus size={16} />
-                    <span>Create AF360 Account</span>
+                    <span>Create Account</span>
                     <ArrowRight size={16} />
                   </>
                 )}
@@ -493,7 +522,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin }) => {
               onClick={onSwitchToLogin}
               id="btn-switch-to-login"
             >
-              Sign In
+              Sign In →
             </button>
           </div>
         </div>

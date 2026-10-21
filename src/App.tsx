@@ -20,6 +20,7 @@ import {
 } from './data/mockData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { Toaster } from 'react-hot-toast';
 import { AuthPage } from './components/auth/AuthPage';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
@@ -679,6 +680,46 @@ export const App: React.FC = () => {
     <ToastProvider>
       <AuthProvider>
         <AppRoot />
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          gutter={10}
+          containerStyle={{
+            top: 20,
+            right: 20,
+            zIndex: 999999,
+          }}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#0c0e12',
+              color: '#ffffff',
+              border: '1px solid rgba(203, 161, 53, 0.45)',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 500,
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+              padding: '12px 16px',
+            },
+            success: {
+              duration: 4000,
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#0c0e12',
+              },
+            },
+            error: {
+              duration: 4500,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#0c0e12',
+              },
+              style: {
+                border: '1px solid rgba(239, 68, 68, 0.5)',
+              },
+            },
+          }}
+        />
       </AuthProvider>
     </ToastProvider>
   );

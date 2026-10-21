@@ -63,7 +63,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, 
             <Lock size={22} color="#b48316" />
           </div>
           <div>
-            <h3 className="auth-modal-title">Set New AF360 Password</h3>
+            <h3 className="auth-modal-title">Set New Password</h3>
             <p className="auth-modal-subtitle">Update your secure saleroom credentials</p>
           </div>
         </div>
@@ -85,7 +85,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, 
               onClick={onClose}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              <span>Continue to AF360 Console</span>
+              <span>Continue to Console</span>
               <ArrowRight size={16} />
             </button>
           </div>

@@ -233,14 +233,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = pass.trim();
+    const rawPass = pass; // Do not silently trim or modify password before auth
 
-    if (!cleanEmail || !cleanPass) {
+    if (!cleanEmail || !rawPass || !rawPass.trim()) {
       setIsLoading(false);
       return { success: false, error: 'Please enter both your email address and password.' };
     }
 
-    // Remember email preference
+    // Remember email preference (never store password)
     if (rememberMe) {
       localStorage.setItem(REMEMBER_EMAIL_KEY, cleanEmail);
       setSavedEmail(cleanEmail);
@@ -253,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
-        password: cleanPass
+        password: rawPass
       });
 
       if (error) {
@@ -270,7 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (errLower.includes('invalid login credentials') || errLower.includes('invalid credentials')) {
           return {
             success: false,
-            error: 'Invalid email address or password. Please verify your credentials and try again.'
+            error: 'Invalid email or password.'
           };
         }
 
@@ -314,9 +314,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const cleanName = userData.name.trim();
     const cleanEmail = userData.email.trim().toLowerCase();
-    const cleanPass = userData.password.trim();
+    const rawPass = userData.password;
 
-    if (!cleanName || !cleanEmail || !cleanPass) {
+    if (!cleanName || !cleanEmail || !rawPass || !rawPass.trim()) {
       setIsLoading(false);
       return { success: false, error: 'Please fill in all required registration fields.' };
     }
@@ -327,7 +327,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Please enter a valid saleroom email address.' };
     }
 
-    if (cleanPass.length < 8) {
+    if (rawPass.length < 8) {
       setIsLoading(false);
       return { success: false, error: 'Password must be at least 8 characters long for administrative security.' };
     }
@@ -336,7 +336,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanEmail,
-        password: cleanPass,
+        password: rawPass,
         options: {
           data: {
             full_name: cleanName,
@@ -352,12 +352,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check for duplicate account
         if (
           errLower.includes('already registered') || 
+          errLower.includes('already exists') || 
           errLower.includes('user already exists') || 
           authError.status === 422
         ) {
           return {
             success: false,
-            error: 'An account with this email address already exists. Please sign in instead.'
+            error: 'An account with this email already exists. Please sign in.'
           };
         }
 
@@ -379,6 +380,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           success: false,
           error: 'Registration was not confirmed by Supabase. Please try again.'
+        };
+      }
+
+      // Supabase returns identities: [] when email already exists and email confirmations are enabled
+      if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
+        setIsLoading(false);
+        return {
+          success: false,
+          error: 'An account with this email already exists. Please sign in.'
         };
       }
 
