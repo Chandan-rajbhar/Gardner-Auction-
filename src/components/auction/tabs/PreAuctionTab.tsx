@@ -36,12 +36,16 @@ import {
   ChevronDown,
   Settings,
   MoreVertical,
-  Filter
+  Filter,
+  UploadCloud,
+  Copy,
+  Download
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
 import { LotFormModal } from '../LotFormModal';
 import { INITIAL_USERS } from '../../../data/mockData';
+import { useToast } from '../../../context/ToastContext';
 
 interface PreAuctionTabProps {
   currentTab: PreAuctionSubTab;
@@ -51,6 +55,7 @@ interface PreAuctionTabProps {
   onUpdateLot: (lot: LotItem) => void;
   onSendToBlock: (lot: LotItem) => void;
   onDeleteLot: (id: string) => Promise<any>;
+  hideSubtabs?: boolean;
 }
 
 export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
@@ -60,13 +65,18 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   onAddLot,
   onUpdateLot,
   onSendToBlock,
-  onDeleteLot
+  onDeleteLot,
+  hideSubtabs = false
 }) => {
-  const { state, dispatch, errors } = useAuctionDetail();
+  const { state, dispatch, errors, saveAuction } = useAuctionDetail();
+  const { showToast } = useToast();
   const auction = state.data;
 
   // Modals for Details Tab
   const [isTipsModalOpen, setIsTipsModalOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [isSavingLocal, setIsSavingLocal] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
@@ -336,743 +346,966 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* Sub-tabs bar matching reference screenshot */}
-      <div 
-        style={{ 
-          display: 'flex', 
-          gap: 8, 
-          marginBottom: 4,
-          flexWrap: 'wrap'
-        }}
-      >
-        {[
-          { key: 'details', label: 'Details' },
-          { key: 'upload-settings', label: 'Upload Settings' },
-          { key: 'preview', label: 'Preview' },
-          { key: 'lots', label: 'Lots' },
-          { key: 'lot-images', label: 'Lot Images' },
-          { key: 'expenses', label: `Expenses (${auction.expenses.length})` }
-        ].map(tab => {
-          const isActive = currentTab === tab.key;
-          const isHovered = hoveredSubTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onMouseEnter={() => setHoveredSubTab(tab.key)}
-              onMouseLeave={() => setHoveredSubTab(null)}
-              onClick={() => onSelectTab(tab.key as PreAuctionSubTab)}
-              style={{
-                padding: '7px 16px',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: isActive ? 700 : 500,
-                background: isActive ? '#151922' : isHovered ? '#fffdf7' : '#ffffff',
-                color: isActive 
-                  ? (isHovered ? '#dfba52' : 'var(--gold-primary, #cba135)') 
-                  : isHovered 
-                    ? 'var(--gold-dark, #8c6428)' 
-                    : '#334155',
-                border: isActive 
-                  ? '1.5px solid var(--gold-primary, #cba135)' 
-                  : isHovered 
-                    ? '1.5px solid var(--gold-primary, #cba135)' 
-                    : '1px solid rgba(203, 161, 53, 0.35)',
-                boxShadow: isActive 
-                  ? '0 0 10px rgba(203, 161, 53, 0.3)' 
-                  : isHovered 
-                    ? '0 0 8px rgba(203, 161, 53, 0.18)' 
-                    : 'none',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Sub-tabs bar matching Image 2 screenshot (only if not hidden / not rendered in unified top bar) */}
+      {!hideSubtabs && (
+        <div className="image2-subtabs-row">
+          {[
+            { key: 'details', label: 'Details' },
+            { key: 'upload-settings', label: 'Upload Settings' },
+            { key: 'preview', label: 'Preview' },
+            { key: 'lots', label: 'Lots', badge: filteredAuctionLots.length, badgeType: 'neutral' },
+            { key: 'lot-images', label: 'Lot Images' },
+            { 
+              key: 'expenses', 
+              label: 'Expenses', 
+              badge: `$${(auction.expenses || []).reduce((s, e) => s + (e.amount || 0), 0).toLocaleString()}`, 
+              badgeType: 'green' 
+            }
+          ].map(tab => {
+            const isActive = currentTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => onSelectTab(tab.key as PreAuctionSubTab)}
+                className={`image2-subtab ${isActive ? 'active' : ''}`}
+              >
+                {isActive && <span className="image2-subtab-dot" />}
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && (
+                  <span className={`image2-tab-badge ${tab.badgeType === 'green' ? 'green' : 'neutral'}`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* =========================================================================
-          SUB-TAB 1: DETAILS (Two-column layout matching reference screenshot)
+          SUB-TAB 1: DETAILS (Refined Two-Column Layout matching Reference Screenshots)
           ========================================================================= */}
       {currentTab === 'details' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: 20, alignItems: 'start' }}>
-          {/* LEFT COLUMN */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Card: Auction Information */}
-            <div className="syndication-card">
-              <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 16 }}>
-                Auction Information
-              </h3>
-
-              {/* Auction Type radios */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 16 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', minWidth: 100 }}>
-                  Auction Type
-                </span>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                  <input 
-                    type="radio"
-                    name="auctionType"
-                    checked={auction.auctionType === 'HiBid'}
-                    onChange={() => dispatch({ type: 'UPDATE_FIELD', field: 'auctionType', value: 'HiBid' })}
-                  />
-                  <span style={{ fontWeight: 600, color: '#0369a1' }}>HiBid</span>
-                </label>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                  <input 
-                    type="radio"
-                    name="auctionType"
-                    checked={auction.auctionType === 'Other Auctions'}
-                    onChange={() => dispatch({ type: 'UPDATE_FIELD', field: 'auctionType', value: 'Other Auctions' })}
-                  />
-                  <span>Other Auctions</span>
-                </label>
-              </div>
-
-              {/* Auction Code */}
-              <FormField label="Auction Code">
-                <input 
-                  type="text"
-                  value={auction.code}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'code', value: e.target.value.toUpperCase() })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-
-              {/* Name */}
-              <FormField label="Name" required error={errors.name}>
-                <input 
-                  type="text"
-                  value={auction.name}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'name', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-
-              {/* Description */}
-              <FormField label="Description">
-                <textarea 
-                  rows={4}
-                  value={auction.description}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'description', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 'auto', padding: '8px 10px', fontSize: 13 }}
-                />
-              </FormField>
-
-              {/* Payment Information */}
-              <FormField label="Payment Information">
-                <textarea 
-                  rows={2}
-                  value={auction.paymentInfo}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'paymentInfo', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 'auto', padding: '8px 10px', fontSize: 13 }}
-                />
-              </FormField>
-
-              {/* Dates */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <FormField label="Start Date" required error={errors.startDate}>
-                  <input 
-                    type="date"
-                    value={auction.startDate}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'startDate', value: e.target.value })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-                <FormField label="End Date" required error={errors.endDate}>
-                  <input 
-                    type="date"
-                    value={auction.endDate}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'endDate', value: e.target.value })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-              </div>
-
-              {/* Tax Exempt All Checkbox */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.taxExemptAll}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'taxExemptAll', value: e.target.checked })}
-                  />
-                  <span>Tax Exempt All</span>
-                </label>
-              </div>
-
-              {/* Currency & Live Starting Bid Card */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <FormField label="Currency" required error={errors.currency}>
-                  <select 
-                    value={auction.currency}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'currency', value: e.target.value })}
-                    className="catalog-filter-select"
-                    style={{ width: '100%', height: 36 }}
-                  >
-                    <option value="USD">USD ($)</option>
-                    <option value="CAD">CAD (C$)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
-                  </select>
-                </FormField>
-
-                <FormField label="Live Starting Bid Card Number">
-                  <input 
-                    type="number"
-                    value={auction.liveStartingBidCard}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'liveStartingBidCard', value: parseInt(e.target.value) || 1 })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-              </div>
-
-              {/* Terms and Conditions */}
-              <FormField label="Terms And Conditions">
-                <textarea 
-                  rows={4}
-                  value={auction.terms}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'terms', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 'auto', padding: '8px 10px', fontSize: 13 }}
-                />
-              </FormField>
-
-              {/* Short BP Explanation */}
-              <FormField label="Short BP Explanation">
-                <input 
-                  type="text"
-                  placeholder="e.g. 15% Buyer's Premium"
-                  value={auction.shortBpExplanation}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'shortBpExplanation', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-
-              {/* Address 1 & 2 */}
-              <FormField label="Address1">
-                <input 
-                  type="text"
-                  value={auction.address1}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address1', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-              <FormField label="Address2">
-                <input 
-                  type="text"
-                  value={auction.address2}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address2', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-
-              {/* City / State / Zip in one row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
-                <FormField label="City">
-                  <input 
-                    type="text"
-                    value={auction.city}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'city', value: e.target.value })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-                <FormField label="State">
-                  <input 
-                    type="text"
-                    value={auction.state}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'state', value: e.target.value })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-                <FormField label="Zip">
-                  <input 
-                    type="text"
-                    value={auction.zip}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'zip', value: e.target.value })}
-                    className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
-                  />
-                </FormField>
-              </div>
-
-              {/* Country */}
-              <FormField label="Country">
-                <select 
-                  value={auction.country}
-                  onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'country', value: e.target.value })}
-                  className="catalog-filter-select"
-                  style={{ width: '100%', height: 36 }}
-                >
-                  <option value="United States">United States</option>
-                  <option value="Canada">Canada</option>
-                  <option value="United Kingdom">United Kingdom</option>
-                </select>
-              </FormField>
-
-              {/* Consolidated Invoicing Checkbox */}
-              <div>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.useConsolidatedInvoicing}
-                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'useConsolidatedInvoicing', value: e.target.checked })}
-                  />
-                  <span>Use Consolidated Invoicing (Seller & Buyer Invoices)</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Card: Shipping/Buyer Charges */}
-            <div className="syndication-card">
-              <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 16 }}>
-                Shipping/Buyer Charges
-              </h3>
-
-              <FormField label="Availability">
-                <select 
-                  value={auction.shippingAvailability}
-                  onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAvailability', value: e.target.value })}
-                  className="catalog-filter-select"
-                  style={{ width: '100%', height: 36 }}
-                >
-                  <option value="Shipping Offered On All Lots">Shipping Offered On All Lots</option>
-                  <option value="Selected Lots Only">Selected Lots Only</option>
-                  <option value="No Shipping">No Shipping</option>
-                </select>
-              </FormField>
-
-              <FormField label="Account">
-                <input 
-                  type="text"
-                  placeholder="e.g. shipping & handling"
-                  value={auction.shippingAccount}
-                  onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAccount', value: e.target.value })}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-              </FormField>
-
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.addHandlingCharge}
-                    onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'addHandlingCharge', value: e.target.checked })}
-                  />
-                  <span>Add Handling Charge</span>
-                </label>
-              </div>
-
-              {auction.addHandlingCharge && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, background: '#fcfbf9', padding: 12, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Handling Charge Type</label>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                        <input 
-                          type="radio"
-                          name="handlingType"
-                          checked={auction.handlingChargeType === 'Fixed'}
-                          onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Fixed' })}
-                        />
-                        <span>Fixed</span>
-                      </label>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                        <input 
-                          type="radio"
-                          name="handlingType"
-                          checked={auction.handlingChargeType === 'Percentage'}
-                          onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Percentage' })}
-                        />
-                        <span>Percentage</span>
-                      </label>
-                    </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div 
+            className="details-two-col-layout" 
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', 
+              gap: 20, 
+              alignItems: 'start' 
+            }}
+          >
+            {/* LEFT COLUMN: Auction Information & Shipping & Buyer Charges */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Section 1: Auction Information */}
+              <div className="details-clean-card">
+                <div className="details-card-header">
+                  <div className="details-card-title-group">
+                    <h3>Auction Information</h3>
+                    <p>Master configuration, catalog scheduling, and venue credentials.</p>
                   </div>
 
-                  <FormField label={auction.handlingChargeType === 'Fixed' ? 'Fixed Amount ($)' : 'Percentage (%)'}>
-                    <input 
-                      type="number"
-                      step="0.01"
-                      value={auction.handlingAmount}
-                      onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingAmount', value: parseFloat(e.target.value) || 0 })}
-                      className="catalog-search-input"
-                      style={{ width: '100%', height: 36 }}
-                    />
-                  </FormField>
+                  {/* Auction Type Segmented Switch */}
+                  <div className="segmented-pill-toggle">
+                    <button
+                      type="button"
+                      className={`segmented-pill-btn ${auction.auctionType === 'HiBid' ? 'active' : ''}`}
+                      onClick={() => dispatch({ type: 'UPDATE_FIELD', field: 'auctionType', value: 'HiBid' })}
+                    >
+                      HiBid
+                    </button>
+                    <button
+                      type="button"
+                      className={`segmented-pill-btn ${auction.auctionType === 'Other Auctions' ? 'active' : ''}`}
+                      onClick={() => dispatch({ type: 'UPDATE_FIELD', field: 'auctionType', value: 'Other Auctions' })}
+                    >
+                      Other Auctions
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* RIGHT COLUMN */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Card: Featured Images */}
-            <div className="syndication-card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                  Featured Images
-                </h3>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 600 }}>
-                  {auction.featuredImages.length} images
-                </span>
-              </div>
-
-              {/* Drag and Drop Zone matching screenshot */}
-              <div 
-                style={{
-                  border: '2px dashed var(--border-subtle)',
-                  borderRadius: 8,
-                  padding: '24px 16px',
-                  textAlign: 'center',
-                  background: '#fcfbf9',
-                  cursor: 'pointer',
-                  marginBottom: 14
-                }}
-                onClick={() => {
-                  // Simulate image addition from public assets
-                  const sampleImages = ['/images/hero_coin.jpg', '/images/morgan_dollar.jpg', '/images/gold_bullion.jpg', '/images/antique_silver.jpg'];
-                  const randomImg = sampleImages[Math.floor(Math.random() * sampleImages.length)];
-                  dispatch({
-                    type: 'ADD_FEATURED_IMAGE',
-                    image: {
-                      id: `img-${Date.now()}`,
-                      url: randomImg,
-                      title: `Featured Lot Image #${auction.featuredImages.length + 1}`,
-                      order: auction.featuredImages.length + 1
-                    }
-                  });
-                }}
-              >
-                <Upload size={24} color="var(--gold-primary)" style={{ margin: '0 auto 8px' }} />
-                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>
-                  Drop Files here to upload. Clicking this button allows to browse my computer for a file.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                <button
-                  type="button"
-                  onClick={() => setIsTipsModalOpen(true)}
-                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Tips & Tricks
-                </button>
-              </div>
-
-              {/* Thumbnail grid with remove & reorder (4 sample coin images) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                {auction.featuredImages.map((img, idx) => (
-                  <div 
-                    key={img.id}
-                    style={{
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 6,
-                      overflow: 'hidden',
-                      position: 'relative',
-                      background: '#ffffff',
-                      boxShadow: 'var(--shadow-xs)'
-                    }}
-                  >
-                    <div style={{ height: 80, width: '100%', overflow: 'hidden', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img 
-                        src={img.url} 
-                        alt={img.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                {/* Auction Code & Live Starting Bid Card # */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
+                  <div className="ecomm-form-group">
+                    <label className="ecomm-form-label">
+                      <span>Auction Code <span className="ecomm-required-star">*</span></span>
+                    </label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input 
+                        type="text"
+                        value={auction.code}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'code', value: e.target.value.toUpperCase() })}
+                        className="ecomm-input"
+                        style={{ paddingRight: 38, fontFamily: 'var(--font-mono, monospace)', fontWeight: 600, letterSpacing: '0.04em' }}
+                        placeholder="e.g. HGS-2026-10-22"
                       />
-                    </div>
-                    <div style={{ padding: '4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fcfbf9' }}>
-                      <div style={{ display: 'flex', gap: 2 }}>
-                        {idx > 0 && (
-                          <button 
-                            type="button" 
-                            onClick={() => moveImage(idx, 'up')}
-                            style={{ background: 'none', border: 'none', fontSize: 10, cursor: 'pointer' }}
-                            title="Move Left"
-                          >
-                            ◀
-                          </button>
-                        )}
-                        {idx < auction.featuredImages.length - 1 && (
-                          <button 
-                            type="button" 
-                            onClick={() => moveImage(idx, 'down')}
-                            style={{ background: 'none', border: 'none', fontSize: 10, cursor: 'pointer' }}
-                            title="Move Right"
-                          >
-                            ▶
-                          </button>
-                        )}
-                      </div>
-                      <button 
+                      <button
                         type="button"
-                        onClick={() => dispatch({ type: 'REMOVE_FEATURED_IMAGE', id: img.id })}
-                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                        title="Remove image"
+                        onClick={() => {
+                          if (auction.code) {
+                            navigator.clipboard.writeText(auction.code);
+                            setCopiedCode(true);
+                            showToast('info', 'Copied', `Auction code "${auction.code}" copied to clipboard`);
+                            setTimeout(() => setCopiedCode(false), 2000);
+                          }
+                        }}
+                        title="Copy Auction Code"
+                        style={{
+                          position: 'absolute',
+                          right: 6,
+                          background: 'none',
+                          border: 'none',
+                          color: copiedCode ? '#059669' : '#64748b',
+                          cursor: 'pointer',
+                          padding: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 4
+                        }}
                       >
-                        <Trash2 size={12} />
+                        {copiedCode ? <Check size={15} /> : <Copy size={15} />}
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Card: Auction Links */}
-            <div className="syndication-card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                  Auction Links
-                </h3>
-                <button
-                  type="button"
-                  className="btn btn-gold"
-                  onClick={() => handleOpenLinkModal()}
-                  style={{ fontSize: 12, padding: '5px 12px' }}
-                >
-                  <Plus size={14} />
-                  <span>+ New Link</span>
-                </button>
-              </div>
-
-              {auction.auctionLinks.length === 0 ? (
-                <div style={{ 
-                  padding: '24px 16px', 
-                  textAlign: 'center', 
-                  border: '1px solid var(--border-subtle)', 
-                  borderRadius: 6, 
-                  color: 'var(--text-dim)',
-                  fontSize: 13 
-                }}>
-                  No Auction Links
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border-subtle)' }}>
-                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>URL</th>
-                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Description</th>
-                        <th style={{ textAlign: 'center', padding: '8px 12px', width: 70 }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {auction.auctionLinks.map((link, idx) => (
-                        <tr key={link.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '8px 12px', color: '#0284c7' }}>
-                            <a href={link.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                              {link.url}
-                            </a>
-                          </td>
-                          <td style={{ padding: '8px 12px' }}>{link.description}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                              <button 
-                                type="button" 
-                                onClick={() => handleOpenLinkModal(idx)}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                              >
-                                <Edit3 size={13} />
-                              </button>
-                              <button 
-                                type="button" 
-                                onClick={() => dispatch({ type: 'REMOVE_AUCTION_LINK', index: idx })}
-                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Card: New Lot Defaults */}
-            <div className="syndication-card">
-              <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 16 }}>
-                New Lot Defaults
-              </h3>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* Commission */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>Commission</label>
-                  <SearchableSelect 
-                    value={auction.lotDefaults.commission}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'commission', value: val })}
-                    options={[
-                      'CSS_52F3ABA3 - SS -> [0% up to $0 ...]',
-                      'COMM_STD_10 - Standard 10% Consignor',
-                      'COMM_FLAT_5 - Flat 5% Estate Reserve'
-                    ]}
-                    showAdd={true}
-                    showUpload={true}
-                    onAddOption={() => {
-                      setCreateOptionTarget('commission');
-                      setIsCreateOptionModalOpen(true);
-                    }}
-                    onUploadCsv={() => {
-                      setCsvTarget('Commission Schedules');
-                      setIsCsvModalOpen(true);
-                    }}
-                  />
+                  <div className="ecomm-form-group">
+                    <label className="ecomm-form-label">
+                      <span>Live Starting Bid Card #</span>
+                    </label>
+                    <input 
+                      type="number"
+                      value={auction.liveStartingBidCard}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'liveStartingBidCard', value: parseInt(e.target.value) || 1 })}
+                      className="ecomm-input"
+                      min={1}
+                      placeholder="1"
+                    />
+                  </div>
                 </div>
 
-                {/* Buyer Tax */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>
-                    Buyer Tax {auction.taxExemptAll && <span style={{ color: '#059669', fontSize: 11 }}>(Disabled: Tax Exempt All Active)</span>}
+                {/* Auction Name */}
+                <div className="ecomm-form-group">
+                  <label className="ecomm-form-label">
+                    <span>Auction Name <span className="ecomm-required-star">*</span></span>
                   </label>
-                  <SearchableSelect 
-                    value={auction.taxExemptAll ? '' : auction.lotDefaults.buyerTax}
-                    disabled={auction.taxExemptAll}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerTax', value: val })}
-                    options={[
-                      'BTAX_0% - 0% Buyer Tax',
-                      'BTAX_6% - 6% Montana Sales Surcharge',
-                      'BTAX_7.5% - 7.5% Standard County Tax'
-                    ]}
-                    showAdd={true}
-                    showUpload={true}
-                    onAddOption={() => {
-                      setCreateOptionTarget('buyerTax');
-                      setIsCreateOptionModalOpen(true);
-                    }}
-                    onUploadCsv={() => {
-                      setCsvTarget('Buyer Tax Schedules');
-                      setIsCsvModalOpen(true);
-                    }}
+                  <input 
+                    type="text"
+                    value={auction.name}
+                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'name', value: e.target.value })}
+                    className="ecomm-input"
+                    placeholder="e.g. Highlander Gold & Silver 10/22/26"
+                  />
+                  {errors.name && (
+                    <span style={{ fontSize: 11.5, color: '#dc2626', marginTop: 3 }}>{errors.name}</span>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div className="ecomm-form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label className="ecomm-form-label" style={{ margin: 0 }}>
+                      Description
+                    </label>
+                    <span className="ecomm-form-hint">Plain text / HTML supported</span>
+                  </div>
+                  <textarea 
+                    rows={3}
+                    value={auction.description}
+                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'description', value: e.target.value })}
+                    className="ecomm-textarea"
+                    placeholder="Welcome to the auction catalog. Enter event details..."
                   />
                 </div>
 
-                {/* Buyer Premium */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>Buyer Premium</label>
-                  <SearchableSelect 
-                    value={auction.lotDefaults.buyerPremium}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerPremium', value: val })}
-                    options={[
-                      'BP_15 - 15% BP for all bidders',
-                      'BP_12 - 12% BP Preferred In-House Tier',
-                      'BP_18 - 18% Credit Card Tier'
-                    ]}
-                    showAdd={true}
-                    showUpload={true}
-                    onAddOption={() => {
-                      setCreateOptionTarget('buyerPremium');
-                      setIsCreateOptionModalOpen(true);
-                    }}
-                    onUploadCsv={() => {
-                      setCsvTarget('Buyer Premium Schedules');
-                      setIsCsvModalOpen(true);
-                    }}
+                {/* Payment Information */}
+                <div className="ecomm-form-group">
+                  <label className="ecomm-form-label">
+                    Payment Information
+                  </label>
+                  <textarea 
+                    rows={2}
+                    value={auction.paymentInfo}
+                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'paymentInfo', value: e.target.value })}
+                    className="ecomm-textarea"
+                    placeholder="Cash, Wire Transfer, Certified Cashier Check, Visa, MasterCard..."
+                  />
+                  {/* Quick tag pill selectors as seen in reference screenshot */}
+                  <div className="quick-tags-row">
+                    {['Cash / Wire', 'Visa / MC / Amex', '3% Credit Fee'].map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="quick-tag-pill"
+                        onClick={() => {
+                          const current = auction.paymentInfo || '';
+                          if (!current.includes(tag)) {
+                            const updated = current ? `${current}, ${tag}` : tag;
+                            dispatch({ type: 'UPDATE_FIELD', field: 'paymentInfo', value: updated });
+                          }
+                        }}
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Start Date & End Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                  <div className="ecomm-form-group">
+                    <label className="ecomm-form-label">
+                      <span>Start Date <span className="ecomm-required-star">*</span></span>
+                    </label>
+                    <input 
+                      type="date"
+                      value={auction.startDate}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'startDate', value: e.target.value })}
+                      className="ecomm-input"
+                    />
+                    {errors.startDate && (
+                      <span style={{ fontSize: 11.5, color: '#dc2626', marginTop: 3 }}>{errors.startDate}</span>
+                    )}
+                  </div>
+                  <div className="ecomm-form-group">
+                    <label className="ecomm-form-label">
+                      <span>End Date <span className="ecomm-required-star">*</span></span>
+                    </label>
+                    <input 
+                      type="date"
+                      value={auction.endDate}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'endDate', value: e.target.value })}
+                      className="ecomm-input"
+                    />
+                    {errors.endDate && (
+                      <span style={{ fontSize: 11.5, color: '#dc2626', marginTop: 3 }}>{errors.endDate}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Currency & Tax Exempt Toggle Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14, alignItems: 'flex-end', marginBottom: 16 }}>
+                  <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                    <label className="ecomm-form-label">
+                      <span>Currency <span className="ecomm-required-star">*</span></span>
+                    </label>
+                    <select 
+                      value={auction.currency}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'currency', value: e.target.value })}
+                      className="ecomm-select"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="CAD">CAD (C$)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                    </select>
+                  </div>
+                  <div style={{ paddingBottom: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--ecomm-text-dark)' }}>
+                      <input 
+                        type="checkbox"
+                        checked={auction.taxExemptAll}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'taxExemptAll', value: e.target.checked })}
+                        style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                      <span>Mark entire auction as Tax Exempt</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Terms and Conditions */}
+                <div className="ecomm-form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label className="ecomm-form-label" style={{ margin: 0 }}>
+                      Terms and Conditions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsTermsModalOpen(true)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#0284c7',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Preview as Modal
+                    </button>
+                  </div>
+                  <textarea 
+                    rows={3}
+                    value={auction.terms}
+                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'terms', value: e.target.value })}
+                    className="ecomm-textarea"
+                    placeholder="Enter legally binding auction rules, bidding agreement, and clearance terms..."
                   />
                 </div>
 
-                {/* Seller Tax */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>Seller Tax</label>
-                  <SearchableSelect 
-                    value={auction.lotDefaults.sellerTax}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'sellerTax', value: val })}
-                    options={[
-                      'STAX_0% - 0% Seller Tax',
-                      'STAX_3% - 3% State Consignment Excise'
-                    ]}
-                    showAdd={true}
-                    showUpload={true}
-                    onAddOption={() => {
-                      setCreateOptionTarget('sellerTax');
-                      setIsCreateOptionModalOpen(true);
-                    }}
-                    onUploadCsv={() => {
-                      setCsvTarget('Seller Tax Schedules');
-                      setIsCsvModalOpen(true);
-                    }}
+                {/* Short BP Explanation */}
+                <div className="ecomm-form-group">
+                  <label className="ecomm-form-label">
+                    Short BP Explanation
+                  </label>
+                  <input 
+                    type="text"
+                    placeholder="e.g. 15% Buyer's Premium"
+                    value={auction.shortBpExplanation}
+                    onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'shortBpExplanation', value: e.target.value })}
+                    className="ecomm-input"
                   />
                 </div>
 
-                {/* Buyer Lot Charge 1 */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>Buyer Lot Charge 1</label>
-                  <SearchableSelect 
-                    value={auction.lotDefaults.buyerLotCharge1}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge1', value: val })}
-                    options={[
-                      'CHG_PACK_4.50 - In-House Packaging Surcharge $4.50',
-                      'CHG_INSUR_10 - Registered Postal Insurance $10.00'
-                    ]}
-                    showAdd={false}
-                    showUpload={true}
-                    onUploadCsv={() => {
-                      setCsvTarget('Buyer Lot Charge 1');
-                      setIsCsvModalOpen(true);
-                    }}
+                {/* Nested Box: REMOVAL & PICKUP ADDRESS */}
+                <div className="nested-address-box">
+                  <div className="nested-box-title">REMOVAL & PICKUP ADDRESS</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                      <label className="ecomm-form-label">Address Line 1</label>
+                      <input 
+                        type="text"
+                        placeholder="119 Jewel Basin Ct"
+                        value={auction.address1}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address1', value: e.target.value })}
+                        className="ecomm-input"
+                      />
+                    </div>
+                    <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                      <label className="ecomm-form-label">Address Line 2 / Suite</label>
+                      <input 
+                        type="text"
+                        placeholder="Suite 100"
+                        value={auction.address2}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address2', value: e.target.value })}
+                        className="ecomm-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                    <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                      <label className="ecomm-form-label">City</label>
+                      <input 
+                        type="text"
+                        placeholder="Bigfork"
+                        value={auction.city}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'city', value: e.target.value })}
+                        className="ecomm-input"
+                      />
+                    </div>
+                    <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                      <label className="ecomm-form-label">State</label>
+                      <input 
+                        type="text"
+                        placeholder="MT"
+                        value={auction.state}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'state', value: e.target.value })}
+                        className="ecomm-input"
+                      />
+                    </div>
+                    <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                      <label className="ecomm-form-label">ZIP</label>
+                      <input 
+                        type="text"
+                        placeholder="59911"
+                        value={auction.zip}
+                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'zip', value: e.target.value })}
+                        className="ecomm-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                    <label className="ecomm-form-label">Country</label>
+                    <select 
+                      value={auction.country}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'country', value: e.target.value })}
+                      className="ecomm-select"
+                    >
+                      <option value="United States">United States</option>
+                      <option value="Canada">Canada</option>
+                      <option value="United Kingdom">United Kingdom</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Consolidated Invoicing Row */}
+                <div className="consolidated-invoicing-row">
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
+                    <input 
+                      type="checkbox"
+                      checked={auction.useConsolidatedInvoicing}
+                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'useConsolidatedInvoicing', value: e.target.checked })}
+                      style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
+                    />
+                    <span>Use Consolidated Invoicing (Combines Seller & Buyer Invoices)</span>
+                  </label>
+                  <span className="recommended-pill">Recommended</span>
+                </div>
+              </div>
+
+              {/* Section 2: Shipping & Buyer Charges */}
+              <div className="details-clean-card">
+                <div className="details-card-header">
+                  <div className="details-card-title-group">
+                    <h3>Shipping & Buyer Charges</h3>
+                    <p>Configure default fulfillment parameters and handling rules.</p>
+                  </div>
+                </div>
+
+                <div className="ecomm-form-group">
+                  <label className="ecomm-form-label">Availability</label>
+                  <select 
+                    value={auction.shippingAvailability}
+                    onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAvailability', value: e.target.value })}
+                    className="ecomm-select"
+                  >
+                    <option value="Shipping Offered On All Lots">Shipping Offered On All Lots</option>
+                    <option value="Selected Lots Only">Selected Lots Only</option>
+                    <option value="No Shipping">No Shipping</option>
+                  </select>
+                </div>
+
+                <div className="ecomm-form-group">
+                  <label className="ecomm-form-label">Account Reference</label>
+                  <input 
+                    type="text"
+                    placeholder="e.g. shipping & handling"
+                    value={auction.shippingAccount}
+                    onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAccount', value: e.target.value })}
+                    className="ecomm-input"
                   />
                 </div>
 
-                {/* Buyer Lot Charge 2 */}
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 5 }}>Buyer Lot Charge 2</label>
-                  <SearchableSelect 
-                    value={auction.lotDefaults.buyerLotCharge2}
-                    onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge2', value: val })}
-                    options={[
-                      'CHG_VAULT_5 - Secure Vault Handling $5.00'
-                    ]}
-                    showAdd={false}
-                    showUpload={true}
-                    onUploadCsv={() => {
-                      setCsvTarget('Buyer Lot Charge 2');
-                      setIsCsvModalOpen(true);
-                    }}
-                  />
+                {/* Nested Box for Handling Charge */}
+                <div style={{
+                  background: '#faf9f6',
+                  border: '1px solid var(--ecomm-border)',
+                  borderRadius: 8,
+                  padding: 14,
+                  marginTop: 10
+                }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
+                    <input 
+                      type="checkbox"
+                      checked={auction.addHandlingCharge}
+                      onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'addHandlingCharge', value: e.target.checked })}
+                      style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
+                    />
+                    <span>Add Handling Charge</span>
+                  </label>
+
+                  {auction.addHandlingCharge && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e4dc', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div>
+                        <label className="ecomm-form-label" style={{ marginBottom: 6 }}>Handling Charge Type</label>
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                            <input 
+                              type="radio"
+                              name="handlingType"
+                              checked={auction.handlingChargeType === 'Fixed'}
+                              onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Fixed' })}
+                              style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)' }}
+                            />
+                            <span style={{ fontWeight: 600 }}>Fixed</span>
+                          </label>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                            <input 
+                              type="radio"
+                              name="handlingType"
+                              checked={auction.handlingChargeType === 'Percentage'}
+                              onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Percentage' })}
+                              style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)' }}
+                            />
+                            <span style={{ fontWeight: 600 }}>Percentage</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
+                        <label className="ecomm-form-label">
+                          {auction.handlingChargeType === 'Fixed' ? 'Fixed Amount ($)' : 'Percentage (%)'}
+                        </label>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <span style={{ position: 'absolute', left: 10, fontSize: 13, fontWeight: 600, color: '#64748b' }}>
+                            {auction.handlingChargeType === 'Fixed' ? '$' : '%'}
+                          </span>
+                          <input 
+                            type="number"
+                            step="0.01"
+                            value={auction.handlingAmount}
+                            onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingAmount', value: parseFloat(e.target.value) || 0 })}
+                            className="ecomm-input"
+                            style={{ paddingLeft: 26 }}
+                            placeholder="4.50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Card: Ring Options (Locked) */}
-            <div 
-              className="syndication-card"
-              style={{
-                opacity: 0.65,
-                background: '#f8fafc',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '16px 20px'
-              }}
-              title="Available during Auction Day"
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Lock size={18} color="var(--text-muted)" />
-                <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-muted)' }}>
-                  Ring Options
+            {/* RIGHT COLUMN: Featured Images, Auction Links, New Lot Defaults, Locked Audio */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Card 1: Featured Images */}
+              <div className="details-clean-card">
+                <div className="details-card-header">
+                  <div className="details-card-title-group">
+                    <h3>Featured Images</h3>
+                    <p>{auction.featuredImages.length} catalog banner assets uploaded</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsTipsModalOpen(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#0284c7',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <span>Tips & Tricks</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+
+                {/* Upload Drag & Drop Zone */}
+                <div 
+                  className="featured-upload-zone"
+                  onClick={() => {
+                    const sampleImages = ['/images/hero_coin.jpg', '/images/morgan_dollar.jpg', '/images/gold_bullion.jpg', '/images/antique_silver.jpg'];
+                    const randomImg = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+                    dispatch({
+                      type: 'ADD_FEATURED_IMAGE',
+                      image: {
+                        id: `img-${Date.now()}`,
+                        url: randomImg,
+                        title: `Catalog Banner Asset #${auction.featuredImages.length + 1}`,
+                        order: auction.featuredImages.length + 1
+                      }
+                    });
+                    showToast('info', 'Asset Added', 'Banner image attached to catalog gallery.');
+                  }}
+                  title="Click to browse files or add sample banner asset"
+                >
+                  <UploadCloud size={28} color="var(--ecomm-primary-gold, #c59b27)" style={{ margin: '0 auto 6px' }} />
+                  <p className="primary-text">
+                    <span className="link-accent">Browse my computer</span> or drag files here
+                  </p>
+                  <p className="sub-text">PNG, JPG, WEBP up to 25MB each</p>
+                </div>
+
+                {/* Thumbnail Grid */}
+                {auction.featuredImages.length === 0 ? (
+                  <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#faf9f6', border: '1px dashed #cbd5e1', borderRadius: 8 }}>
+                    No featured banner images uploaded yet. Drop files above or browse to attach.
+                  </div>
+                ) : (
+                  <div className="featured-grid-row">
+                    {auction.featuredImages.map((img, idx) => {
+                      const fallbackThemes = [
+                        { className: 'asset-circle-gold', label: 'GOLD' },
+                        { className: 'asset-rect-slab', label: 'SLAB' },
+                        { className: 'asset-rect-bar', label: 'BARS' },
+                        { className: 'asset-rect-room', label: 'ROOM' },
+                      ];
+                      const theme = fallbackThemes[idx % fallbackThemes.length];
+
+                      return (
+                        <div key={img.id} className="featured-img-card">
+                          {idx === 0 && (
+                            <span className="featured-cover-badge">Cover</span>
+                          )}
+                          <div className="featured-img-preview">
+                            {img.url ? (
+                              <>
+                                <img 
+                                  src={img.url} 
+                                  alt={img.title || `Featured asset ${idx + 1}`}
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                    const fb = (e.target as HTMLElement).nextElementSibling;
+                                    if (fb) (fb as HTMLElement).style.display = 'flex';
+                                  }}
+                                />
+                                <div 
+                                  className={theme.className}
+                                  style={{ display: 'none' }}
+                                >
+                                  {theme.label}
+                                </div>
+                              </>
+                            ) : (
+                              <div className={theme.className} style={{ display: 'flex' }}>
+                                {theme.label}
+                              </div>
+                            )}
+                          </div>
+                          <div className="featured-actions-bar">
+                            <div style={{ display: 'flex', gap: 2 }}>
+                              {idx > 0 && (
+                                <button 
+                                  type="button" 
+                                  onClick={() => moveImage(idx, 'up')}
+                                  className="reorder-arrow-btn"
+                                  title="Move Left"
+                                >
+                                  ◀
+                                </button>
+                              )}
+                              {idx < auction.featuredImages.length - 1 && (
+                                <button 
+                                  type="button" 
+                                  onClick={() => moveImage(idx, 'down')}
+                                  className="reorder-arrow-btn"
+                                  title="Move Right"
+                                >
+                                  ▶
+                                </button>
+                              )}
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => dispatch({ type: 'REMOVE_FEATURED_IMAGE', id: img.id })}
+                              className="img-delete-btn"
+                              title="Remove image"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Auction Links */}
+              <div className="details-clean-card">
+                <div className="details-card-header">
+                  <div className="details-card-title-group">
+                    <h3>Auction Links</h3>
+                    <p>Portals and external bidder destinations</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-executive-gold"
+                    style={{ padding: '6px 14px', fontSize: 12 }}
+                    onClick={() => handleOpenLinkModal()}
+                  >
+                    <Plus size={14} />
+                    <span>+ New Link</span>
+                  </button>
+                </div>
+
+                {auction.auctionLinks.length === 0 ? (
+                  <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#faf9f6', border: '1px dashed #cbd5e1', borderRadius: 8 }}>
+                    No external bidder links added. Click "+ New Link" to configure syndication portals.
+                  </div>
+                ) : (
+                  <div>
+                    {auction.auctionLinks.map((link, idx) => (
+                      <div key={link.id} className="link-item-row">
+                        <span className={`link-status-dot ${idx === 0 ? 'active' : 'inactive'}`} />
+                        <div className="link-content-col">
+                          <span className="link-title">{link.description || 'Syndication Portal Link'}</span>
+                          <a 
+                            href={link.url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="link-url-text"
+                          >
+                            {link.url}
+                          </a>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleOpenLinkModal(idx)}
+                            className="reorder-arrow-btn"
+                            title="Edit Link"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => dispatch({ type: 'REMOVE_AUCTION_LINK', index: idx })}
+                            className="img-delete-btn"
+                            title="Remove Link"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Card 3: New Lot Defaults */}
+              <div className="details-clean-card">
+                <div className="details-card-header">
+                  <div className="details-card-title-group">
+                    <h3>New Lot Defaults</h3>
+                    <p>Preset tax tiers, BP rates & commissions</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCsvTarget('Defaults');
+                        setIsCsvModalOpen(true);
+                      }}
+                      className="btn-clean-white"
+                      style={{ padding: '5px 8px' }}
+                      title="Import Schedules CSV"
+                    >
+                      <Upload size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showToast('info', 'Export', 'Downloading default schedule templates...');
+                      }}
+                      className="btn-clean-white"
+                      style={{ padding: '5px 8px' }}
+                      title="Download Template"
+                    >
+                      <Download size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Commission Rule */}
+                  <div>
+                    <label className="ecomm-form-label" style={{ marginBottom: 4 }}>COMMISSION RULE</label>
+                    {auction.lotDefaults.commission ? (
+                      <div className="default-rule-chip-container">
+                        <div className="default-rule-chip-content">
+                          <span className="default-rule-code-badge">
+                            {auction.lotDefaults.commission.split(' - ')[0] || auction.lotDefaults.commission}
+                          </span>
+                          <span>
+                            {auction.lotDefaults.commission.split(' - ')[1] || ''}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="default-rule-clear-btn"
+                          onClick={() => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'commission', value: '' })}
+                          title="Clear commission rule"
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    ) : (
+                      <SearchableSelect 
+                        value=""
+                        onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'commission', value: val })}
+                        options={[
+                          'CSS_52F3ABA3 - SS -> [0% up to $0 ...]',
+                          'COMM_STD_10 - Standard 10% Consignor',
+                          'COMM_FLAT_5 - Flat 5% Estate Reserve'
+                        ]}
+                        showAdd={true}
+                        showUpload={false}
+                        onAddOption={() => {
+                          setCreateOptionTarget('commission');
+                          setIsCreateOptionModalOpen(true);
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Buyer Tax Code */}
+                  <div>
+                    <label className="ecomm-form-label" style={{ marginBottom: 4 }}>
+                      <span>BUYER TAX CODE</span>
+                      {auction.taxExemptAll && (
+                        <span style={{ color: '#059669', fontSize: 11 }}>(Disabled: Tax Exempt All Active)</span>
+                      )}
+                    </label>
+                    {auction.lotDefaults.buyerTax && !auction.taxExemptAll ? (
+                      <div className="default-rule-chip-container">
+                        <div className="default-rule-chip-content">
+                          <span className="default-rule-code-badge">
+                            {auction.lotDefaults.buyerTax.split(' - ')[0] || auction.lotDefaults.buyerTax}
+                          </span>
+                          <span>
+                            {auction.lotDefaults.buyerTax.split(' - ')[1] || ''}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="default-rule-clear-btn"
+                          onClick={() => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerTax', value: '' })}
+                          title="Clear buyer tax"
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    ) : (
+                      <SearchableSelect 
+                        value=""
+                        disabled={auction.taxExemptAll}
+                        onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerTax', value: val })}
+                        options={[
+                          'BTAX_0% - 0% BuyerTax',
+                          'BTAX_6% - 6% Montana Sales Surcharge',
+                          'BTAX_7.5% - 7.5% Standard County Tax'
+                        ]}
+                        showAdd={true}
+                        showUpload={false}
+                        onAddOption={() => {
+                          setCreateOptionTarget('buyerTax');
+                          setIsCreateOptionModalOpen(true);
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Buyer Premium (BP) */}
+                  <div>
+                    <label className="ecomm-form-label" style={{ marginBottom: 4 }}>BUYER PREMIUM (BP)</label>
+                    {auction.lotDefaults.buyerPremium ? (
+                      <div className="default-rule-chip-container">
+                        <div className="default-rule-chip-content">
+                          <span className="default-rule-code-badge">
+                            {auction.lotDefaults.buyerPremium.split(' - ')[0] || auction.lotDefaults.buyerPremium}
+                          </span>
+                          <span>
+                            {auction.lotDefaults.buyerPremium.split(' - ')[1] || ''}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="default-rule-clear-btn"
+                          onClick={() => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerPremium', value: '' })}
+                          title="Clear buyer premium"
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    ) : (
+                      <SearchableSelect 
+                        value=""
+                        onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerPremium', value: val })}
+                        options={[
+                          'BP_15 - 15% BP for all bidders',
+                          'BP_12 - 12% BP Preferred In-House Tier',
+                          'BP_18 - 18% Credit Card Tier'
+                        ]}
+                        showAdd={true}
+                        showUpload={false}
+                        onAddOption={() => {
+                          setCreateOptionTarget('buyerPremium');
+                          setIsCreateOptionModalOpen(true);
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Seller Tax */}
+                  <div>
+                    <label className="ecomm-form-label" style={{ marginBottom: 4 }}>SELLER TAX</label>
+                    <select
+                      value={auction.lotDefaults.sellerTax || ''}
+                      onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'sellerTax', value: e.target.value })}
+                      className="ecomm-select"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="STAX_0% - 0% Seller Tax">STAX_0% - 0% Seller Tax</option>
+                      <option value="STAX_3% - 3% State Consignment Excise">STAX_3% - 3% State Consignment Excise</option>
+                    </select>
+                  </div>
+
+                  {/* Buyer Lot Charges 1 & 2 */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label className="ecomm-form-label" style={{ marginBottom: 4 }}>BUYER LOT CHARGE 1</label>
+                      <select
+                        value={auction.lotDefaults.buyerLotCharge1 || ''}
+                        onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge1', value: e.target.value })}
+                        className="ecomm-select"
+                      >
+                        <option value="">Select charge...</option>
+                        <option value="CHG_PACK_4.50 - In-House Packaging Surcharge $4.50">CHG_PACK_4.50 - In-House Packaging $4.50</option>
+                        <option value="CHG_INSUR_10 - Registered Postal Insurance $10.00">CHG_INSUR_10 - Postal Insurance $10.00</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="ecomm-form-label" style={{ marginBottom: 4 }}>BUYER LOT CHARGE 2</label>
+                      <select
+                        value={auction.lotDefaults.buyerLotCharge2 || ''}
+                        onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge2', value: e.target.value })}
+                        className="ecomm-select"
+                      >
+                        <option value="">Select charge...</option>
+                        <option value="CHG_VAULT_5 - Secure Vault Handling $5.00">CHG_VAULT_5 - Secure Vault $5.00</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Ring & Clerk Audio Options (Locked) */}
+              <div className="locked-audio-card" title="Available during Auction Day">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Lock size={15} color="#94a3b8" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>
+                    Ring & Clerk Audio Options
+                  </span>
+                </div>
+                <span style={{ fontSize: 11.5, color: '#94a3b8', fontStyle: 'italic' }}>
+                  Available during Auction Day
                 </span>
               </div>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                Available during Auction Day
-              </span>
             </div>
+          </div>
+
+          {/* Details Page Footer Actions (Discard & Save Settings) */}
+          <div className="details-page-footer-actions">
+            <button
+              type="button"
+              className="btn-clean-white"
+              onClick={() => {
+                showToast('info', 'Discard', 'Reset changes to saved state.');
+              }}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="btn-executive-gold"
+              disabled={isSavingLocal}
+              onClick={async () => {
+                setIsSavingLocal(true);
+                const ok = await saveAuction();
+                setIsSavingLocal(false);
+                if (ok) {
+                  showToast('success', 'Saved', 'Auction configuration saved successfully!');
+                }
+              }}
+            >
+              <Check size={14} strokeWidth={2.5} />
+              <span>{isSavingLocal ? 'Saving...' : 'Save Settings'}</span>
+            </button>
           </div>
         </div>
       )}
@@ -2734,6 +2967,24 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
           <p><strong>1. Optimal Image Dimensions:</strong> We recommend 1200 x 1200 px square photographs on neutral gallery white or black felt backgrounds.</p>
           <p><strong>2. Primary Highlight Image:</strong> The first thumbnail in the sequence serves as the banner image for HiBid catalog feeds and Gardner mobile rostrum preview.</p>
           <p><strong>3. TrueView Numismatics:</strong> Uploading high-res slab scans of certified PCGS or NGC coins increases bidder confidence by up to 40%.</p>
+        </div>
+      </FormModal>
+
+      {/* Terms and Conditions Preview Modal */}
+      <FormModal
+        isOpen={isTermsModalOpen}
+        title="Terms and Conditions Preview"
+        onClose={() => setIsTermsModalOpen(false)}
+        submitLabel="Close"
+        onSubmit={(e) => { e.preventDefault(); setIsTermsModalOpen(false); }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ fontSize: 12.5, color: 'var(--ecomm-text-muted, #64748b)', margin: 0 }}>
+            This legal text is displayed to registered bidders on HiBid syndication portals and live saleroom catalogs.
+          </p>
+          <div className="terms-preview-content">
+            {auction.terms || 'No terms and conditions configured yet.'}
+          </div>
         </div>
       </FormModal>
 

@@ -150,8 +150,12 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
       status: 'verified',
       creditCardAuthorized: true,
       cardLast4: '4242',
-      spendingLimit: 250000,
-      totalPurchases: 0,
+      bidLimit: 250000,
+      totalSpent: 0,
+      totalBidsPlaced: 0,
+      lotsWon: 0,
+      address: '',
+      cityStateZip: '',
       notes: `Consignor commission agreement: ${newSellerCommission}%`,
       type: 'consignor'
     };

@@ -70,23 +70,25 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         <div 
           onClick={() => !disabled && setIsOpen(!isOpen)}
           style={{
-            minHeight: 36,
-            border: '1px solid var(--border-subtle)',
+            minHeight: 38,
+            border: isOpen ? '1.5px solid var(--gold-primary, #cba135)' : '1px solid #cbd5e1',
             borderRadius: 6,
             background: disabled ? '#f8fafc' : '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '4px 8px',
+            padding: '6px 10px',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            gap: 6
+            gap: 6,
+            boxShadow: isOpen ? '0 0 0 3px rgba(203, 161, 53, 0.16)' : 'none',
+            transition: 'all 0.15s ease'
           }}
         >
-          <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: value ? 'var(--text-main)' : 'var(--text-dim)' }}>
+          <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, color: value ? 'var(--text-main)' : 'var(--text-muted)' }}>
             {selectedOption ? selectedOption.label : placeholder}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {value && !disabled && (
               <button
                 type="button"
@@ -96,17 +98,28 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 }}
                 title="Clear selection"
                 style={{
-                  background: '#047857',
-                  color: '#ffffff',
-                  border: 'none',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
                   borderRadius: 4,
                   fontSize: 11,
                   fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
-                  padding: '2px 6px',
-                  cursor: 'pointer'
+                  padding: '2px 7px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fee2e2';
+                  e.currentTarget.style.color = '#dc2626';
+                  e.currentTarget.style.borderColor = '#fca5a5';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
                 }}
               >
                 <X size={11} strokeWidth={2.5} />
@@ -201,17 +214,33 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           title="Add New Option"
           disabled={disabled}
           style={{
-            background: '#047857',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 4,
-            width: 32,
-            height: 32,
+            background: '#151922',
+            color: 'var(--gold-primary, #cba135)',
+            border: '1.5px solid var(--gold-primary, #cba135)',
+            borderRadius: 6,
+            width: 36,
+            height: 38,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            flexShrink: 0
+            flexShrink: 0,
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!disabled) {
+              e.currentTarget.style.background = '#1e2432';
+              e.currentTarget.style.borderColor = '#dfba52';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(203, 161, 53, 0.25)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!disabled) {
+              e.currentTarget.style.background = '#151922';
+              e.currentTarget.style.borderColor = 'var(--gold-primary, #cba135)';
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.12)';
+            }
           }}
         >
           <Plus size={16} />
@@ -225,17 +254,33 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           title="Import Options from CSV"
           disabled={disabled}
           style={{
-            background: '#047857',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 4,
-            width: 32,
-            height: 32,
+            background: '#151922',
+            color: 'var(--gold-primary, #cba135)',
+            border: '1.5px solid var(--gold-primary, #cba135)',
+            borderRadius: 6,
+            width: 36,
+            height: 38,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            flexShrink: 0
+            flexShrink: 0,
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!disabled) {
+              e.currentTarget.style.background = '#1e2432';
+              e.currentTarget.style.borderColor = '#dfba52';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(203, 161, 53, 0.25)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!disabled) {
+              e.currentTarget.style.background = '#151922';
+              e.currentTarget.style.borderColor = 'var(--gold-primary, #cba135)';
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.12)';
+            }
           }}
         >
           <Upload size={15} />

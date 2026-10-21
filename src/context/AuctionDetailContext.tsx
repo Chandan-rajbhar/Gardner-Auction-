@@ -217,7 +217,8 @@ export const AuctionDetailProvider: React.FC<{
   children: React.ReactNode;
   onSavedSuccess?: () => void;
   onSavedError?: (err: string) => void;
-}> = ({ auctionId, children, onSavedSuccess, onSavedError }) => {
+  initialLots?: any[];
+}> = ({ auctionId, children, onSavedSuccess, onSavedError, initialLots }) => {
   const [state, dispatch] = useReducer(auctionDetailReducer, initialState);
   const [isLoading, setIsLoading] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});

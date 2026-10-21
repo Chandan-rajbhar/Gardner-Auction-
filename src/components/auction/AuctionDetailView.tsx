@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AuctionDetailProvider, 
   useAuctionDetail 
@@ -15,10 +15,14 @@ import {
   Save, 
   FileText, 
   Trash2, 
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  Check,
+  MoreHorizontal
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { auctionService } from '../../services/auctionService';
+import './AuctionDetailsStyles.css';
 
 interface AuctionDetailViewProps {
   auctionId: string;
@@ -70,6 +74,23 @@ const AuctionDetailContent: React.FC<{
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    if (showMoreMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMoreMenu]);
 
   // Handle Return to All Auctions with unsaved changes check
   const handleReturnClick = () => {
@@ -114,101 +135,141 @@ const AuctionDetailContent: React.FC<{
     );
   }
 
+  // Filtered lots & expenses total for tab badges
+  const filteredAuctionLots = lots.filter(l => 
+    !l.auctionId || l.auctionId === auction.id || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)
+  );
+  const expensesTotal = (auction.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
+
+  const subTabs: { key: PreAuctionSubTab; label: string; badge?: string | number; badgeType?: 'neutral' | 'green' }[] = [
+    { key: 'details', label: 'Details' },
+    { key: 'upload-settings', label: 'Upload Settings' },
+    { key: 'preview', label: 'Preview' },
+    { key: 'lots', label: 'Lots', badge: filteredAuctionLots.length, badgeType: 'neutral' },
+    { key: 'lot-images', label: 'Lot Images' },
+    { 
+      key: 'expenses', 
+      label: 'Expenses', 
+      badge: `$${expensesTotal.toLocaleString()}`, 
+      badgeType: 'green' 
+    }
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: state.isDirty ? 80 : 20 }}>
-      {/* Header matching specification */}
-      <div className="card-header-flex" style={{ alignItems: 'flex-start' }}>
-        <div>
-          {/* Back link */}
+    <div className="auction-details-page-root" style={{ paddingBottom: state.isDirty ? 80 : 20 }}>
+      {/* Top Header Bar: All buttons (subtabs and actions) aligned in the SAME line */}
+      <div className="auction-top-action-bar">
+        {/* Left Side: Sub-tabs matching Preview Catalog button style */}
+        <div className="auction-subtabs-btn-group">
+          {subTabs.map(tab => {
+            const isActive = preAuctionSubTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setPreAuctionSubTab(tab.key)}
+                className={`btn-screenshot-tab ${isActive ? 'active' : ''}`}
+              >
+                {isActive && <span className="image2-subtab-dot" />}
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && (
+                  <span className={`image2-tab-badge ${tab.badgeType === 'green' ? 'green' : 'neutral'}`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right Side: Action Controls (Preview Catalog, Save Draft, Publish Live + More Dropdown) */}
+        <div className="auction-top-actions">
           <button
             type="button"
-            onClick={handleReturnClick}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--gold-dark)',
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              marginBottom: 6,
-              padding: 0
-            }}
+            className="btn-screenshot-white"
+            onClick={() => setPreAuctionSubTab('preview')}
+            title="Preview Catalog View"
           >
-            <ArrowLeft size={14} />
-            <span>← Return to All Auctions</span>
+            <Eye size={14} color="#64748b" />
+            <span>Preview Catalog</span>
           </button>
 
-          {/* Title + HiBid Badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 className="font-serif" style={{ fontSize: 24, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-              {auction.name}
-            </h1>
-            {auction.auctionType === 'HiBid' && (
-              <span style={{ 
-                fontSize: 11, 
-                fontWeight: 700, 
-                background: '#e0f2fe', 
-                color: '#0369a1', 
-                padding: '2px 8px', 
-                borderRadius: 4 
-              }}>
-                HiBid
-              </span>
+          <button
+            type="button"
+            className="btn-screenshot-white"
+            onClick={handleSave}
+            disabled={isSaving}
+            title="Save as Draft"
+          >
+            <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-screenshot-publish"
+            onClick={handleSave}
+            disabled={isSaving}
+            title="Publish and Save Configuration"
+          >
+            <Check size={14} strokeWidth={2.5} color="#10b981" />
+            <span>Publish Live</span>
+          </button>
+
+          {/* More actions dropdown for Reports & Delete Auction */}
+          <div className="auction-more-menu-wrapper" ref={moreMenuRef}>
+            <button
+              type="button"
+              className="btn-screenshot-more"
+              onClick={() => setShowMoreMenu(prev => !prev)}
+              title="More Actions"
+            >
+              <MoreHorizontal size={15} color="#64748b" />
+            </button>
+
+            {showMoreMenu && (
+              <div className="auction-dropdown-menu">
+                <button
+                  type="button"
+                  className="auction-dropdown-item"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    handleReturnClick();
+                  }}
+                >
+                  <ArrowLeft size={14} color="#64748b" />
+                  <span>Return to Auctions</span>
+                </button>
+                {onNavigateReports && (
+                  <button
+                    type="button"
+                    className="auction-dropdown-item"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      onNavigateReports();
+                    }}
+                  >
+                    <FileText size={14} color="#64748b" />
+                    <span>Reports</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="auction-dropdown-item destructive"
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    setIsDeleteModalOpen(true);
+                  }}
+                >
+                  <Trash2 size={14} color="#dc2626" />
+                  <span>Delete Auction</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Header Action Buttons: Save (primary), Reports, Delete Auction */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            type="button"
-            className="btn btn-gold"
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            <Save size={15} />
-            <span>{isSaving ? 'Saving...' : 'SAVE'}</span>
-          </button>
-
-          {onNavigateReports && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onNavigateReports}
-            >
-              <FileText size={15} />
-              <span>REPORTS</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setIsDeleteModalOpen(true)}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #ef4444',
-              color: '#dc2626',
-              borderRadius: 6,
-              padding: '8px 14px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              transition: 'background 0.15s ease'
-            }}
-          >
-            <Trash2 size={14} />
-            <span>✕ DELETE AUCTION</span>
-          </button>
-        </div>
       </div>
 
-      {/* Pre-Auction View */}
+      {/* Pre-Auction View (hideSubtabs={true} because subtabs are now aligned in the unified top action bar) */}
       <PreAuctionTab
         currentTab={preAuctionSubTab}
         onSelectTab={setPreAuctionSubTab}
@@ -217,6 +278,7 @@ const AuctionDetailContent: React.FC<{
         onUpdateLot={onUpdateLot}
         onSendToBlock={onSendToBlock}
         onDeleteLot={onDeleteLot}
+        hideSubtabs={true}
       />
 
       {/* Sticky Bottom Save Bar when there are unsaved changes */}
