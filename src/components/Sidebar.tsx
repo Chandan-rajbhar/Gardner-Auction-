@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -12,7 +12,9 @@ import {
   ShieldCheck,
   ExternalLink,
   X,
-  LogOut
+  LogOut,
+  ChevronDown,
+  User
 } from 'lucide-react';
 import { NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -35,8 +37,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingVerifications
 }) => {
   const { user, logout } = useAuth();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
-  const navItems: Array<{
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const operationsNav: Array<{
     id: NavigationSection;
     label: string;
     icon: React.ElementType;
@@ -45,9 +60,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }> = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'live_clerking', label: 'Live Clerking Block', icon: Radio, badge: 'LIVE', isLive: true },
-    { id: 'lots', label: 'Lots & Catalog', icon: Layers, badge: liveLotsCount },
+    { id: 'lots', label: 'Lots & Catalog', icon: Layers, badge: liveLotsCount || 6 },
     { id: 'auctions', label: 'Auction Sales', icon: Gavel },
-    { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
+    { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : 1 },
+  ];
+
+  const financeNav: Array<{
+    id: NavigationSection;
+    label: string;
+    icon: React.ElementType;
+    badge?: string | number;
+  }> = [
     { id: 'payments', label: 'Settlement & Invoices', icon: Receipt },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
@@ -55,120 +78,217 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleLogout = () => {
+    setIsProfileMenuOpen(false);
     onClose();
     logout();
   };
 
   return (
     <>
-      {/* Mobile Drawer Backdrop */}
+      {/* Mobile Backdrop */}
       {isOpen && (
         <div 
-          className="sidebar-backdrop" 
+          className="sidebar-mobile-backdrop" 
           onClick={onClose} 
-          aria-label="Close navigation sidebar"
+          aria-hidden="true" 
         />
       )}
 
-      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <div className="brand-crest">G</div>
-          <div className="brand-details">
+      <aside className={`sidebar-executive ${isOpen ? 'open' : ''}`}>
+        {/* Brand Area */}
+        <div className="sidebar-brand-area">
+          <div className="sidebar-brand-crest">
+            <span className="crest-monogram">G</span>
+            <div className="crest-glow" />
+          </div>
+          <div className="sidebar-brand-text">
             <h2>Gardner Auction</h2>
             <p>Admin Console</p>
           </div>
           <button 
-            className="icon-btn mobile-menu-btn" 
-            style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: '#94a3b8' }}
+            className="sidebar-close-btn" 
             onClick={onClose}
-            aria-label="Close Menu"
+            aria-label="Close sidebar menu"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="sidebar-nav">
-          <div className="nav-section-title">Auction Operations</div>
-          {navItems.slice(0, 5).map(item => {
-            const Icon = item.icon;
-            const isActive = currentSection === item.id;
-            return (
-              <button
-                key={item.id}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  setCurrentSection(item.id);
-                  onClose();
-                }}
-              >
-                <Icon size={18} className="nav-icon" />
-                <span>{item.label}</span>
-                {item.badge !== undefined && (
-                  <span className={`nav-badge ${item.isLive ? 'live-pulse' : ''}`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Navigation Groups */}
+        <div className="sidebar-scroll-nav">
+          {/* Section: Auction Operations */}
+          <div className="sidebar-nav-group">
+            <div className="sidebar-section-header">
+              <span>AUCTION OPERATIONS</span>
+            </div>
+            <div className="sidebar-links-list">
+              {operationsNav.map(item => {
+                const Icon = item.icon;
+                const isActive = currentSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={`sidebar-nav-button ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentSection(item.id);
+                      onClose();
+                    }}
+                  >
+                    <Icon size={18} className="sidebar-nav-icon" />
+                    <span className="sidebar-nav-label">{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span className={`sidebar-badge ${item.isLive ? 'live-rostrum-pulse' : ''}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive && <div className="sidebar-active-gold-pill" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-          <div className="nav-section-title">Finance & Intelligence</div>
-          {navItems.slice(5).map(item => {
-            const Icon = item.icon;
-            const isActive = currentSection === item.id;
-            return (
-              <button
-                key={item.id}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  setCurrentSection(item.id);
-                  onClose();
-                }}
-              >
-                <Icon size={18} className="nav-icon" />
-                <span>{item.label}</span>
-                {item.badge !== undefined && (
-                  <span className="nav-badge">{item.badge}</span>
-                )}
-              </button>
-            );
-          })}
+          {/* Section: Finance & Intelligence */}
+          <div className="sidebar-nav-group">
+            <div className="sidebar-section-header">
+              <span>FINANCE & INTELLIGENCE</span>
+            </div>
+            <div className="sidebar-links-list">
+              {financeNav.map(item => {
+                const Icon = item.icon;
+                const isActive = currentSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={`sidebar-nav-button ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentSection(item.id);
+                      onClose();
+                    }}
+                  >
+                    <Icon size={18} className="sidebar-nav-icon" />
+                    <span className="sidebar-nav-label">{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span className="sidebar-badge">{item.badge}</span>
+                    )}
+                    {isActive && <div className="sidebar-active-gold-pill" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <div className="sidebar-footer">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <ShieldCheck size={14} color="#f59e0b" /> Gardner v24.2 Linked
+        {/* Sidebar Footer */}
+        <div className="sidebar-executive-footer">
+          <div className="sidebar-system-links">
+            <span className="sidebar-system-status">
+              <span className="status-live-dot" />
+              <span>Gardner v24.2 Linked</span>
             </span>
             <a 
               href="https://gardner-auction.vercel.app/" 
               target="_blank" 
               rel="noreferrer" 
-              style={{ fontSize: 11, color: 'var(--gold-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+              className="sidebar-public-site-link"
+              title="Open public bidder portal"
             >
-              Public Site <ExternalLink size={11} />
+              <span>Public Site</span>
+              <ExternalLink size={11} />
             </a>
           </div>
 
-          <div className="operator-profile">
-            <div className="operator-avatar">
-              {user?.avatarText || 'TG'}
-            </div>
-            <div className="operator-info">
-              <div className="operator-name">{user?.name || 'Todd Gardner'}</div>
-              <div className="operator-role">{user?.title || 'Owner & Master Auctioneer'}</div>
-            </div>
-            <button
-              className="operator-logout-btn"
-              onClick={handleLogout}
-              title="Sign Out / Lock AF360 Console"
-              aria-label="Sign Out"
+          {/* Administrator Profile Card with Toggle Dropdown */}
+          <div className="sidebar-profile-wrapper" ref={profileMenuRef}>
+            {/* Popover Dropdown Menu (Opens upwards above card) */}
+            {isProfileMenuOpen && (
+              <div 
+                className="sidebar-profile-dropdown" 
+                role="menu" 
+                aria-label="Administrator profile menu"
+              >
+                {/* 1. Admin Information */}
+                <div className="sidebar-dropdown-info">
+                  <div className="sidebar-dropdown-info-header">Admin Information</div>
+                  <div className="sidebar-dropdown-name">{user?.name || 'Todd Gardner'}</div>
+                  <div className="sidebar-dropdown-email">{user?.email || 'admin@gardner-auction.com'}</div>
+                  <div className="sidebar-dropdown-role-badge">
+                    <ShieldCheck size={12} className="shield-icon" />
+                    <span>{user?.role ? user.role.replace('_', ' ').toUpperCase() : 'SUPER ADMIN'}</span>
+                  </div>
+                </div>
+
+                <div className="sidebar-dropdown-divider" />
+
+                {/* 2. My Profile */}
+                <button
+                  type="button"
+                  className="sidebar-dropdown-item"
+                  onClick={() => {
+                    setCurrentSection('profile');
+                    setIsProfileMenuOpen(false);
+                    onClose();
+                  }}
+                  id="btn-sidebar-profile"
+                  role="menuitem"
+                >
+                  <User size={15} className="dropdown-item-icon" />
+                  <span>My Profile</span>
+                </button>
+
+                {/* 3. Log Out */}
+                <button
+                  type="button"
+                  className="sidebar-dropdown-item logout"
+                  onClick={handleLogout}
+                  id="btn-sidebar-logout"
+                  role="menuitem"
+                >
+                  <LogOut size={15} className="dropdown-item-icon" />
+                  <span>Log Out</span>
+                </button>
+              </div>
+            )}
+
+            <div 
+              className={`sidebar-profile-card ${isProfileMenuOpen ? 'menu-active' : ''}`}
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              role="button"
+              tabIndex={0}
+              aria-haspopup="true"
+              aria-expanded={isProfileMenuOpen}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                }
+              }}
             >
-              <LogOut size={16} />
-            </button>
+              <div className="sidebar-profile-avatar">
+                <span>{user?.avatarText || 'TG'}</span>
+              </div>
+              <div className="sidebar-profile-details">
+                <span className="sidebar-profile-name">{user?.name || 'Todd Gardner'}</span>
+                <span className="sidebar-profile-title">{user?.title || 'Owner & Master Auctioneer'}</span>
+              </div>
+              <button
+                type="button"
+                className={`sidebar-profile-toggle ${isProfileMenuOpen ? 'open' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                }}
+                title="Admin profile options"
+                aria-label="Admin profile options"
+                aria-expanded={isProfileMenuOpen}
+              >
+                <ChevronDown size={14} className={`sidebar-chevron-icon ${isProfileMenuOpen ? 'rotate' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
     </>
   );
 };
+

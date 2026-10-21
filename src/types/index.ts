@@ -174,4 +174,5 @@ export type NavigationSection =
   | 'payments'
   | 'reports'
   | 'logs'
-  | 'settings';
+  | 'settings'
+  | 'profile';

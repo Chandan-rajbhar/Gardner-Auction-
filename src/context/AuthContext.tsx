@@ -28,6 +28,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  updateProfile: (profileData: {
+    name?: string;
+    phone?: string;
+    title?: string;
+  }) => Promise<{ success: boolean; message?: string; error?: string }>;
   clearRecoverySession: () => void;
 }
 
@@ -505,6 +510,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // --- UPDATE PROFILE ---
+  const updateProfile = async (profileData: {
+    name?: string;
+    phone?: string;
+    title?: string;
+  }): Promise<{ success: boolean; message?: string; error?: string }> => {
+    if (!user) {
+      return { success: false, error: 'No authenticated user session found.' };
+    }
+
+    setIsLoading(true);
+    try {
+      const trimmedName = profileData.name ? profileData.name.trim() : user.name;
+      const trimmedPhone = profileData.phone !== undefined ? profileData.phone.trim() : user.phone;
+      const customTitle = profileData.title ? profileData.title.trim() : user.title;
+
+      // 1. Update Supabase Auth user metadata
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              full_name: trimmedName,
+              phone: trimmedPhone,
+              title: customTitle
+            }
+          });
+        } catch (authMetaErr) {
+          console.warn('Supabase auth metadata update notice:', authMetaErr);
+        }
+
+        // 2. Update public.users database table
+        try {
+          await supabase
+            .from('users')
+            .update({
+              full_name: trimmedName,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id);
+        } catch (dbErr) {
+          console.warn('Supabase public.users update notice:', dbErr);
+        }
+      }
+
+      // 3. Update local user state
+      setUser(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          name: trimmedName,
+          avatarText: getInitials(trimmedName),
+          phone: trimmedPhone,
+          title: customTitle
+        };
+      });
+
+      setIsLoading(false);
+      return {
+        success: true,
+        message: 'Profile information updated and synchronized successfully.'
+      };
+    } catch (err: any) {
+      setIsLoading(false);
+      return {
+        success: false,
+        error: err?.message || 'Failed to update profile.'
+      };
+    }
+  };
+
   const clearRecoverySession = () => {
     setIsRecoverySession(false);
     if (window.location.hash === '#reset-password') {
@@ -524,6 +599,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       resetPassword,
       updatePassword,
+      updateProfile,
       clearRecoverySession
     }}>
       {children}

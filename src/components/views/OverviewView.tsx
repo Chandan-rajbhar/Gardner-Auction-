@@ -1,36 +1,54 @@
 import React, { useState } from 'react';
-import { 
-  Auction, 
-  LotItem, 
-  UserBidder, 
-  NavigationSection 
+import {
+  Auction,
+  LotItem,
+  UserBidder,
+  LiveBid,
+  InvoiceSettlement,
+  ActivityLog,
+  NavigationSection
 } from '../../types';
-import { 
-  formatCurrency, 
-  formatNumber, 
-  formatDate 
+import {
+  formatCurrency,
+  formatNumber,
+  formatDate
 } from '../../utils/formatters';
-import { 
-  Layers, 
-  CheckCircle2, 
-  Users, 
-  TrendingUp, 
-  ArrowDownCircle, 
-  ArrowUpCircle, 
-  DollarSign, 
-  FileText, 
-  Upload, 
-  Gavel, 
+import {
+  Layers,
+  CheckCircle2,
+  Users,
+  TrendingUp,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  DollarSign,
+  Upload,
+  Gavel,
   AlertCircle,
+  Radio,
+  Calendar,
+  MapPin,
+  Clock,
+  ShieldCheck,
+  Search,
+  ArrowRight,
   ExternalLink,
-  Shield,
-  Activity
+  ChevronRight,
+  Sparkles,
+  Info,
+  X,
+  CreditCard,
+  FileCheck2,
+  AlertTriangle
 } from 'lucide-react';
+import { AuctionAnalyticsChart } from './AuctionAnalyticsChart';
 
 interface OverviewViewProps {
   auction: Auction;
   lots: LotItem[];
   bidders: UserBidder[];
+  bids?: LiveBid[];
+  invoices?: InvoiceSettlement[];
+  logs?: ActivityLog[];
   onNavigate: (section: NavigationSection) => void;
   onSyncHiBid: () => void;
 }
@@ -39,10 +57,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   auction,
   lots,
   bidders,
+  bids = [],
+  invoices = [],
+  logs = [],
   onNavigate,
   onSyncHiBid
 }) => {
-  const [activeTab, setActiveTab] = useState<'details' | 'registrations' | 'lotStats'>('details');
+  const [showDemoNotice, setShowDemoNotice] = useState(true);
+  const [syndicationSearch, setSyndicationSearch] = useState('');
+  const [activeInfoTab, setActiveInfoTab] = useState<'info' | 'bidders' | 'lotsSummary'>('info');
+  const [copiedCode, setCopiedCode] = useState(false);
 
   // Compute live aggregates
   const totalBids = auction.syndications.reduce((acc, s) => acc + s.totalBids, 0);
@@ -51,511 +75,677 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const totalCC = auction.syndications.reduce((acc, s) => acc + s.ccAuths, 0);
   const totalUniqueBidders = auction.syndications.reduce((acc, s) => acc + s.uniqueBidders, 0);
   const totalUniqueBids = auction.syndications.reduce((acc, s) => acc + s.uniqueBids, 0);
-  const overallHighBid = Math.max(...auction.syndications.map(s => s.highBid), 0);
+  const overallHighBid = Math.max(...auction.syndications.map(s => s.highBid), 135000.00);
+
+  // Filtered syndication sites
+  const filteredSyndications = auction.syndications.filter(s =>
+    s.site.toLowerCase().includes(syndicationSearch.toLowerCase())
+  );
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(auction.code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Notice about mock data per user instruction */}
-      <div className="mock-notice">
-        <AlertCircle size={16} />
-        <span>
-          <strong>Demonstration Mode:</strong> Initial administrative interface populated with mock numismatic and auction data for client review. No real credit card or bank funds are processed.
-        </span>
-      </div>
+    <div className="overview-page-container">
+      {/* 1. Demonstration Mode Notice */}
+      {showDemoNotice && (
+        <div className="executive-demo-banner" role="alert">
+          <div className="demo-banner-content">
+            <span className="demo-banner-icon-wrap">
+              <Info size={15} />
+            </span>
+            <span className="demo-banner-text">
+              <strong>Demonstration Mode:</strong> Initial administrative interface populated with mock numismatic and auction data for client review. No real credit card or bank funds are processed.
+            </span>
+          </div>
+          <button
+            className="demo-banner-dismiss"
+            onClick={() => setShowDemoNotice(false)}
+            aria-label="Dismiss demonstration notice"
+            title="Dismiss notice"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
-      {/* Main AF360 Top Header Bar */}
-      <div className="af360-header-card">
-        <div className="af360-top-row">
-          <div className="af360-title-group">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span className={`badge badge-${auction.status}`}>
-                {auction.status}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                {auction.code}
-              </span>
-            </div>
-            <h1>{auction.title}</h1>
-            <p>
-              Inspection & Preview: {formatDate(auction.startDate)} • Gavel Fall: {formatDate(auction.endDate)} • {auction.location}
-            </p>
+      {/* 2. Active Auction Overview Header */}
+      <div className="auction-hero-card">
+        <div className="auction-hero-main">
+          {/* Status & Code Bar */}
+          <div className="auction-hero-badges-row">
+            <span className="hero-status-pill live">
+              <span className="hero-live-indicator" />
+              {auction.status.toUpperCase()}
+            </span>
+            <button
+              className="hero-code-tag"
+              onClick={handleCopyCode}
+              title="Click to copy auction code"
+            >
+              <span>{auction.code}</span>
+              {copiedCode && <span className="copy-confirm">Copied</span>}
+            </button>
+            <span className="hero-category-tag">
+              {auction.category || 'Premier Numismatics & Horology'}
+            </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button 
-              className="btn btn-secondary"
-              onClick={() => onNavigate('users')}
-            >
-              <Users size={16} />
-              <span>Bidders Registry ({bidders.length})</span>
-            </button>
-            <button 
-              className="btn btn-gold"
-              onClick={() => onNavigate('live_clerking')}
-            >
-              <Gavel size={16} />
-              <span>Auction Day Clerking</span>
-            </button>
-            <button 
-              className="btn btn-secondary"
-              onClick={onSyncHiBid}
-            >
-              <Upload size={16} />
-              <span>Upload to HiBid</span>
-            </button>
+          {/* Auction Title */}
+          <h1 className="auction-hero-title">
+            {auction.title}
+          </h1>
+
+          {/* Metadata Row */}
+          <div className="auction-hero-meta">
+            <div className="meta-item">
+              <Calendar size={14} className="meta-icon" />
+              <span>Inspection & Preview: <strong>{formatDate(auction.startDate)}</strong></span>
+            </div>
+            <div className="meta-divider">•</div>
+            <div className="meta-item">
+              <Clock size={14} className="meta-icon" />
+              <span>Gavel Fall: <strong>{formatDate(auction.endDate)}</strong></span>
+            </div>
+            <div className="meta-divider">•</div>
+            <div className="meta-item">
+              <MapPin size={14} className="meta-icon" />
+              <span>{auction.location}</span>
+            </div>
           </div>
         </div>
 
-        {/* 8 Primary AF360 Metric Cards directly matching BeautyOasisRx 8-card grid layout */}
-        <div className="metrics-grid-af360">
-          {/* 1: Lot Count */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">TOTAL LOTS</span>
-              <div className="metric-icon-box emerald">
-                <Layers size={18} />
+        {/* Operational Action Buttons */}
+        <div className="auction-hero-actions">
+          <button
+            className="hero-action-btn secondary"
+            onClick={() => onNavigate('users')}
+          >
+            <Users size={16} />
+            <span>Bidders Registry ({bidders.length})</span>
+          </button>
+
+          <button
+            className="hero-action-btn primary-gavel"
+            onClick={() => onNavigate('live_clerking')}
+          >
+            <Gavel size={17} />
+            <span>Auction Day Clerking</span>
+          </button>
+
+          <button
+            className="hero-action-btn secondary"
+            onClick={onSyncHiBid}
+          >
+            <Upload size={16} />
+            <span>Upload to HiBid</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Modern KPI Cards (8 Metrics in Two Cohesive Rows) */}
+      <div className="kpi-section">
+        {/* Row 1 — Operational metrics */}
+        <div className="kpi-grid">
+          {/* Card 1: Total Lots */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">TOTAL LOTS</span>
+              <div className="kpi-icon-pill gold-tint">
+                <Layers size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{auction.lotCount}</div>
-              <div className="metric-subtext">
-                <span>{auction.lotCount - 14} active</span>
-                <span>•</span>
+            <div className="kpi-body">
+              <div className="kpi-number">{auction.lotCount}</div>
+              <div className="kpi-supporting">
+                <span className="highlight-dark">{auction.lotCount - 14} active</span>
+                <span className="bullet-sep">•</span>
                 <span>14 on block</span>
               </div>
             </div>
+            <div className="kpi-accent-border gold" />
           </div>
 
-          {/* 2: Check In Count */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">TOTAL CHECK-INS</span>
-              <div className="metric-icon-box blue">
-                <CheckCircle2 size={18} />
+          {/* Card 2: Total Check-Ins */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">TOTAL CHECK-INS</span>
+              <div className="kpi-icon-pill blue-tint">
+                <CheckCircle2 size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{auction.checkInCount}</div>
-              <div className="metric-subtext">
-                <span>188 online</span>
-                <span>•</span>
+            <div className="kpi-body">
+              <div className="kpi-number">{auction.checkInCount}</div>
+              <div className="kpi-supporting">
+                <span className="highlight-dark">188 online</span>
+                <span className="bullet-sep">•</span>
                 <span>16 floor paddles</span>
               </div>
             </div>
+            <div className="kpi-accent-border blue" />
           </div>
 
-          {/* 3: Unique Sellers */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">UNIQUE CONSIGNORS</span>
-              <div className="metric-icon-box purple">
-                <Users size={18} />
+          {/* Card 3: Unique Consignors */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">UNIQUE CONSIGNORS</span>
+              <div className="kpi-icon-pill purple-tint">
+                <Users size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{auction.uniqueSellers}</div>
-              <div className="metric-subtext">
+            <div className="kpi-body">
+              <div className="kpi-number">{auction.uniqueSellers}</div>
+              <div className="kpi-supporting">
                 <span>12 private collections</span>
               </div>
             </div>
+            <div className="kpi-accent-border purple" />
           </div>
 
-          {/* 4: HiBid AF360 Status */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">HIBID SYNDICATION</span>
-              <div className="metric-icon-box gold">
-                <Activity size={18} />
+          {/* Card 4: HiBid Syndication */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">HIBID SYNDICATION</span>
+              <div className="kpi-icon-pill amber-tint">
+                <Radio size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val" style={{ fontSize: 22, color: 'var(--text-main)' }}>
-                5 Nodes Live
-              </div>
-              <div className="metric-subtext">
+            <div className="kpi-body">
+              <div className="kpi-number text-val">5 Nodes Live</div>
+              <div className="kpi-supporting">
+                <span className="kpi-live-dot" />
                 <span>Simulcast streaming active</span>
               </div>
             </div>
+            <div className="kpi-accent-border amber" />
           </div>
+        </div>
 
-          {/* 5: Presale Estimate Min */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">PRESALE ESTIMATE MIN</span>
-              <div className="metric-icon-box amber">
-                <ArrowDownCircle size={18} />
+        {/* Row 2 — Financial metrics */}
+        <div className="kpi-grid">
+          {/* Card 5: Presale Estimate Min */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">PRESALE ESTIMATE MIN</span>
+              <div className="kpi-icon-pill amber-tint">
+                <ArrowDownCircle size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{formatCurrency(auction.presaleMin)}</div>
-              <div className="metric-subtext">
+            <div className="kpi-body">
+              <div className="kpi-number font-mono">{formatCurrency(auction.presaleMin)}</div>
+              <div className="kpi-supporting">
                 <span>Floor reserves secured</span>
               </div>
             </div>
+            <div className="kpi-accent-border amber" />
           </div>
 
-          {/* 6: Presale Estimate Max */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">PRESALE ESTIMATE MAX</span>
-              <div className="metric-icon-box blue">
-                <ArrowUpCircle size={18} />
+          {/* Card 6: Presale Estimate Max */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">PRESALE ESTIMATE MAX</span>
+              <div className="kpi-icon-pill blue-tint">
+                <ArrowUpCircle size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{formatCurrency(auction.presaleMax)}</div>
-              <div className="metric-subtext">
+            <div className="kpi-body">
+              <div className="kpi-number font-mono">{formatCurrency(auction.presaleMax)}</div>
+              <div className="kpi-supporting">
                 <span>Top institutional bids</span>
               </div>
             </div>
+            <div className="kpi-accent-border blue" />
           </div>
 
-          {/* 7: Avg Estimate Per Lot */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">AVG ESTIMATE / LOT</span>
-              <div className="metric-icon-box purple">
-                <TrendingUp size={18} />
+          {/* Card 7: Avg Estimate / Lot */}
+          <div className="executive-kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-label">AVG ESTIMATE / LOT</span>
+              <div className="kpi-icon-pill purple-tint">
+                <TrendingUp size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val">{formatCurrency(auction.avgEstimate)}</div>
-              <div className="metric-subtext">
+            <div className="kpi-body">
+              <div className="kpi-number font-mono">{formatCurrency(auction.avgEstimate)}</div>
+              <div className="kpi-supporting">
                 <span>Median value $4,200.00</span>
               </div>
             </div>
+            <div className="kpi-accent-border purple" />
           </div>
 
-          {/* 8: High Bid / Current Hammer */}
-          <div className="metric-card-af360">
-            <div className="metric-card-top">
-              <span className="metric-label">TOTAL HAMMER REALIZED</span>
-              <div className="metric-icon-box emerald">
-                <DollarSign size={18} />
+          {/* Card 8: Total Hammer Realized */}
+          <div className="executive-kpi-card financial-highlight">
+            <div className="kpi-card-header">
+              <span className="kpi-label">TOTAL HAMMER REALIZED</span>
+              <div className="kpi-icon-pill emerald-tint">
+                <DollarSign size={17} />
               </div>
             </div>
-            <div className="metric-content">
-              <div className="metric-val" style={{ color: '#059669' }}>
+            <div className="kpi-body">
+              <div className="kpi-number font-mono emerald-text">
                 {formatCurrency(overallHighBid)}
               </div>
-              <div className="metric-subtext">
-                <span>+14.2% over low estimate</span>
+              <div className="kpi-supporting">
+                <span className="kpi-trend-badge emerald">+14.2% over low estimate</span>
               </div>
             </div>
+            <div className="kpi-accent-border emerald" />
           </div>
         </div>
       </div>
 
-      {/* Revenue & Realization Analytics Chart Card (Matching the BeautyOasisRx Screenshot) */}
-      <div className="revenue-card">
-        <div className="revenue-card-header">
-          <div className="revenue-title-group">
-            <div className="revenue-icon-pill">
-              <TrendingUp size={18} />
+      {/* 4. Advanced Auction Analytics and Live Charts (Visual Centerpiece) */}
+      <AuctionAnalyticsChart />
+
+      {/* 5. Operational Workbench (Live Rostrum Activity & Settlement Exceptions) */}
+      <div className="operational-workbench-grid">
+        {/* Left: Live Clerking & Bids Stream */}
+        <div className="workbench-card">
+          <div className="workbench-card-header">
+            <div className="workbench-title-group">
+              <div className="workbench-icon-pill gold">
+                <Gavel size={16} />
+              </div>
+              <div>
+                <h4>Live Clerking & Floor Bids Stream</h4>
+                <p>Real-time bids accepted by rostrum auctioneer across all streams</p>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-                Auction Sales & Realization Overview
-              </h3>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Dynamic hammer price performance from catalog sessions, floor paddles, and syndicated HiBid orders
-              </p>
-            </div>
+
           </div>
 
-          <div className="filter-pills-group">
-            <button className="filter-pill">7 Days</button>
-            <button className="filter-pill active">30 Days</button>
-            <button className="filter-pill">12 Months</button>
-          </div>
-        </div>
+          <div className="live-bids-feed-list">
+            {bids.slice(0, 4).map((b) => (
+              <div key={b.id} className="live-bid-row">
+                <div className="bid-row-left">
+                  <span className="bid-lot-badge">Lot #{b.lotNumber}</span>
+                  <div className="bid-paddle-info">
+                    <span className="bid-paddle">Paddle #{b.paddleNumber}</span>
+                    <span className="bid-name truncate">{b.bidderName}</span>
+                  </div>
+                </div>
 
-        <div className="revenue-metrics-banner">
-          <div className="revenue-stat-item">
-            <span className="revenue-stat-label">LAST 30 DAYS TOTAL</span>
-            <span className="revenue-stat-val">$1,081,116.00</span>
-          </div>
+                <div className="bid-row-middle">
+                  <span className={`bid-source-pill ${b.source.toLowerCase().replace(/\s+/g, '-')}`}>
+                    {b.source}
+                  </span>
+                  <span className="bid-time">{b.timestamp}</span>
+                </div>
 
-          <div className="revenue-stat-item">
-            <span className="revenue-stat-label">AVERAGE LOT RATE</span>
-            <span className="revenue-stat-val" style={{ color: '#2563eb' }}>$7,662.03 <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>/ lot</span></span>
-          </div>
-
-          <div className="revenue-stat-item">
-            <span className="revenue-stat-label">PEAK LOT HAMMER</span>
-            <span className="revenue-stat-val" style={{ color: '#059669' }}>$345,000.00</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ecfdf5', color: '#059669', padding: '6px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 700, border: '1px solid #a7f3d0' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', display: 'inline-block' }}></span>
-            <span>Live HiBid Feed</span>
-          </div>
-        </div>
-
-        {/* Visual Bar Chart matching the screenshot */}
-        <div className="chart-container-sim">
-          <div className="chart-bar-group">
-            <div className="chart-bar" style={{ height: '14px', background: '#cbd5e1' }}>
-              <span className="chart-bar-label">Session 1</span>
-            </div>
+                <div className="bid-row-right">
+                  <span className="bid-amount font-mono">{formatCurrency(b.amount)}</span>
+                  {b.isWinning ? (
+                    <span className="bid-winning-tag">High Bid</span>
+                  ) : (
+                    <span className="bid-outbid-tag">Outbid</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="chart-bar-group">
-            <div className="chart-bar" style={{ height: '95px' }}>
-              <span className="chart-bar-label">Session 2</span>
-            </div>
-          </div>
-
-          <div className="chart-bar-group">
-            <div className="chart-bar" style={{ height: '170px' }}>
-              <span className="chart-bar-label">Session 3</span>
-            </div>
-          </div>
-
-          <div className="chart-bar-group">
-            <div className="chart-bar" style={{ height: '40px', background: '#93c5fd' }}>
-              <span className="chart-bar-label">Session 4</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AF360 Multi-Site Syndication Table (Direct Match to reference photo) */}
-      <div className="syndication-card">
-        <div className="card-header-flex">
-          <div className="card-title-group">
-            <h3>Multi-Site Syndication & Bidder Traffic</h3>
-            <p>Real-time telemetry across HiBid syndication nodes and Gardner direct web saleroom</p>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button 
-              className="btn btn-secondary" 
-              style={{ fontSize: 12, padding: '6px 12px' }}
-              onClick={() => onNavigate('users')}
+          <div className="workbench-footer-bar">
+            <span className="footer-meta-text">
+              Showing latest rostrum bids
+            </span>
+            <button
+              className="workbench-action-link"
+              onClick={() => onNavigate('live_clerking')}
             >
-              <Users size={14} />
-              <span>View Registered Bidders ({bidders.length})</span>
+              Live Block
+              <ChevronRight size={14} />
             </button>
           </div>
         </div>
 
-        <div className="table-wrapper">
-          <table className="luxury-table">
+        {/* Right: Operational Flags & Settlement Exceptions */}
+        <div className="workbench-card">
+          <div className="workbench-card-header">
+            <div className="workbench-title-group">
+              <div className="workbench-icon-pill amber">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <h4>Settlement & Operational Exceptions</h4>
+                <p>High-value pending wires and bidder verification authorizations</p>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="operational-flags-list">
+            {/* Flag 1: High Value Wire */}
+            <div className="op-flag-item warning">
+              <div className="op-flag-icon">
+                <DollarSign size={16} />
+              </div>
+              <div className="op-flag-content">
+                <div className="op-flag-title-row">
+                  <span className="op-flag-title">Pending Wire Settlement</span>
+                  <span className="op-flag-amount font-mono">$106,200.00</span>
+                </div>
+                <p className="op-flag-desc">
+                  Invoice #INV-GA-2026-8841 (Paddle #104 Arthur Kensington) won Lot #100. Bank wire instructions transmitted.
+                </p>
+              </div>
+            </div>
+
+            {/* Flag 2: Verification Pending */}
+            <div className="op-flag-item info">
+              <div className="op-flag-icon">
+                <CreditCard size={16} />
+              </div>
+              <div className="op-flag-content">
+                <div className="op-flag-title-row">
+                  <span className="op-flag-title">International Verification</span>
+                  <span className="op-badge-pill">Requires ID</span>
+                </div>
+                <p className="op-flag-desc">
+                  Julian Vance-Moreau (Geneva, CH) requested $50k bid limit. Awaiting passport copy verification.
+                </p>
+              </div>
+            </div>
+
+            {/* Flag 3: Reserve Met Clearance */}
+            <div className="op-flag-item success">
+              <div className="op-flag-icon">
+                <ShieldCheck size={16} />
+              </div>
+              <div className="op-flag-content">
+                <div className="op-flag-title-row">
+                  <span className="op-flag-title">Consignor Reserve Clearance</span>
+                  <span className="op-badge-pill green">100% Protected</span>
+                </div>
+                <p className="op-flag-desc">
+                  All 8 private estate consignors have registered minimum reserves locked in the clerking system.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="workbench-footer-bar">
+            <span className="footer-meta-text">
+              Automated 15% wire / 18% credit card premium calculations active
+            </span>
+            <button
+              className="workbench-action-link"
+              onClick={() => onNavigate('payments')}
+            >
+              <span>All Invoices</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. Multi-Site Syndication & Bidder Traffic Table */}
+      <div className="syndication-section-card">
+        <div className="syndication-header-row">
+          <div className="syndication-title-block">
+            <div className="syndication-icon-pill">
+              <Radio size={17} />
+            </div>
+            <div>
+              <h3>Multi-Site Syndication & Bidder Traffic</h3>
+              <p>Real-time telemetry across HiBid network syndication nodes and Gardner direct web saleroom</p>
+            </div>
+          </div>
+
+          <div className="syndication-actions">
+            <div className="syndication-search-box">
+              <Search size={14} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search syndication nodes..."
+                value={syndicationSearch}
+                onChange={(e) => setSyndicationSearch(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onNavigate('users')}
+            >
+              <Users size={14} />
+              <span>Registered Bidders ({bidders.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="syndication-table-container">
+          <table className="executive-table">
             <thead>
               <tr>
                 <th>Site Node / URL</th>
-                <th style={{ textAlign: 'right' }}>Registrations</th>
-                <th style={{ textAlign: 'right' }}>CC Authorizations</th>
-                <th style={{ textAlign: 'right' }}>Views</th>
-                <th style={{ textAlign: 'right' }}>Unique Bidders</th>
-                <th style={{ textAlign: 'right' }}>Unique Bids</th>
-                <th style={{ textAlign: 'right' }}>Total Bids</th>
-                <th style={{ textAlign: 'right' }}>High Bid</th>
-                <th style={{ textAlign: 'right' }}>Max Bid</th>
+                <th>Node Status</th>
+                <th className="align-right">Registrations</th>
+                <th className="align-right">CC Authorizations</th>
+                <th className="align-right">Views</th>
+                <th className="align-right">Unique Bidders</th>
+                <th className="align-right">Unique Bids</th>
+                <th className="align-right">Total Bids</th>
+                <th className="align-right">High Bid</th>
+                <th className="align-right">Max Bid</th>
               </tr>
             </thead>
             <tbody>
-              {auction.syndications.map((siteItem, idx) => (
-                <tr key={idx}>
-                  <td style={{ fontWeight: 600, color: 'var(--gold-light)' }}>
-                    {siteItem.site}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.registrations)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.ccAuths)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.views)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.uniqueBidders)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.uniqueBids)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                    {formatNumber(siteItem.totalBids)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                    {formatCurrency(siteItem.highBid)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>
-                    {formatCurrency(siteItem.maxBid)}
-                  </td>
-                </tr>
-              ))}
-              <tr className="total-row">
-                <td>Total</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalRegs)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalCC)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalViews)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalUniqueBidders)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalUniqueBids)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatNumber(totalBids)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--gold-bright)' }}>
+              {filteredSyndications.map((siteItem, idx) => {
+                const isDirect = siteItem.site.includes('gardner-auction.com');
+                const isHiBidMain = siteItem.site === 'www.hibid.com';
+                return (
+                  <tr key={idx} className={isDirect ? 'highlight-row' : ''}>
+                    <td className="node-name-cell">
+                      <div className="node-name-wrap">
+                        <span className="node-url">{siteItem.site}</span>
+                        {isDirect && <span className="direct-badge">Host Saleroom</span>}
+                        {isHiBidMain && <span className="hibid-main-badge">Primary HiBid</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`node-status-pill ${siteItem.views > 0 ? 'online' : 'standby'}`}>
+                        <span className="status-dot-mini" />
+                        {siteItem.views > 0 ? 'Online' : 'Standby'}
+                      </span>
+                    </td>
+                    <td className="align-right font-mono">{formatNumber(siteItem.registrations)}</td>
+                    <td className="align-right font-mono">
+                      <span className="cc-auth-cell">
+                        {formatNumber(siteItem.ccAuths)}
+                        {siteItem.registrations > 0 && (
+                          <span className="cc-pct">
+                            ({Math.round((siteItem.ccAuths / siteItem.registrations) * 100)}%)
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="align-right font-mono">{formatNumber(siteItem.views)}</td>
+                    <td className="align-right font-mono">{formatNumber(siteItem.uniqueBidders)}</td>
+                    <td className="align-right font-mono">{formatNumber(siteItem.uniqueBids)}</td>
+                    <td className="align-right font-mono">{formatNumber(siteItem.totalBids)}</td>
+                    <td className="align-right font-mono font-bold text-gold">
+                      {formatCurrency(siteItem.highBid)}
+                    </td>
+                    <td className="align-right font-mono text-dim">
+                      {formatCurrency(siteItem.maxBid)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Grand Total Row */}
+              <tr className="executive-total-row">
+                <td colSpan={2} className="total-label-cell">
+                  <div className="total-label-wrap">
+                    <strong>Syndication Network Total</strong>
+                    <span className="total-node-count">{auction.syndications.length} Nodes</span>
+                  </div>
+                </td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalRegs)}</td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalCC)}</td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalViews)}</td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalUniqueBidders)}</td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalUniqueBids)}</td>
+                <td className="align-right font-mono font-bold">{formatNumber(totalBids)}</td>
+                <td className="align-right font-mono font-bold text-gold">
                   {formatCurrency(overallHighBid)}
                 </td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>—</td>
+                <td className="align-right font-mono text-dim">—</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Bottom Sub-Navigation Tabs matching AF360 (Details, Registrations, Lot Stats) */}
-      <div className="syndication-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, marginBottom: 20 }}>
-          <div className="af360-tabs">
-            <button 
-              className={`af360-tab ${activeTab === 'details' ? 'active' : ''}`}
-              onClick={() => setActiveTab('details')}
+      {/* 7. Bottom Information Sub-Navigation Tabs */}
+      <div className="bottom-info-card">
+        <div className="bottom-info-tabs-bar">
+          <div className="info-tab-pills" role="tablist">
+            <button
+              className={`info-pill ${activeInfoTab === 'info' ? 'active' : ''}`}
+              onClick={() => setActiveInfoTab('info')}
             >
-              Auction Information & BP
+              Auction Information & BP Structure
             </button>
-            <button 
-              className={`af360-tab ${activeTab === 'registrations' ? 'active' : ''}`}
-              onClick={() => setActiveTab('registrations')}
+            <button
+              className={`info-pill ${activeInfoTab === 'bidders' ? 'active' : ''}`}
+              onClick={() => setActiveInfoTab('bidders')}
             >
-              Recent Registrations & CC Status
+              Recent Registered Bidders ({bidders.length})
             </button>
-            <button 
-              className={`af360-tab ${activeTab === 'lotStats' ? 'active' : ''}`}
-              onClick={() => setActiveTab('lotStats')}
+            <button
+              className={`info-pill ${activeInfoTab === 'lotsSummary' ? 'active' : ''}`}
+              onClick={() => setActiveInfoTab('lotsSummary')}
             >
-              Catalog Summary & Estimates
+              Catalog & Consignor Reserves
             </button>
           </div>
 
-          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            Record Ref: {auction.code}
+          <span className="info-record-ref font-mono">
+            Catalog Reference: {auction.code}
           </span>
         </div>
 
-        {activeTab === 'details' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Auction Code</span>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: 'var(--gold-light)' }}>{auction.code}</p>
+        {/* Tab 1: Details */}
+        {activeInfoTab === 'info' && (
+          <div className="info-tab-content-grid">
+            <div className="info-column">
+              <div className="info-item">
+                <span className="info-label">Auction Code</span>
+                <p className="info-value font-mono text-gold">{auction.code}</p>
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Catalog Name</span>
-                <p style={{ fontSize: 14, color: 'var(--text-main)', fontWeight: 600 }}>{auction.title}</p>
+              <div className="info-item">
+                <span className="info-label">Catalog Title</span>
+                <p className="info-value font-bold">{auction.title}</p>
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Curator Description</span>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{auction.description}</p>
+              <div className="info-item">
+                <span className="info-label">Curator Description</span>
+                <p className="info-text">{auction.description}</p>
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Buyer's Premium Structure</span>
-                <p style={{ fontSize: 13, color: 'var(--gold-bright)', fontWeight: 600 }}>
+              <div className="info-item">
+                <span className="info-label">Buyer's Premium Structure</span>
+                <p className="info-value text-gold font-semibold">
                   {auction.bpExplanation}
                 </p>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Physical Saleroom Address</span>
-                <p style={{ fontSize: 14, color: 'var(--text-main)' }}>{auction.address}</p>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{auction.cityStateZip}, {auction.country}</p>
+            <div className="info-column">
+              <div className="info-item">
+                <span className="info-label">Physical Saleroom & Exhibition Address</span>
+                <p className="info-value">{auction.address}</p>
+                <p className="info-text">{auction.cityStateZip}, {auction.country}</p>
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Terms & Conditions</span>
-                <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4, maxHeight: 100, overflowY: 'auto', background: 'var(--bg-darkest)', padding: 10, borderRadius: 6 }}>
+              <div className="info-item">
+                <span className="info-label">Terms & Conditions of Sale</span>
+                <div className="terms-scroll-box">
                   {auction.terms}
-                </p>
+                </div>
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>Tax Exemption Policy</span>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{auction.taxExemptInfo}</p>
+              <div className="info-item">
+                <span className="info-label">Tax Exemption Policy</span>
+                <p className="info-text">{auction.taxExemptInfo}</p>
               </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'registrations' && (
-          <div>
-            <div className="table-wrapper">
-              <table className="luxury-table">
-                <thead>
-                  <tr>
-                    <th>Paddle #</th>
-                    <th>Bidder Name</th>
-                    <th>Origin Site</th>
-                    <th>Credit Card</th>
-                    <th>Bid Limit</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bidders.slice(0, 5).map(b => (
-                    <tr key={b.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-primary)' }}>
-                        #{b.paddleNumber}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{b.name}</td>
-                      <td style={{ color: 'var(--text-muted)' }}>{b.siteOrigin}</td>
-                      <td>
-                        {b.creditCardAuthorized ? (
-                          <span style={{ color: '#d97706', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
-                            <Shield size={12} /> Auth (••{b.cardLast4})
-                          </span>
-                        ) : (
-                          <span style={{ color: '#f59e0b', fontSize: 12 }}>Pending Auth</span>
-                        )}
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(b.bidLimit)}</td>
-                      <td>
-                        <span className={`badge badge-${b.status === 'verified' || b.status === 'vip' ? 'live' : 'preview'}`}>
-                          {b.status}
+        {/* Tab 2: Recent Registrations */}
+        {activeInfoTab === 'bidders' && (
+          <div className="info-bidders-wrap">
+            <table className="executive-table compact">
+              <thead>
+                <tr>
+                  <th>Paddle #</th>
+                  <th>Bidder Name</th>
+                  <th>Origin Site</th>
+                  <th>Credit Card Auth</th>
+                  <th>Bid Limit</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bidders.slice(0, 5).map(b => (
+                  <tr key={b.id}>
+                    <td className="font-mono font-bold text-gold">#{b.paddleNumber}</td>
+                    <td className="font-semibold">{b.name}</td>
+                    <td className="text-muted">{b.siteOrigin}</td>
+                    <td>
+                      {b.creditCardAuthorized ? (
+                        <span className="badge-auth-yes">
+                          <ShieldCheck size={13} /> Auth (••{b.cardLast4})
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ marginTop: 12, textAlign: 'right' }}>
-              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => onNavigate('users')}>
+                      ) : (
+                        <span className="badge-auth-no">Pending Auth</span>
+                      )}
+                    </td>
+                    <td className="font-mono">{formatCurrency(b.bidLimit)}</td>
+                    <td>
+                      <span className={`status-tag ${b.status}`}>
+                        {b.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="bidders-footer-link">
+              <button className="btn btn-secondary" onClick={() => onNavigate('users')}>
                 View All {bidders.length} Registered Bidders →
               </button>
             </div>
           </div>
         )}
 
-        {activeTab === 'lotStats' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-            <div style={{ background: 'var(--bg-darkest)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Active On Block</div>
-              <div style={{ fontSize: 24, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-bright)', marginTop: 4 }}>
-                Lot #101
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>1907 Saint-Gaudens Double Eagle</div>
+        {/* Tab 3: Catalog & Reserves */}
+        {activeInfoTab === 'lotsSummary' && (
+          <div className="catalog-reserves-grid">
+            <div className="catalog-stat-box">
+              <span className="stat-box-label">Active On Rostrum Block</span>
+              <div className="stat-box-num font-mono text-gold">Lot #101</div>
+              <div className="stat-box-desc">1907 Saint-Gaudens Double Eagle $20 High Relief</div>
+              <span className="stat-box-meta">Current Bid: $82,500.00 • Reserve Met</span>
             </div>
 
-            <div style={{ background: 'var(--bg-darkest)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Highest Lot Estimate</div>
-              <div style={{ fontSize: 24, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)', marginTop: 4 }}>
-                $220,000.00
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Lot #104 (1796 Draped Bust Quarter Eagle)</div>
+            <div className="catalog-stat-box">
+              <span className="stat-box-label">Highest Catalog Lot Estimate</span>
+              <div className="stat-box-num font-mono">$220,000.00</div>
+              <div className="stat-box-desc">Lot #104 (1796 Draped Bust Quarter Eagle PCGS AU-58)</div>
+              <span className="stat-box-meta">Consigned by Private Sewickley Heights Estate</span>
             </div>
 
-            <div style={{ background: 'var(--bg-darkest)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Consigned Value</div>
-              <div style={{ fontSize: 24, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#38bdf8', marginTop: 4 }}>
-                $2,009,724.00
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Representing 8 Consignor Estates</div>
+            <div className="catalog-stat-box">
+              <span className="stat-box-label">Consigned Reserve Value</span>
+              <div className="stat-box-num font-mono text-blue">$2,009,724.00</div>
+              <div className="stat-box-desc">Representing 8 Consignor Estates & Private Collections</div>
+              <span className="stat-box-meta">100% Floor Reserves Secured & Locked</span>
             </div>
           </div>
         )}

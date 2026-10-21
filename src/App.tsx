@@ -32,6 +32,7 @@ import { PaymentsView } from './components/views/PaymentsView';
 import { ReportsView } from './components/views/ReportsView';
 import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
+import { ProfileView } from './components/views/ProfileView';
 import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
 import { recordBidToSupabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
@@ -379,6 +380,9 @@ const AdminConsole: React.FC = () => {
               auction={currentAuction}
               lots={lots}
               bidders={bidders}
+              bids={bids}
+              invoices={invoices}
+              logs={logs}
               onNavigate={setCurrentSection}
               onSyncHiBid={triggerHiBidSync}
             />
@@ -478,6 +482,10 @@ const AdminConsole: React.FC = () => {
 
           {currentSection === 'settings' && (
             <SettingsView />
+          )}
+
+          {currentSection === 'profile' && (
+            <ProfileView onNavigate={setCurrentSection} />
           )}
         </main>
       </div>
