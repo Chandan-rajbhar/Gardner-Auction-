@@ -2362,6 +2362,10 @@ section[id] {
   color: #f59e0b;
 }
 
+.toast-icon-error {
+  color: #ef4444;
+}
+
 .toast-text-col {
   display: flex;
   flex-direction: column;

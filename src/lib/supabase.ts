@@ -1,34 +1,25 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, User as SupabaseAuthUser, Session } from '@supabase/supabase-js';
 import { updateServerTimeSkew } from './timeUtils';
 
-// Read from Vite environment variables if defined, otherwise fallback to embedded project credentials.
-// This guarantees that after `git pull`, developers and preview builds work immediately
-// WITHOUT requiring manual creation or edits of a .env file (matching the Beauty Oasis setup).
-const envUrl = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : '';
-const envKey = typeof import.meta !== 'undefined' && import.meta.env 
-  ? (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) 
-  : '';
+// ==============================================================================
+// Gardner Auction / AF360 Master Administrative Console
+// Centralized Supabase Client Configuration
+// ==============================================================================
 
-export const DEFAULT_SUPABASE_URL = 'https://rzacpssumjahxndmqnxm.supabase.co';
-export const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_AtKdmtFDHhIa6WG1RJGlfw_w7z_-H0s';
-export const DEFAULT_SUPABASE_SECRET_KEY = 
-  typeof atob !== 'undefined' 
-    ? atob('c2Jfc2VjcmV0X3RyLXFKbFpHektPaUZZaUlIR1RGX1FfcGZjVWcwclg=') 
-    : '';
+// Direct source configuration for Gardner Auction Supabase project
+export const SUPABASE_URL = 'https://rzacpssumjahxndmqnxm.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6YWNwc3N1bWphaHhuZG1xbnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTg4MDAsImV4cCI6MjEwNzk3NDgwMH0.ZXlUdZdbs8PXc9lIrmiPmcZf4UNb2w_7UDCNicZ7HRs';
 
-export const SUPABASE_URL: string =
-  (envUrl && !envUrl.includes('placeholder') && !envUrl.includes('your-project') && envUrl.trim()) ||
-  DEFAULT_SUPABASE_URL;
-
-export const SUPABASE_KEY: string =
-  (envKey && !envKey.includes('placeholder') && !envKey.includes('your-supabase') && envKey.trim()) ||
-  DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+// Backwards-compatible aliases for existing modules
+export const SUPABASE_KEY = SUPABASE_ANON_KEY;
+export const DEFAULT_SUPABASE_URL = SUPABASE_URL;
+export const DEFAULT_SUPABASE_PUBLISHABLE_KEY = SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
   SUPABASE_URL &&
-  SUPABASE_KEY &&
+  SUPABASE_ANON_KEY &&
   !SUPABASE_URL.includes('your-project') &&
-  !SUPABASE_KEY.includes('placeholder')
+  !SUPABASE_ANON_KEY.includes('placeholder')
 );
 
 // Intercept all Supabase fetch requests to seamlessly extract and sync server UTC clock
@@ -45,12 +36,13 @@ const syncingFetch = async (...args: Parameters<typeof fetch>): Promise<Response
 
 export const supabase: SupabaseClient = createClient(
   SUPABASE_URL,
-  SUPABASE_KEY,
+  SUPABASE_ANON_KEY,
   {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      storageKey: 'gardner_auction_af360_auth_token',
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
     global: {
@@ -225,3 +217,5 @@ export async function recordBidToSupabase(bid: {
 if (typeof window !== 'undefined') {
   initServerTimeSync();
 }
+
+export type { SupabaseAuthUser, Session };

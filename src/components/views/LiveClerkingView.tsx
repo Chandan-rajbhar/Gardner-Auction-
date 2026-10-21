@@ -444,6 +444,9 @@ export const LiveClerkingView: React.FC<LiveClerkingViewProps> = ({
               <span className="clerking-hero-item-pill">
                 ITEM #{currentLot.lotNumber}
               </span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                Estimate: {formatCurrency(currentLot.estimateLow)} – {formatCurrency(currentLot.estimateHigh)}
+              </span>
             </div>
 
             <div className="clerking-hero-body-row">

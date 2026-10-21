@@ -173,7 +173,7 @@ export const AuctionsView: React.FC<AuctionsViewProps> = ({
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+                <div className="auction-actions-col" style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button 
                       className={`btn ${isSelected ? 'btn-gold' : 'btn-secondary'}`}

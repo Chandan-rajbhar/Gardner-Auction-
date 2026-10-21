@@ -18,6 +18,9 @@ import {
   INITIAL_CONSIGNOR_SETTLEMENTS, 
   INITIAL_LOGS 
 } from './data/mockData';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { AuthPage } from './components/auth/AuthPage';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { OverviewView } from './components/views/OverviewView';
@@ -32,7 +35,8 @@ import { SettingsView } from './components/views/SettingsView';
 import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
 import { recordBidToSupabase } from './lib/supabase';
 
-export const App: React.FC = () => {
+const AdminConsole: React.FC = () => {
+  const { user } = useAuth();
   const [currentSection, setCurrentSection] = useState<NavigationSection>('overview');
   const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc-001');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -52,6 +56,8 @@ export const App: React.FC = () => {
   const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
   const activeLotOnBlock = lots.find(l => l.id === activeLotId) || lots.find(l => l.status === 'on_block') || lots[0];
 
+  const currentAdminName = user?.name || 'Todd Gardner';
+
   // HiBid AF360 Sync Simulation
   const triggerHiBidSync = () => {
     setIsSyncModalOpen(true);
@@ -65,7 +71,7 @@ export const App: React.FC = () => {
       const newLog: ActivityLog = {
         id: `log-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        adminUser: 'Todd Gardner',
+        adminUser: currentAdminName,
         action: 'Manual HiBid AF360 Full Sync Completed',
         category: 'HiBid Sync',
         severity: 'success',
@@ -121,7 +127,7 @@ export const App: React.FC = () => {
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      adminUser: 'Todd Gardner',
+      adminUser: currentAdminName,
       action: `Accepted ${source} Bid: $${amount.toLocaleString()} on Lot #${activeLotOnBlock.lotNumber}`,
       category: 'Clerking',
       severity: 'info',
@@ -191,7 +197,7 @@ export const App: React.FC = () => {
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      adminUser: 'Todd Gardner',
+      adminUser: currentAdminName,
       action: `HAMMER DOWN! Lot #${lot.lotNumber} SOLD for $${finalAmount.toLocaleString()}`,
       category: 'Clerking',
       severity: 'success',
@@ -213,7 +219,7 @@ export const App: React.FC = () => {
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      adminUser: 'Todd Gardner',
+      adminUser: currentAdminName,
       action: `Lot #${lot?.lotNumber} PASSED (${reason})`,
       category: 'Clerking',
       severity: 'warning',
@@ -235,7 +241,7 @@ export const App: React.FC = () => {
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      adminUser: 'Todd Gardner',
+      adminUser: currentAdminName,
       action: `Rostrum Reopened for Lot #${lot?.lotNumber}`,
       category: 'Clerking',
       severity: 'warning',
@@ -448,6 +454,41 @@ export const App: React.FC = () => {
       )}
     </div>
   );
+};
+
+export const App: React.FC = () => {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <AppRoot />
+      </AuthProvider>
+    </ToastProvider>
+  );
+};
+
+const AppRoot: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="brand-crest" style={{ width: 56, height: 56, fontSize: 28, animation: 'pulse 1.5s infinite' }}>
+          G
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#ffffff' }}>Gardner Auction AF360</div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>Verifying Rostrum Session Security...</div>
+          <span className="auth-spinner" style={{ width: 24, height: 24, marginTop: 8 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
+  return <AdminConsole />;
 };
 
 export default App;

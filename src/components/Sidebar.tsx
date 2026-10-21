@@ -11,9 +11,11 @@ import {
   Settings, 
   ShieldCheck,
   ExternalLink,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { NavigationSection } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
   currentSection: NavigationSection;
@@ -32,6 +34,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   liveLotsCount,
   pendingVerifications
 }) => {
+  const { user, logout } = useAuth();
+
   const navItems: Array<{
     id: NavigationSection;
     label: string;
@@ -50,8 +54,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
   ];
 
+  const handleLogout = () => {
+    onClose();
+    logout();
+  };
+
   return (
     <>
+      {/* Mobile Drawer Backdrop */}
+      {isOpen && (
+        <div 
+          className="sidebar-backdrop" 
+          onClick={onClose} 
+          aria-label="Close navigation sidebar"
+        />
+      )}
+
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand-crest">G</div>
@@ -61,10 +79,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <button 
             className="icon-btn mobile-menu-btn" 
-            style={{ marginLeft: 'auto', border: 'none' }}
+            style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: '#94a3b8' }}
             onClick={onClose}
+            aria-label="Close Menu"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -132,11 +151,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="operator-profile">
-            <div className="operator-avatar">TG</div>
-            <div className="operator-info">
-              <div className="operator-name">Todd Gardner</div>
-              <div className="operator-role">Owner & Master Auctioneer</div>
+            <div className="operator-avatar">
+              {user?.avatarText || 'TG'}
             </div>
+            <div className="operator-info">
+              <div className="operator-name">{user?.name || 'Todd Gardner'}</div>
+              <div className="operator-role">{user?.title || 'Owner & Master Auctioneer'}</div>
+            </div>
+            <button
+              className="operator-logout-btn"
+              onClick={handleLogout}
+              title="Sign Out / Lock AF360 Console"
+              aria-label="Sign Out"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </aside>

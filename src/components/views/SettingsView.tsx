@@ -146,7 +146,7 @@ export const SettingsView: React.FC = () => {
             Standard fees automatically added to hammer prices upon gavel fall.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="auth-grid-2col">
             <div className="form-group">
               <label>Wire / Cash / Certified Check BP (%)</label>
               <input 
@@ -175,7 +175,7 @@ export const SettingsView: React.FC = () => {
             HiBid Network Connection
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="auth-grid-2col">
             <div className="form-group">
               <label>Master Gateway License Key</label>
               <input 

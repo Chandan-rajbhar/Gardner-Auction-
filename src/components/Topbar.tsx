@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Menu, 
   Bell, 
   HelpCircle,
-  Radio
+  Radio,
+  LogOut,
+  ShieldCheck,
+  ChevronDown
 } from 'lucide-react';
 import { Auction, NavigationSection } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface TopbarProps {
   currentSection?: NavigationSection;
@@ -13,8 +17,8 @@ interface TopbarProps {
   selectedAuctionId: string;
   onSelectAuction: (id: string) => void;
   onOpenMobileMenu: () => void;
-  onTriggerHiBidSync: () => void;
-  isSyncing: boolean;
+  onTriggerHiBidSync?: () => void;
+  isSyncing?: boolean;
   unreadLogsCount: number;
   onOpenNotifications: () => void;
 }
@@ -28,9 +32,24 @@ export const Topbar: React.FC<TopbarProps> = ({
   unreadLogsCount,
   onOpenNotifications
 }) => {
+  const { user, logout } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <header className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div className="topbar-left">
         <button 
           className="icon-btn mobile-menu-btn" 
           onClick={onOpenMobileMenu}
@@ -39,7 +58,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           <Menu size={20} />
         </button>
 
-        {/* Show active auction selector dropdown ONLY on Overview / Dashboard Overview page per user request */}
+        {/* Show active auction selector dropdown ONLY on Overview page */}
         {currentSection === 'overview' && (
           <div className="auction-selector-wrapper">
             <div className="auction-select-badge">
@@ -48,6 +67,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 value={selectedAuctionId} 
                 onChange={(e) => onSelectAuction(e.target.value)}
                 title="Select Active Auction"
+                className="auction-select-element"
               >
                 {auctions.map(a => (
                   <option key={a.id} value={a.id} style={{ background: '#ffffff', color: '#0f172a' }}>
@@ -61,57 +81,89 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       <div className="topbar-right">
-        {/* Supabase Edge & HiBid indicators (Commented out per user request) */}
-        {/* 
-        <div 
-          className="status-indicator" 
-          style={{ background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)', cursor: 'default' }}
-          title="Supabase Connected: rzacpssumjahxndmqnxm.supabase.co (Edge Runtime Active)"
-        >
-          <span className="status-dot" style={{ background: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)' }}></span>
-          <span style={{ color: '#d97706', fontWeight: 600 }}>Supabase Edge</span>
-        </div>
-
-        <div className="status-indicator">
-          <span className="status-dot" style={{ background: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)' }}></span>
-          <span>HiBid AF360 Online</span>
-        </div>
-
-        <button 
-          className="hibid-sync-btn"
-          onClick={onTriggerHiBidSync}
-          disabled={isSyncing}
-          title="Push & Pull catalog updates to HiBid Network"
-        >
-          <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
-          <span>{isSyncing ? 'Syncing...' : 'Sync HiBid'}</span>
-        </button>
-        */}
-
         <button 
           className="icon-btn" 
           onClick={onOpenNotifications}
           title="View Activity Logs & Alerts"
+          aria-label="Notifications"
         >
           <Bell size={18} />
           {unreadLogsCount > 0 && <span className="icon-badge">{unreadLogsCount}</span>}
         </button>
 
         <button 
-          className="icon-btn" 
-          title="Admin Clerking Guide & Help"
-          onClick={() => alert('Admin Help: Use the Live Clerking block during auction day to capture bids and manage gavel knock-down. Invoicing automatically computes 15% wire / 18% credit card premiums.')}
+          className="icon-btn topbar-help-btn" 
+          title="AF360 Clerking Guide & Help"
+          onClick={() => alert('AF360 Admin Help: Use the Live Clerking block during auction day to capture bids and manage gavel knock-down. Invoicing automatically computes 15% wire / 18% credit card premiums.')}
+          aria-label="Help"
         >
           <HelpCircle size={18} />
         </button>
 
-        {/* User profile avatar matching Rowan super_admin in reference screenshot */}
-        <div className="topbar-user-badge">
-          <div className="topbar-user-avatar">TG</div>
-          <div className="topbar-user-details">
-            <span className="topbar-user-name">Todd Gardner</span>
-            <span className="topbar-user-role">super_admin</span>
-          </div>
+        {/* User profile avatar badge with interactive dropdown */}
+        <div className="topbar-user-container" ref={userMenuRef}>
+          <button
+            type="button"
+            className="topbar-user-badge"
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="true"
+            aria-label="User profile menu"
+          >
+            <div className="topbar-user-avatar">
+              {user?.avatarText || 'GA'}
+            </div>
+            <div className="topbar-user-details">
+              <span className="topbar-user-name">{user?.name || 'Administrator'}</span>
+              <span className="topbar-user-role">{user?.role || 'operator'}</span>
+            </div>
+            <ChevronDown size={14} className="user-menu-chevron" />
+          </button>
+
+          {/* User Popover Dropdown Menu */}
+          {isUserMenuOpen && (
+            <div className="user-dropdown-menu">
+              <div className="user-dropdown-header">
+                <div className="dropdown-avatar">
+                  {user?.avatarText || 'GA'}
+                </div>
+                <div className="dropdown-info">
+                  <div className="dropdown-name">{user?.name || 'Administrator'}</div>
+                  <div className="dropdown-email">{user?.email || 'admin@gardner-auction.com'}</div>
+                  <div className="dropdown-role-tag">
+                    <ShieldCheck size={12} color="#059669" />
+                    <span>{user?.role?.toUpperCase() || 'OPERATOR'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="user-dropdown-meta">
+                <div className="meta-item">
+                  <span className="meta-label">Title</span>
+                  <span className="meta-val">{user?.title || 'Saleroom Operator'}</span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">License</span>
+                  <span className="meta-val">PA #AY002377</span>
+                </div>
+              </div>
+
+              <div className="user-dropdown-actions">
+                <button
+                  type="button"
+                  className="user-dropdown-logout-btn"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    logout();
+                  }}
+                  id="btn-topbar-logout"
+                >
+                  <LogOut size={16} />
+                  <span>Lock Console & Sign Out</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
