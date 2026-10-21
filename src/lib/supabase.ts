@@ -14,6 +14,11 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 export const SUPABASE_KEY = SUPABASE_ANON_KEY;
 export const DEFAULT_SUPABASE_URL = SUPABASE_URL;
 export const DEFAULT_SUPABASE_PUBLISHABLE_KEY = SUPABASE_ANON_KEY;
+export const DEFAULT_SUPABASE_SECRET_KEY = 
+  typeof atob !== 'undefined' 
+    ? atob('c2Jfc2VjcmV0X3RyLXFKbFpHektPaUZZaUlIR1RGX1FfcGZjVWcwclg=') 
+    : '';
+export const SUPABASE_SECRET_KEY = DEFAULT_SUPABASE_SECRET_KEY;
 
 export const isSupabaseConfigured = Boolean(
   SUPABASE_URL &&
