@@ -26,6 +26,7 @@ interface SidebarProps {
   onClose: () => void;
   liveLotsCount: number;
   pendingVerifications: number;
+  auctionsCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,7 +35,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   liveLotsCount,
-  pendingVerifications
+  pendingVerifications,
+  auctionsCount
 }) => {
   const { user, logout } = useAuth();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -60,9 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }> = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'live_clerking', label: 'Live Clerking Block', icon: Radio, badge: 'LIVE', isLive: true },
-    { id: 'lots', label: 'Lots & Catalog', icon: Layers, badge: liveLotsCount || 6 },
-    { id: 'auctions', label: 'Auction Sales', icon: Gavel },
-    { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : 1 },
+    { id: 'auctions', label: 'Auction', icon: Gavel, badge: auctionsCount },
+    { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
   ];
 
   const financeNav: Array<{

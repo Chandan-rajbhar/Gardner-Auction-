@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GARDNER AUCTION DASHBOARD & AF360 CLERKING CONSOLE
    Theme: High-Contrast Modern White / Black Luxury Executive Theme
    Inspired by clean modern medical/executive clinical dashboard design
@@ -990,6 +990,12 @@ html, body {
   background: var(--status-live-bg);
   color: var(--status-live);
   border: 1px solid var(--status-live-border);
+}
+
+.badge-in-progress {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
 }
 
 .badge-preview, .badge-cataloging {

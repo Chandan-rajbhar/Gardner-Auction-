@@ -36,11 +36,48 @@ import { ProfileView } from './components/views/ProfileView';
 import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
 import { recordBidToSupabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
+import { auctionService } from './services/auctionService';
+import { StageType } from './types/auctionDetail';
+
+function mapDetailToAuction(d: any): Auction {
+  return {
+    id: d.id,
+    code: d.code,
+    title: d.name || d.title,
+    category: 'Premier Numismatics & Horology',
+    status: d.status === 'Open' ? 'preview' : d.status === 'In Progress' ? 'live' : 'closed',
+    startDate: d.startDate?.includes('T') ? d.startDate : `${d.startDate}T10:00:00Z`,
+    endDate: d.endDate?.includes('T') ? d.endDate : `${d.endDate}T20:00:00Z`,
+    location: `${d.city || 'Missoula'}, ${d.state || 'MT'} Saleroom & HiBid Simulcast`,
+    address: d.address1 || '1960 Heritage Way, Suite 400',
+    cityStateZip: `${d.city || 'Missoula'}, ${d.state || 'MT'} ${d.zip || '59801'}`,
+    country: d.country || 'United States',
+    lotCount: d.dayStats?.lotCount || 0,
+    checkInCount: d.dayStats?.checkInCount || 0,
+    uniqueSellers: d.dayStats?.uniqueSellers || 0,
+    presaleMin: d.dayStats?.presaleMin || 0,
+    presaleMax: d.dayStats?.presaleMax || 0,
+    avgEstimate: d.dayStats?.avgEstimate || 0,
+    avgSalesPrice: d.dayStats?.avgSalesPrice || 0,
+    buyersPremiumCash: 15.0,
+    buyersPremiumCredit: 18.0,
+    taxRate: 7.5,
+    description: d.description || '',
+    terms: d.terms || '',
+    bpExplanation: d.shortBpExplanation || "15% Buyer's Premium",
+    taxExemptInfo: d.taxExemptAll ? 'Tax Exempt All Active' : 'Dealer resale licenses required',
+    hibidSyncStatus: 'synced',
+    syndications: d.dayStats?.siteStats || []
+  };
+}
 
 const AdminConsole: React.FC = () => {
   const { user } = useAuth();
   const [currentSection, setCurrentSection] = useState<NavigationSection>('overview');
-  const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc-001');
+  const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc-002');
+  const [activeAuctionDetailId, setActiveAuctionDetailId] = useState<string | null>(null);
+  const [auctionStage, setAuctionStage] = useState<StageType>('pre-auction');
+  const [auctionSubTab, setAuctionSubTab] = useState<string | undefined>(undefined);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncStep, setSyncStep] = useState(0);
@@ -55,6 +92,73 @@ const AdminConsole: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>(INITIAL_LOGS);
 
   const [activeLotId, setActiveLotId] = useState<string>('lot-001');
+
+  // Load 10+ auctions from auctionService
+  useEffect(() => {
+    const loadAllAuctions = async () => {
+      try {
+        const details = await auctionService.getAuctions();
+        if (details && details.length > 0) {
+          const mapped = details.map(mapDetailToAuction);
+          setAuctions(mapped);
+        }
+      } catch (err) {
+        console.warn('[App] Could not load auctions from service:', err);
+      }
+    };
+    loadAllAuctions();
+  }, []);
+
+  // URL Routing Sync
+  useEffect(() => {
+    const syncFromPath = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/auctions/')) {
+        const parts = path.replace('/auctions/', '').split('/');
+        const id = parts[0];
+        const stage = parts[1] as StageType;
+        const tab = parts[2];
+        setCurrentSection('auctions');
+        setActiveAuctionDetailId(id);
+        setSelectedAuctionId(id);
+        if (stage) setAuctionStage(stage);
+        if (tab) setAuctionSubTab(tab);
+      } else if (path === '/auctions') {
+        setCurrentSection('auctions');
+        setActiveAuctionDetailId(null);
+      } else if (path === '/lots') {
+        setCurrentSection('lots');
+      } else if (path === '/live_clerking') {
+        setCurrentSection('live_clerking');
+      } else if (path === '/users') {
+        setCurrentSection('users');
+      } else if (path === '/payments') {
+        setCurrentSection('payments');
+      } else if (path === '/reports') {
+        setCurrentSection('reports');
+      } else if (path === '/logs') {
+        setCurrentSection('logs');
+      } else if (path === '/settings') {
+        setCurrentSection('settings');
+      } else if (path === '/profile') {
+        setCurrentSection('profile');
+      }
+    };
+
+    syncFromPath();
+    window.addEventListener('popstate', syncFromPath);
+    return () => window.removeEventListener('popstate', syncFromPath);
+  }, []);
+
+  const handleNavigateSection = (section: NavigationSection) => {
+    setCurrentSection(section);
+    if (section === 'auctions') {
+      setActiveAuctionDetailId(null);
+      try { window.history.pushState({}, '', '/auctions'); } catch (e) {}
+    } else {
+      try { window.history.pushState({}, '', `/${section}`); } catch (e) {}
+    }
+  };
 
   // Load lots dynamically from Supabase on startup & subscribe to Realtime updates
   useEffect(() => {
@@ -353,11 +457,12 @@ const AdminConsole: React.FC = () => {
       {/* Sidebar */}
       <Sidebar 
         currentSection={currentSection}
-        setCurrentSection={setCurrentSection}
+        setCurrentSection={handleNavigateSection}
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
         liveLotsCount={lots.filter(l => l.status === 'on_block' || l.status === 'upcoming').length}
         pendingVerifications={bidders.filter(b => b.status === 'pending_verification').length}
+        auctionsCount={auctions.length}
       />
 
       {/* Main App Body */}
@@ -383,7 +488,7 @@ const AdminConsole: React.FC = () => {
               bids={bids}
               invoices={invoices}
               logs={logs}
-              onNavigate={setCurrentSection}
+              onNavigate={handleNavigateSection}
               onSyncHiBid={triggerHiBidSync}
             />
           )}
@@ -402,8 +507,29 @@ const AdminConsole: React.FC = () => {
               selectedAuctionId={selectedAuctionId}
               onSelectAuction={setSelectedAuctionId}
               onAddAuction={(newAuc) => setAuctions(prev => [newAuc, ...prev])}
-              onNavigate={setCurrentSection}
+              onNavigate={handleNavigateSection}
               onSyncHiBid={triggerHiBidSync}
+              activeAuctionDetailId={activeAuctionDetailId}
+              onSetActiveAuctionDetailId={setActiveAuctionDetailId}
+              initialStage={auctionStage}
+              initialSubTab={auctionSubTab}
+              lots={lots}
+              onAddLot={async (newLot) => {
+                setLots(prev => [newLot, ...prev]);
+                await lotsService.createLot(newLot);
+              }}
+              onUpdateLot={async (updated) => {
+                setLots(prev => prev.map(l => l.id === updated.id ? updated : l));
+                await lotsService.updateLot(updated.id, updated);
+              }}
+              onSendToBlock={handleSendToBlock}
+              onDeleteLot={async (lotId: string) => {
+                const res = await lotsService.deleteLot(lotId);
+                if (res.success) {
+                  setLots(prev => prev.filter(l => l.id !== lotId));
+                }
+                return res;
+              }}
             />
           )}
 
@@ -464,6 +590,7 @@ const AdminConsole: React.FC = () => {
               onUpdateConsignorStatus={(id, status) => {
                 setConsignors(prev => prev.map(c => c.id === id ? { ...c, status, checkNumber: `CHK-${Math.floor(900000 + Math.random() * 99999)}` } : c));
               }}
+              selectedAuctionId={selectedAuctionId}
             />
           )}
 

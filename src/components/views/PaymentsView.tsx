@@ -16,20 +16,26 @@ import {
   Building
 } from 'lucide-react';
 
+import { AuctionDetailProvider } from '../../context/AuctionDetailContext';
+import { SettlementTab } from '../auction/tabs/SettlementTab';
+
 interface PaymentsViewProps {
   invoices: InvoiceSettlement[];
   consignorSettlements: ConsignorSettlement[];
   onUpdateInvoiceStatus: (id: string, status: InvoiceSettlement['paymentStatus']) => void;
   onUpdateConsignorStatus: (id: string, status: ConsignorSettlement['status']) => void;
+  selectedAuctionId?: string;
 }
 
 export const PaymentsView: React.FC<PaymentsViewProps> = ({
   invoices,
   consignorSettlements,
   onUpdateInvoiceStatus,
-  onUpdateConsignorStatus
+  onUpdateConsignorStatus,
+  selectedAuctionId = 'auc-002'
 }) => {
-  const [activeTab, setActiveTab] = useState<'invoices' | 'consignors'>('invoices');
+  const [activeTab, setActiveTab] = useState<'consolidated' | 'invoices' | 'consignors'>('consolidated');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceSettlement | null>(null);
@@ -87,6 +93,12 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         <div className="card-header-flex">
           <div className="af360-tabs">
             <button 
+              className={`af360-tab ${activeTab === 'consolidated' ? 'active' : ''}`}
+              onClick={() => setActiveTab('consolidated')}
+            >
+              Consolidated Settlement
+            </button>
+            <button 
               className={`af360-tab ${activeTab === 'invoices' ? 'active' : ''}`}
               onClick={() => setActiveTab('invoices')}
             >
@@ -126,7 +138,18 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           )}
         </div>
 
-        {activeTab === 'invoices' ? (
+        {activeTab === 'consolidated' && (
+          <div style={{ padding: '8px 0' }}>
+            <AuctionDetailProvider auctionId={selectedAuctionId || 'auc-002'}>
+              <SettlementTab
+                selectedCustomerId={selectedCustomerId}
+                onSelectCustomer={setSelectedCustomerId}
+              />
+            </AuctionDetailProvider>
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
           <div className="table-wrapper">
             <table className="luxury-table">
               <thead>
@@ -189,7 +212,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               </tbody>
             </table>
           </div>
-        ) : (
+        )}
+
+        {activeTab === 'consignors' && (
           /* Consignors Tab */
           <div className="table-wrapper">
             <table className="luxury-table">
