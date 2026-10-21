@@ -1,1089 +1,753 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import './App.css';
+import React, { useState, useEffect } from 'react';
+import { 
+  NavigationSection, 
+  Auction, 
+  LotItem, 
+  UserBidder, 
+  LiveBid, 
+  InvoiceSettlement, 
+  ConsignorSettlement, 
+  ActivityLog 
+} from './types';
+import { 
+  INITIAL_AUCTIONS, 
+  INITIAL_LOTS, 
+  INITIAL_USERS, 
+  INITIAL_BIDS, 
+  INITIAL_INVOICES, 
+  INITIAL_CONSIGNOR_SETTLEMENTS, 
+  INITIAL_LOGS 
+} from './data/mockData';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { Toaster } from 'react-hot-toast';
+import { AuthPage } from './components/auth/AuthPage';
+import { Sidebar } from './components/Sidebar';
+import { Topbar } from './components/Topbar';
+import { OverviewView } from './components/views/OverviewView';
+import { UsersView } from './components/views/UsersView';
+import { AuctionsView } from './components/views/AuctionsView';
+import { LotsView } from './components/views/LotsView';
+import { LiveClerkingView } from './components/views/LiveClerkingView';
+import { PaymentsView } from './components/views/PaymentsView';
+import { ReportsView } from './components/views/ReportsView';
+import { LogsView } from './components/views/LogsView';
+import { SettingsView } from './components/views/SettingsView';
+import { ProfileView } from './components/views/ProfileView';
+import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
+import { recordBidToSupabase } from './lib/supabase';
+import { lotsService } from './services/lotsService';
+import { auctionService } from './services/auctionService';
+import { StageType } from './types/auctionDetail';
 
-import { Header } from './components/Header';
-import { Hero } from './components/Hero';
-import { LiveBiddingDesk } from './components/LiveBiddingDesk';
-import { PastAuctionsSection } from './components/PastAuctionsSection';
-import { TrustSection } from './components/TrustSection';
-import { EmailListPage } from './components/EmailListPage';
-import { Footer } from './components/Footer';
-import { BiddingModal } from './components/BiddingModal';
-import { LotDetailModal } from './components/LotDetailModal';
-import { ConditionReportModal } from './components/ConditionReportModal';
-import { WatchlistDrawer } from './components/WatchlistDrawer';
-import { AuthModal } from './components/AuthModal';
-import { Toast } from './components/Toast';
-import type { ToastMessage } from './components/Toast';
-
-import {
-  AuctionSearchControls,
-  type BrowsingMode,
-  type DisplayMode
-} from './components/AuctionSearchControls';
-import { PastCatalogsPage } from './components/PastCatalogsPage';
-import { AuctionDetailsPage } from './components/AuctionDetailsPage';
-import { CatalogLotsPage } from './components/CatalogLotsPage';
-import { LotDetailPage } from './components/LotDetailPage';
-
-import {
-  SPOTLIGHT_LOT
-} from './data/auctionData';
-import type { LotItem, CuratedEvent } from './data/auctionData';
-import {
-  CURRENT_AUCTIONS,
-  CURRENT_AUCTION_LOT_ITEMS
-} from './data/currentAuctionData';
-import { playBidSuccessSound } from './utils/sound';
-import {
-  Bookmark,
-  Clock,
-  CheckCircle2,
-  Zap,
-  Eye,
-  Building,
-  MapPin,
-  Phone,
-  Compass,
-  ArrowRight
-} from 'lucide-react';
-
-import { CurrentAuctionPage } from './components/CurrentAuction/CurrentAuctionPage';
-import type { EnrichedLotItem } from './components/CurrentAuction/types';
-
-const CATEGORIES = [
-  'Coins & Currency',
-  'Gold & Bullion',
-  'Fine Jewelry & Watches',
-  'Americana & Antiques',
-  'Fine Art & Prints'
-];
-
-export type AppRoute =
-  | { view: 'home' }
-  | { view: 'current-auction' }
-  | { view: 'email-list' }
-  | { view: 'catalogs' }
-  | { view: 'auction-details'; auctionId: string }
-  | { view: 'catalog-lots'; auctionId: string }
-  | { view: 'lot-detail'; lotId: string; auctionId?: string };
-
-export const App: React.FC = () => {
-  // State: Lots & Live Data
-  const [spotlightLot, setSpotlightLot] = useState<LotItem>(SPOTLIGHT_LOT);
-  const [liveLots, setLiveLots] = useState<LotItem[]>(CURRENT_AUCTION_LOT_ITEMS);
-  const [watchlist, setWatchlist] = useState<string[]>(['spotlight-104']);
-
-  // Timers: seconds remaining map
-  const [secondsMap, setSecondsMap] = useState<Record<string, number>>(() => {
-    const map: Record<string, number> = {
-      [SPOTLIGHT_LOT.id]: SPOTLIGHT_LOT.timeRemainingSeconds
-    };
-    CURRENT_AUCTION_LOT_ITEMS.forEach((l) => {
-      map[l.id] = l.timeRemainingSeconds;
-    });
-    return map;
-  });
-
-  // Search & Filtering & View Modes State
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [browsingMode, setBrowsingMode] = useState<BrowsingMode>('auctions');
-  const [sortOrder, setSortOrder] = useState<string>('upcoming');
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
-  const [itemsPerPage, setItemsPerPage] = useState<number>(4);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-
-  // Modals & Drawers
-  const [activeBiddingLot, setActiveBiddingLot] = useState<LotItem | null>(null);
-  const [activeDetailLot, setActiveDetailLot] = useState<LotItem | null>(null);
-  const [activeConditionEvent, setActiveConditionEvent] = useState<CuratedEvent | null>(null);
-  const [isWatchlistOpen, setIsWatchlistOpen] = useState<boolean>(false);
-  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-
-  // Toasts
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const addToast = useCallback((type: 'success' | 'info' | 'warning', title: string, message: string) => {
-    const id = Date.now().toString() + Math.random().toString().slice(2, 6);
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
-  }, []);
-
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+function mapDetailToAuction(d: any): Auction {
+  return {
+    id: d.id,
+    code: d.code,
+    title: d.name || d.title,
+    category: 'Premier Numismatics & Horology',
+    status: d.status === 'Open' ? 'preview' : d.status === 'In Progress' ? 'live' : 'closed',
+    startDate: d.startDate?.includes('T') ? d.startDate : `${d.startDate}T10:00:00Z`,
+    endDate: d.endDate?.includes('T') ? d.endDate : `${d.endDate}T20:00:00Z`,
+    location: `${d.city || 'Missoula'}, ${d.state || 'MT'} Saleroom & HiBid Simulcast`,
+    address: d.address1 || '1960 Heritage Way, Suite 400',
+    cityStateZip: `${d.city || 'Missoula'}, ${d.state || 'MT'} ${d.zip || '59801'}`,
+    country: d.country || 'United States',
+    lotCount: d.dayStats?.lotCount || 0,
+    checkInCount: d.dayStats?.checkInCount || 0,
+    uniqueSellers: d.dayStats?.uniqueSellers || 0,
+    presaleMin: d.dayStats?.presaleMin || 0,
+    presaleMax: d.dayStats?.presaleMax || 0,
+    avgEstimate: d.dayStats?.avgEstimate || 0,
+    avgSalesPrice: d.dayStats?.avgSalesPrice || 0,
+    buyersPremiumCash: 15.0,
+    buyersPremiumCredit: 18.0,
+    taxRate: 7.5,
+    description: d.description || '',
+    terms: d.terms || '',
+    bpExplanation: d.shortBpExplanation || "15% Buyer's Premium",
+    taxExemptInfo: d.taxExemptAll ? 'Tax Exempt All Active' : 'Dealer resale licenses required',
+    hibidSyncStatus: 'synced',
+    syndications: d.dayStats?.siteStats || []
   };
+}
 
-  // Route resolution supporting both hash routing and top-level pages
-  const parseRoute = (pathname: string, hash: string): AppRoute => {
-    const clean = hash.replace(/^#\/?/, '').trim();
+const AdminConsole: React.FC = () => {
+  const { user } = useAuth();
+  const [currentSection, setCurrentSection] = useState<NavigationSection>('overview');
+  const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc-002');
+  const [activeAuctionDetailId, setActiveAuctionDetailId] = useState<string | null>(null);
+  const [auctionStage, setAuctionStage] = useState<StageType>('pre-auction');
+  const [auctionSubTab, setAuctionSubTab] = useState<string | undefined>(undefined);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [syncStep, setSyncStep] = useState(0);
 
-    if (clean === 'email-list' || pathname === '/email-list') {
-      return { view: 'email-list' };
-    }
+  // Application Data States
+  const [auctions, setAuctions] = useState<Auction[]>(INITIAL_AUCTIONS);
+  const [lots, setLots] = useState<LotItem[]>(INITIAL_LOTS);
+  const [bidders, setBidders] = useState<UserBidder[]>(INITIAL_USERS);
+  const [bids, setBids] = useState<LiveBid[]>(INITIAL_BIDS);
+  const [invoices, setInvoices] = useState<InvoiceSettlement[]>(INITIAL_INVOICES);
+  const [consignors, setConsignors] = useState<ConsignorSettlement[]>(INITIAL_CONSIGNOR_SETTLEMENTS);
+  const [logs, setLogs] = useState<ActivityLog[]>(INITIAL_LOGS);
 
-    if (
-      clean === 'auctions' ||
-      clean === 'current-auction' ||
-      clean.startsWith('current-auction') ||
-      pathname === '/current-auction' ||
-      pathname === '/auctions'
-    ) {
-      return { view: 'current-auction' };
-    }
+  const [activeLotId, setActiveLotId] = useState<string>('lot-001');
 
-    // 1. Lot details routing: e.g. #lot/:id or #catalog/:auctionId/lot/:lotId or #auction/:auctionId/lot/:lotId
-    if (clean.includes('/lot/')) {
-      const parts = clean.split('/lot/');
-      const rawAuctionPart = parts[0];
-      const lotId = parts[1].split(/[?#]/)[0];
-      let auctionId: string | undefined;
-      if (rawAuctionPart.startsWith('auction/')) {
-        auctionId = rawAuctionPart.substring('auction/'.length);
-      } else if (rawAuctionPart.startsWith('catalog/')) {
-        auctionId = rawAuctionPart.substring('catalog/'.length);
-      }
-      return { view: 'lot-detail', lotId, auctionId };
-    }
-
-    if (clean.startsWith('lot/')) {
-      const lotId = clean.substring('lot/'.length).split('/')[0].split(/[?#]/)[0];
-      return { view: 'lot-detail', lotId };
-    }
-
-    if (clean.startsWith('lot?') || clean === 'lot') {
-      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
-      const lotId = params.get('id') || params.get('lotId') || '';
-      const auctionId = params.get('auctionId') || undefined;
-      return { view: 'lot-detail', lotId, auctionId };
-    }
-
-    // 2. Auction details routing
-    if (clean.startsWith('auction/')) {
-      const id = clean.substring('auction/'.length).split(/[?#]/)[0];
-      return { view: 'auction-details', auctionId: id };
-    }
-    if (clean.startsWith('auction?') || clean === 'auction') {
-      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
-      const id = params.get('id') || '';
-      return { view: 'auction-details', auctionId: id };
-    }
-    if (clean.startsWith('past-auction-')) {
-      const id = clean.split(/[?#]/)[0];
-      return { view: 'auction-details', auctionId: id };
-    }
-    if (pathname.startsWith('/past-auction-')) {
-      const id = pathname.substring(1).split(/[?#]/)[0];
-      return { view: 'auction-details', auctionId: id };
-    }
-
-    // 3. Catalog lots routing
-    if (clean.startsWith('catalog/')) {
-      const id = clean.substring('catalog/'.length).split(/[?#]/)[0];
-      return { view: 'catalog-lots', auctionId: id };
-    }
-    if (clean.startsWith('catalog?') || clean === 'catalog') {
-      const params = new URLSearchParams(clean.includes('?') ? clean.split('?')[1] : '');
-      const id = params.get('id') || '';
-      return { view: 'catalog-lots', auctionId: id };
-    }
-
-    // 4. Past Catalogs main page
-    if (clean.startsWith('catalogs')) {
-      return { view: 'catalogs' };
-    }
-
-    return { view: 'home' };
-  };
-
-  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
-    if (typeof window === 'undefined') return { view: 'home' };
-    return parseRoute(window.location.pathname, window.location.hash);
-  });
-
-  // Listen to popstate and hashchange events for browser forward/back buttons and programmatic route pushes
+  // Load 10+ auctions from auctionService
   useEffect(() => {
-    const handleLocationChange = () => {
-      const newRoute = parseRoute(window.location.pathname, window.location.hash);
-      setCurrentRoute(newRoute);
-    };
-
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
-    };
-  }, []);
-
-  const handleNavigate = useCallback((path: string) => {
-    if (path === '/') {
-      if (window.location.hash || window.location.pathname !== '/') {
-        window.history.pushState(null, '', '/');
-      }
-    } else {
-      if (window.location.hash !== path) {
-        window.history.pushState(null, '', path);
-      }
-    }
-    const newRoute = parseRoute(window.location.pathname, window.location.hash);
-    setCurrentRoute(newRoute);
-    window.scrollTo({ top: 0, behavior: path === '/' ? 'smooth' : 'instant' });
-  }, []);
-
-  // Real-time 1s Clock Countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSecondsMap((prev) => {
-        const next: Record<string, number> = {};
-        for (const [id, secs] of Object.entries(prev)) {
-          next[id] = Math.max(0, secs - 1);
+    const loadAllAuctions = async () => {
+      try {
+        const details = await auctionService.getAuctions();
+        if (details && details.length > 0) {
+          const mapped = details.map(mapDetailToAuction);
+          setAuctions(mapped);
         }
-        return next;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Format seconds into display strings
-  const formatTime = (totalSeconds: number, formatHour = false): string => {
-    if (totalSeconds <= 0) return 'CLOSING NOW';
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    if (formatHour || hours > 0) {
-      return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
-    }
-    return `${pad(minutes)}m ${pad(seconds)}s`;
-  };
-
-  // Pre-calculated timer strings
-  const spotlightTimeFormatted = useMemo(() => {
-    return formatTime(secondsMap[spotlightLot.id] || 0, true);
-  }, [secondsMap, spotlightLot.id]);
-
-  const timers = useMemo(() => {
-    const map: Record<string, string> = {};
-    liveLots.forEach((l) => {
-      map[l.id] = formatTime(secondsMap[l.id] || 0, false);
-    });
-    map[spotlightLot.id] = spotlightTimeFormatted;
-    return map;
-  }, [secondsMap, liveLots, spotlightLot.id, spotlightTimeFormatted]);
-
-  // Periodic Auto-Refresh Simulation (every 15s)
-  const triggerRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 600);
-  }, []);
-
-  useEffect(() => {
-    const refreshTimer = setInterval(triggerRefresh, 15000);
-    return () => clearInterval(refreshTimer);
-  }, [triggerRefresh]);
-
-  // Watchlist Actions
-  const handleToggleWatchlist = (lotId: string) => {
-    setWatchlist((prev) => {
-      const exists = prev.includes(lotId);
-      if (exists) {
-        addToast('info', 'Removed from Watchlist', 'Lot removed from your monitored catalog.');
-        return prev.filter((id) => id !== lotId);
-      } else {
-        addToast('success', 'Added to Watchlist', 'Lot is now monitored in your active watchlist.');
-        return [...prev, lotId];
+      } catch (err) {
+        console.warn('[App] Could not load auctions from service:', err);
       }
-    });
-  };
+    };
+    loadAllAuctions();
+  }, []);
 
-  // Instant Bidding / Modal Bid Confirmation
-  const handleConfirmBid = (lotId: string, amount: number) => {
-    playBidSuccessSound();
+  // URL Routing Sync
+  useEffect(() => {
+    const syncFromPath = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/auctions/')) {
+        const parts = path.replace('/auctions/', '').split('/');
+        const id = parts[0];
+        const stage = parts[1] as StageType;
+        const tab = parts[2];
+        setCurrentSection('auctions');
+        setActiveAuctionDetailId(id);
+        setSelectedAuctionId(id);
+        if (stage) setAuctionStage(stage);
+        if (tab) setAuctionSubTab(tab);
+      } else if (path === '/auctions') {
+        setCurrentSection('auctions');
+        setActiveAuctionDetailId(null);
+      } else if (path === '/lots') {
+        setCurrentSection('lots');
+      } else if (path === '/live_clerking') {
+        setCurrentSection('live_clerking');
+      } else if (path === '/users') {
+        setCurrentSection('users');
+      } else if (path === '/payments') {
+        setCurrentSection('payments');
+      } else if (path === '/reports') {
+        setCurrentSection('reports');
+      } else if (path === '/logs') {
+        setCurrentSection('logs');
+      } else if (path === '/settings') {
+        setCurrentSection('settings');
+      } else if (path === '/profile') {
+        setCurrentSection('profile');
+      }
+    };
 
-    if (lotId === spotlightLot.id) {
-      const nextIncrement = amount + spotlightLot.bidIncrement;
-      setSpotlightLot((prev) => ({
-        ...prev,
-        currentBid: amount,
-        nextBid: nextIncrement,
-        bidsCount: prev.bidsCount + 1,
-        reserveMet: true
-      }));
-      addToast(
-        'success',
-        `Bid Placed: $${amount.toLocaleString()}`,
-        `You are now high bidder on Lot 104 (${spotlightLot.title}).`
-      );
+    syncFromPath();
+    window.addEventListener('popstate', syncFromPath);
+    return () => window.removeEventListener('popstate', syncFromPath);
+  }, []);
+
+  const handleNavigateSection = (section: NavigationSection) => {
+    setCurrentSection(section);
+    if (section === 'auctions') {
+      setActiveAuctionDetailId(null);
+      try { window.history.pushState({}, '', '/auctions'); } catch (e) {}
     } else {
-      setLiveLots((prevLots) =>
-        prevLots.map((lot) => {
-          if (lot.id === lotId) {
-            const nextIncrement = amount + lot.bidIncrement;
-            return {
-              ...lot,
-              currentBid: amount,
-              nextBid: nextIncrement,
-              bidsCount: lot.bidsCount + 1,
-              reserveMet: true
-            };
+      try { window.history.pushState({}, '', `/${section}`); } catch (e) {}
+    }
+  };
+
+  // Load lots dynamically from Supabase on startup & subscribe to Realtime updates
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDynamicLots = async () => {
+      try {
+        const fetched = await lotsService.fetchLots();
+        if (isMounted && fetched && fetched.length > 0) {
+          setLots(fetched);
+          // Set active lot to whichever is currently on_block, or the first lot
+          const liveLot = fetched.find(l => l.status === 'on_block') || fetched[0];
+          if (liveLot) {
+            setActiveLotId(liveLot.id);
           }
-          return lot;
-        })
-      );
+        }
+      } catch (err) {
+        console.warn('[App] Could not fetch dynamic lots from Supabase:', err);
+      }
+    };
 
-      const targetLot = liveLots.find((l) => l.id === lotId);
-      addToast(
-        'success',
-        `Bid Confirmed: $${amount.toLocaleString()}`,
-        `High bid recorded on ${targetLot ? targetLot.lotNumber : 'lot'}. Floor acknowledgment transmitted.`
-      );
+    loadDynamicLots();
+
+    // Listen for Realtime database changes
+    const unsubscribe = lotsService.subscribeToLots(() => {
+      loadDynamicLots();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
+  const activeLotOnBlock = lots.find(l => l.id === activeLotId) || lots.find(l => l.status === 'on_block') || lots[0];
+
+  const currentAdminName = user?.name || 'Todd Gardner';
+
+  // HiBid AF360 Sync Simulation
+  const triggerHiBidSync = () => {
+    setIsSyncModalOpen(true);
+    setSyncStep(1);
+
+    setTimeout(() => setSyncStep(2), 700);
+    setTimeout(() => setSyncStep(3), 1400);
+    setTimeout(() => {
+      setSyncStep(4);
+      // Log sync
+      const newLog: ActivityLog = {
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        adminUser: currentAdminName,
+        action: 'Manual HiBid AF360 Full Sync Completed',
+        category: 'HiBid Sync',
+        severity: 'success',
+        details: 'Synchronized catalog entries, reserve modifications, and floor check-ins to all HiBid syndication nodes.'
+      };
+      setLogs(prev => [newLog, ...prev]);
+    }, 2100);
+  };
+
+  // Live Clerking Bid Handler
+  const handlePlaceBid = (amount: number, paddleNumber: string, bidderName: string, source: LiveBid['source']) => {
+    if (!activeLotOnBlock) return;
+
+    const newBid: LiveBid = {
+      id: `bid-${Date.now()}`,
+      lotId: activeLotOnBlock.id,
+      lotNumber: activeLotOnBlock.lotNumber,
+      amount,
+      paddleNumber,
+      bidderName,
+      source,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      isWinning: true
+    };
+
+    setBids(prev => [newBid, ...prev.map(b => ({ ...b, isWinning: false }))]);
+
+    setLots(prev => prev.map(lot => {
+      if (lot.id === activeLotOnBlock.id) {
+        return {
+          ...lot,
+          currentBid: amount,
+          highBidderPaddle: paddleNumber,
+          highBidderName: bidderName,
+          bidsCount: lot.bidsCount + 1,
+          status: 'on_block'
+        };
+      }
+      return lot;
+    }));
+
+    // Synchronize lot bid update to Supabase database
+    lotsService.updateLot(activeLotOnBlock.id, {
+      currentBid: amount,
+      highBidderPaddle: paddleNumber,
+      highBidderName: bidderName,
+      bidsCount: (activeLotOnBlock.bidsCount || 0) + 1,
+      status: 'on_block'
+    });
+
+    // Asynchronously synchronize bid to Supabase & Edge Function
+    recordBidToSupabase({
+      lotId: activeLotOnBlock.id,
+      lotNumber: activeLotOnBlock.lotNumber,
+      amount,
+      paddleNumber,
+      bidderName,
+      source
+    });
+
+    // Audit log
+    const audit: ActivityLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      adminUser: currentAdminName,
+      action: `Accepted ${source} Bid: $${amount.toLocaleString()} on Lot #${activeLotOnBlock.lotNumber}`,
+      category: 'Clerking',
+      severity: 'info',
+      details: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}. Synced with Supabase Edge.`
+    };
+    setLogs(prev => [audit, ...prev]);
+  };
+
+  // Hammer Down / Sold Handler
+  const handleHammerSold = (lotId: string, finalAmount: number, winningPaddle: string, overrideReserve?: boolean) => {
+    const lot = lots.find(l => l.id === lotId);
+    if (!lot) return;
+
+    const winner = bidders.find(b => b.paddleNumber === winningPaddle) || {
+      name: `Bidder #${winningPaddle}`,
+      email: `paddle${winningPaddle}@gardner-auction.com`
+    };
+
+    // Calculate premium (15% cash/wire standard)
+    const buyersPremium = finalAmount * 0.15;
+    const taxAmount = finalAmount * 0.075;
+    const shippingFee = 250.00;
+    const totalDue = finalAmount + buyersPremium + taxAmount + shippingFee;
+
+    const newInvoice: InvoiceSettlement = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: `INV-GA-2026-${Math.floor(8000 + Math.random() * 1999)}`,
+      auctionId: currentAuction.id,
+      auctionCode: currentAuction.code,
+      paddleNumber: winningPaddle,
+      buyerName: winner.name,
+      buyerEmail: winner.email,
+      itemsCount: 1,
+      lots: [{ lotNumber: lot.lotNumber, title: lot.title, hammerPrice: finalAmount }],
+      hammerSubtotal: finalAmount,
+      buyersPremium,
+      taxAmount,
+      shippingFee,
+      totalDue,
+      paymentStatus: 'Pending Wire',
+      notes: `Won on block via gavel fall at ${new Date().toLocaleTimeString()}.${overrideReserve ? ' Authorized consignor reserve override applied.' : ''}`
+    };
+
+    setInvoices(prev => [newInvoice, ...prev]);
+
+    // Mark lot sold
+    setLots(prev => prev.map(l => {
+      if (l.id === lotId) {
+        return { ...l, status: 'sold', hammerPrice: finalAmount };
+      }
+      return l;
+    }));
+
+    // Persist sold state to Supabase
+    lotsService.updateLot(lotId, {
+      status: 'sold',
+      hammerPrice: finalAmount
+    });
+
+    // Update bidder spending
+    setBidders(prev => prev.map(b => {
+      if (b.paddleNumber === winningPaddle) {
+        return {
+          ...b,
+          lotsWon: b.lotsWon + 1,
+          totalSpent: b.totalSpent + totalDue
+        };
+      }
+      return b;
+    }));
+
+    // Log sale
+    const audit: ActivityLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      adminUser: currentAdminName,
+      action: `HAMMER DOWN! Lot #${lot.lotNumber} SOLD for $${finalAmount.toLocaleString()}`,
+      category: 'Clerking',
+      severity: 'success',
+      details: `Sold to Paddle #${winningPaddle} (${winner.name}). Invoice #${newInvoice.invoiceNumber} generated.${overrideReserve ? ' (Reserve override authorized)' : ''}`
+    };
+    setLogs(prev => [audit, ...prev]);
+  };
+
+  // Pass Lot Handler
+  const handlePassLot = (lotId: string, reason: string = 'Reserve Not Met') => {
+    setLots(prev => prev.map(l => {
+      if (l.id === lotId) {
+        return { ...l, status: 'passed', passReason: reason };
+      }
+      return l;
+    }));
+
+    // Persist passed state to Supabase
+    lotsService.updateLot(lotId, {
+      status: 'passed'
+    });
+
+    const lot = lots.find(l => l.id === lotId);
+    const audit: ActivityLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      adminUser: currentAdminName,
+      action: `Lot #${lot?.lotNumber} PASSED (${reason})`,
+      category: 'Clerking',
+      severity: 'warning',
+      details: `Lot #${lot?.lotNumber} passed as unsold. Reason: ${reason}. Highest bid was $${(lot?.currentBid || 0).toLocaleString()} vs Reserve $${(lot?.reservePrice || 0).toLocaleString()}.`
+    };
+    setLogs(prev => [audit, ...prev]);
+  };
+
+  // Reopen Lot Handler
+  const handleReopenLot = (lotId: string) => {
+    setLots(prev => prev.map(l => {
+      if (l.id === lotId) {
+        return { ...l, status: 'on_block' };
+      }
+      return l;
+    }));
+
+    // Persist to Supabase
+    lotsService.sendLotToBlock(lotId);
+
+    const lot = lots.find(l => l.id === lotId);
+    const audit: ActivityLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      adminUser: currentAdminName,
+      action: `Rostrum Reopened for Lot #${lot?.lotNumber}`,
+      category: 'Clerking',
+      severity: 'warning',
+      details: `Lot #${lot?.lotNumber} status changed back to on_block for continued bidding.`
+    };
+    setLogs(prev => [audit, ...prev]);
+  };
+
+  // Next Catalog Lot Handler
+  const handleNextLot = () => {
+    const currentIndex = lots.findIndex(l => l.id === activeLotOnBlock?.id);
+    const nextLot = lots.slice(currentIndex + 1).find(l => l.status === 'upcoming') || 
+                    lots.find(l => l.status === 'upcoming' && l.id !== activeLotOnBlock?.id);
+
+    if (nextLot) {
+      setActiveLotId(nextLot.id);
+      setLots(prev => prev.map(l => {
+        if (l.id === nextLot.id) {
+          return { ...l, status: 'on_block' };
+        }
+        return l;
+      }));
+
+      // Persist to Supabase
+      lotsService.sendLotToBlock(nextLot.id);
+    } else {
+      alert('All catalog lots for this session have been presented on the rostrum block!');
     }
   };
 
-  const handleInstantBidDirect = (lot: LotItem) => {
-    setActiveBiddingLot(lot);
+  const handleSendToBlock = (lot: LotItem) => {
+    setActiveLotId(lot.id);
+    setLots(prev => prev.map(l => {
+      if (l.id === lot.id) {
+        return { ...l, status: 'on_block' };
+      }
+      if (l.status === 'on_block') {
+        return { ...l, status: 'upcoming' };
+      }
+      return l;
+    }));
+
+    // Persist to Supabase
+    lotsService.sendLotToBlock(lot.id);
+    setCurrentSection('live_clerking');
   };
-
-  // Filter Change Handlers
-  const handleCategoryChange = (cat: string) => {
-    setSelectedCategory(cat);
-    setCurrentPage(1);
-  };
-
-  const handleSearchChange = (term: string) => {
-    setSearchTerm(term);
-    setCurrentPage(1);
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm('');
-    setCurrentPage(1);
-  };
-
-  const handleBrowsingModeChange = (mode: BrowsingMode) => {
-    setBrowsingMode(mode);
-    setCurrentPage(1);
-    if (mode === 'auctions') {
-      setSortOrder('upcoming');
-    } else if (mode === 'lots') {
-      setSortOrder('closing-soon');
-    }
-  };
-
-  const handleSortChange = (sort: string) => {
-    setSortOrder(sort);
-    setCurrentPage(1);
-  };
-
-  const handleItemsPerPageChange = (count: number) => {
-    setItemsPerPage(count);
-    setCurrentPage(1);
-  };
-
-  // Filtered & Sorted Current Auction Events (from shared Current Auctions data source)
-  const filteredEvents = useMemo(() => {
-    let result = CURRENT_AUCTIONS.filter((event) => {
-      const q = searchTerm.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        event.title.toLowerCase().includes(q) ||
-        event.description.toLowerCase().includes(q) ||
-        event.typeTag.toLowerCase().includes(q) ||
-        (event.category && event.category.toLowerCase().includes(q)) ||
-        (event.location && event.location.toLowerCase().includes(q));
-
-      const matchesCategory =
-        selectedCategory === 'all' ||
-        event.typeTag.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-        event.title.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-        (event.category && event.category.toLowerCase().includes(selectedCategory.toLowerCase()));
-
-      return matchesSearch && matchesCategory;
-    });
-
-    if (sortOrder === 'lots-desc') {
-      result = [...result].sort((a, b) => b.lotsCount - a.lotsCount);
-    } else if (sortOrder === 'title-asc') {
-      result = [...result].sort((a, b) => a.title.localeCompare(b.title));
-    }
-
-    return result;
-  }, [searchTerm, selectedCategory, sortOrder]);
-
-  // Filtered & Sorted Live Lots
-  const filteredSortedLots = useMemo(() => {
-    let result = liveLots.filter((lot) => {
-      const q = searchTerm.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        lot.title.toLowerCase().includes(q) ||
-        lot.description.toLowerCase().includes(q) ||
-        lot.lotNumber.toLowerCase().includes(q) ||
-        lot.categoryTag.toLowerCase().includes(q) ||
-        lot.department.toLowerCase().includes(q);
-
-      const matchesCategory =
-        selectedCategory === 'all' ||
-        lot.department.toLowerCase() === selectedCategory.toLowerCase() ||
-        lot.categoryTag.toLowerCase().includes(selectedCategory.toLowerCase());
-
-      return matchesSearch && matchesCategory;
-    });
-
-    result = [...result].sort((a, b) => {
-      if (sortOrder === 'price-asc') return a.currentBid - b.currentBid;
-      if (sortOrder === 'price-desc') return b.currentBid - a.currentBid;
-      if (sortOrder === 'bids-desc') return b.bidsCount - a.bidsCount;
-      if (sortOrder === 'lot-asc') return a.lotNumber.localeCompare(b.lotNumber);
-      // closing soonest
-      const secA = secondsMap[a.id] ?? a.timeRemainingSeconds;
-      const secB = secondsMap[b.id] ?? b.timeRemainingSeconds;
-      return secA - secB;
-    });
-
-    return result;
-  }, [liveLots, searchTerm, selectedCategory, sortOrder, secondsMap]);
-
-  // Total count & Paginated Lots
-  const totalCount = browsingMode === 'auctions' ? filteredEvents.length : filteredSortedLots.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
-
-  const paginatedLots = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredSortedLots.slice(start, start + itemsPerPage);
-  }, [filteredSortedLots, currentPage, itemsPerPage]);
-
-  // Watchlisted Lot Objects
-  const watchlistLots = useMemo(() => {
-    const all = [spotlightLot, ...liveLots];
-    return all.filter((l) => watchlist.includes(l.id));
-  }, [watchlist, spotlightLot, liveLots]);
 
   return (
-    <div className="app-root">
-      {/* 1. Navbar with 4 Core Links in order + Login & Sign Up */}
-      <Header
-        currentPath={
-          currentRoute.view === 'current-auction'
-            ? '#auctions'
-            : currentRoute.view === 'email-list'
-            ? '#email-list'
-            : currentRoute.view === 'catalogs'
-            ? '#catalogs'
-            : currentRoute.view === 'auction-details'
-            ? `#auction/${currentRoute.auctionId}`
-            : currentRoute.view === 'catalog-lots'
-            ? `#catalog/${currentRoute.auctionId}`
-            : currentRoute.view === 'lot-detail'
-            ? `#lot/${currentRoute.lotId}`
-            : '/'
-        }
-        onNavigate={handleNavigate}
-        onOpenLogin={() => {
-          setAuthMode('signin');
-          setIsAuthOpen(true);
-        }}
-        onOpenSignUp={() => {
-          setAuthMode('register');
-          setIsAuthOpen(true);
-        }}
-        watchlistCount={watchlist.length}
-        onOpenWatchlist={() => setIsWatchlistOpen(true)}
-        onSearch={(term) => {
-          setSearchTerm(term);
-          if (currentRoute.view === 'home') {
-            const el = document.getElementById('auctions');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }
-        }}
-        onOpenAuth={() => setIsAuthOpen(true)}
+    <div className="app-container">
+      {/* Sidebar */}
+      <Sidebar 
+        currentSection={currentSection}
+        setCurrentSection={handleNavigateSection}
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        liveLotsCount={lots.filter(l => l.status === 'on_block' || l.status === 'upcoming').length}
+        pendingVerifications={bidders.filter(b => b.status === 'pending_verification').length}
+        auctionsCount={auctions.length}
       />
 
-      {currentRoute.view === 'current-auction' ? (
-        <main>
-          {/* Dedicated Current Auction / Live Auction Page Experience */}
-          <CurrentAuctionPage
-            watchlist={watchlist}
-            searchQuery={searchTerm}
-            onToggleWatchlist={handleToggleWatchlist}
-            onOpenAuth={() => setIsAuthOpen(true)}
-            onRequestConditionDossier={(lot: EnrichedLotItem) => {
-              setActiveConditionEvent({
-                id: lot.id,
-                badge: 'SPECIMEN REPORT',
-                badgeType: 'gold',
-                lotsCount: 1,
-                typeTag: lot.categoryTag,
-                title: `${lot.lotNumber}: ${lot.title}`,
-                description: lot.description,
-                estimate: `Est. $${lot.estimateLow.toLocaleString()} – $${lot.estimateHigh.toLocaleString()}`,
-                dateLabel: 'OFFICIAL DOSSIER',
-                buttonText: 'SUBMIT REQUEST',
-                buttonVariant: 'gold',
-                image: lot.images[0]?.url || '/images/hero_coin.jpg'
-              });
-            }}
-            onAddToast={addToast}
-          />
-        </main>
-      ) : currentRoute.view === 'email-list' ? (
-        <EmailListPage
-          onSubscribe={(email) => {
-            addToast(
-              'success',
-              'Subscribed Successfully',
-              `Advance catalog previews and auction notices will be forwarded to ${email}.`
-            );
-          }}
+      {/* Main App Body */}
+      <div className="main-wrapper">
+        <Topbar 
+          currentSection={currentSection}
+          auctions={auctions}
+          selectedAuctionId={selectedAuctionId}
+          onSelectAuction={setSelectedAuctionId}
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onTriggerHiBidSync={triggerHiBidSync}
+          isSyncing={isSyncModalOpen && syncStep < 4}
+          unreadLogsCount={logs.filter(l => l.severity === 'warning' || l.severity === 'alert').length}
+          onOpenNotifications={() => setCurrentSection('logs')}
         />
-      ) : currentRoute.view === 'lot-detail' ? (
-        <LotDetailPage
-          lotId={currentRoute.lotId}
-          auctionId={currentRoute.auctionId}
-          onShowToast={addToast}
-          onPlaceBid={(lot) => setActiveBiddingLot(lot)}
-          onToggleWatchlist={handleToggleWatchlist}
-          isWatchlisted={watchlist.includes(currentRoute.lotId)}
-          liveTimeFormatted={timers[currentRoute.lotId]}
-        />
-      ) : currentRoute.view === 'auction-details' ? (
-        <AuctionDetailsPage
-          auctionId={currentRoute.auctionId}
-          onShowToast={addToast}
-        />
-      ) : currentRoute.view === 'catalog-lots' ? (
-        <CatalogLotsPage
-          auctionId={currentRoute.auctionId}
-          onShowToast={addToast}
-        />
-      ) : currentRoute.view === 'catalogs' ? (
-        <PastCatalogsPage onShowToast={addToast} />
-      ) : (
-        <main id="main-content">
-          {/* 2. Hero Section: Refined, elegant, showcasing certified gold and silver numismatics */}
-          <Hero
-            spotlightLot={spotlightLot}
-            spotlightTimeFormatted={spotlightTimeFormatted}
-            isWatchlisted={watchlist.includes(spotlightLot.id)}
-            onToggleWatchlist={handleToggleWatchlist}
-            onPlaceBid={(lot) => setActiveBiddingLot(lot)}
-            onViewLot={(lot) => setActiveDetailLot(lot)}
-          />
 
-          {/* 3. Featured Auction Preview: Explore Our Auctions with Full Search, Filter, Sort, View Controls */}
-          <section id="auctions" className="curated-events-section" aria-label="Explore Our Auctions">
-            <div className="section-container container-fluid">
-              {/* Section Header */}
-              <div className="section-header-row">
-                <div className="section-header-left">
-                  <span className="section-eyebrow">CATALOG EXPLORER &amp; LIVE SESSIONS</span>
-                  <h2 className="section-main-title">Explore Current Auctions</h2>
-                  <p className="section-subtitle">
-                    Browse certified signature sales, search live inventory, and inspect rare specimens closing today.
-                  </p>
-                </div>
-
-                <a
-                  href="#catalogs"
-                  className="view-calendar-link"
-                  title="Browse past completed auctions"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.location.hash = '#catalogs';
-                  }}
-                >
-                  <span>Browse Completed Catalogs</span>
-                  <ArrowRight size={16} />
-                </a>
-              </div>
-
-              {/* Auction Search & View Controls (Row 1, Row 2, Row 3) */}
-              <AuctionSearchControls
-                searchTerm={searchTerm}
-                onSearchChange={handleSearchChange}
-                onSearchSubmit={() => {
-                  addToast('info', 'Search Filter Applied', `Showing results for "${searchTerm || 'all items'}"`);
-                }}
-                onClearSearch={handleClearSearch}
-                selectedCategory={selectedCategory}
-                onCategoryChange={handleCategoryChange}
-                categories={CATEGORIES}
-                browsingMode={browsingMode}
-                onBrowsingModeChange={handleBrowsingModeChange}
-                sortOrder={sortOrder}
-                onSortChange={handleSortChange}
-                displayMode={displayMode}
-                onDisplayModeChange={setDisplayMode}
-                resultCount={browsingMode === 'auctions' ? filteredEvents.length : paginatedLots.length}
-                totalCount={totalCount}
-                itemsPerPage={itemsPerPage}
-                onItemsPerPageChange={handleItemsPerPageChange}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
-
-              {/* Active View: AUCTIONS */}
-              {browsingMode === 'auctions' && (
-                <>
-                  {filteredEvents.length === 0 ? (
-                    <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
-                      <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
-                        No auction sessions match your current search and category criteria.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn-event-gold"
-                        onClick={() => {
-                          setSearchTerm('');
-                          setSelectedCategory('all');
-                        }}
-                      >
-                        Reset Filter Criteria
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="events-grid">
-                      {filteredEvents.map((event) => {
-                        const getBadgeClass = () => {
-                          if (event.badgeType === 'red') return 'badge-live-red';
-                          if (event.badgeType === 'green') return 'badge-status-green';
-                          return 'badge-gold-gold';
-                        };
-
-                        const handleEventNavigate = () => {
-                          window.location.hash = event.detailUrl || '#auctions';
-                        };
-
-                        return (
-                          <div key={event.id} className="event-card">
-                            <div
-                              className="event-card-media"
-                              onClick={handleEventNavigate}
-                              role="button"
-                              tabIndex={0}
-                            >
-                              <img
-                                src={event.image || '/images/hero_coin.jpg'}
-                                alt={event.title}
-                                className="event-img"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).src = '/images/hero_coin.jpg';
-                                }}
-                              />
-                              <div className="event-badges-overlay">
-                                <span className={`event-badge-pill ${getBadgeClass()}`}>{event.badge}</span>
-                                <span className="event-lots-pill">{event.lotsCount} LOTS</span>
-                              </div>
-                            </div>
-
-                            <div className="event-card-body">
-                              <div className="event-type-tag">{event.typeTag}</div>
-                              <h3
-                                className="event-title"
-                                onClick={handleEventNavigate}
-                                role="button"
-                                tabIndex={0}
-                              >
-                                {event.title}
-                              </h3>
-                              <p className="event-description">{event.description}</p>
-
-                              <div className="event-card-footer">
-                                <div className="event-estimate-meta">
-                                  <span className="estimate-label">{event.dateLabel}</span>
-                                  <span className="estimate-val">{event.estimate}</span>
-                                </div>
-
-                                <div className="event-cta-btn-wrap">
-                                  {event.buttonVariant === 'dark' && (
-                                    <button
-                                      type="button"
-                                      className="btn-event-dark"
-                                      onClick={handleEventNavigate}
-                                    >
-                                      <span>{event.buttonText}</span>
-                                    </button>
-                                  )}
-                                  {event.buttonVariant === 'gold' && (
-                                    <button
-                                      type="button"
-                                      className="btn-event-gold"
-                                      onClick={handleEventNavigate}
-                                    >
-                                      <span>{event.buttonText}</span>
-                                    </button>
-                                  )}
-                                  {event.buttonVariant === 'outline' && (
-                                    <button
-                                      type="button"
-                                      className="btn-event-outline"
-                                      onClick={() => setActiveConditionEvent(event)}
-                                    >
-                                      <span>{event.buttonText}</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Active View: LOTS (Grid or List Layout) */}
-              {browsingMode === 'lots' && (
-                <>
-                  {paginatedLots.length === 0 ? (
-                    <div className="empty-results-box" style={{ textAlign: 'center', padding: '48px 20px' }}>
-                      <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '16px' }}>
-                        No individual lots match your current search and category criteria.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn-event-gold"
-                        onClick={() => {
-                          setSearchTerm('');
-                          setSelectedCategory('all');
-                        }}
-                      >
-                        Reset Filter Criteria
-                      </button>
-                    </div>
-                  ) : displayMode === 'grid' ? (
-                    <div className="lots-grid" style={{ marginTop: '24px' }}>
-                      {paginatedLots.map((lot) => {
-                        const isWatchlisted = watchlist.includes(lot.id);
-                        const timeRemaining = timers[lot.id] || 'Closing Soon';
-
-                        return (
-                          <div key={lot.id} className="lot-card">
-                            <div className="lot-card-media" onClick={() => setActiveDetailLot(lot)}>
-                              <img src={lot.image} alt={lot.title} className="lot-img" />
-                              <div className="lot-badges-overlay">
-                                <span className="lot-number-badge">{lot.lotNumber}</span>
-                                <span className="lot-timer-badge">
-                                  <Clock size={12} />
-                                  <span>{timeRemaining}</span>
-                                </span>
-                              </div>
-                              <button
-                                className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleWatchlist(lot.id);
-                                }}
-                                title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                                aria-label="Bookmark Lot"
-                              >
-                                <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
-                              </button>
-                            </div>
-
-                            <div className="lot-card-body">
-                              <span className="lot-category-tag">{lot.categoryTag}</span>
-                              <h3 className="lot-title" onClick={() => setActiveDetailLot(lot)}>
-                                {lot.title}
-                              </h3>
-                              <p className="lot-brief-note">{lot.description}</p>
-
-                              <div className="lot-bid-details">
-                                <div className="bid-data-row">
-                                  <div className="current-bid-wrap">
-                                    <span className="bid-label-micro">CURRENT BID</span>
-                                    <span className="current-bid-val">
-                                      ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                  </div>
-                                  <div className="reserve-wrap">
-                                    <span className="reserve-met-badge">
-                                      <CheckCircle2 size={11} /> RESERVE MET
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="bids-count-meta">
-                                  <span>{lot.bidsCount} Bids Placed</span>
-                                </div>
-                              </div>
-
-                              <button
-                                className="btn-instant-bid"
-                                onClick={() => handleInstantBidDirect(lot)}
-                              >
-                                <Zap size={15} />
-                                <span>⚡ INSTANT BID ${lot.nextBid.toLocaleString()}</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="lots-list-view">
-                      {paginatedLots.map((lot) => {
-                        const isWatchlisted = watchlist.includes(lot.id);
-                        const timeRemaining = timers[lot.id] || 'Closing Soon';
-
-                        return (
-                          <div key={lot.id} className="lot-list-card">
-                            <div className="list-card-media" onClick={() => setActiveDetailLot(lot)}>
-                              <img src={lot.image} alt={lot.title} className="list-card-img" />
-                              <div className="lot-badges-overlay">
-                                <span className="lot-number-badge">{lot.lotNumber}</span>
-                                <span className="lot-timer-badge">
-                                  <Clock size={12} />
-                                  <span>{timeRemaining}</span>
-                                </span>
-                              </div>
-                              <button
-                                className={`lot-card-bookmark-btn ${isWatchlisted ? 'active' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleWatchlist(lot.id);
-                                }}
-                                title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                                aria-label="Bookmark Lot"
-                              >
-                                <Bookmark size={15} fill={isWatchlisted ? '#cba135' : 'none'} />
-                              </button>
-                            </div>
-
-                            <div className="list-card-body">
-                              <div className="list-info-col">
-                                <span className="list-lot-tag">{lot.categoryTag}</span>
-                                <h3 className="list-lot-title" onClick={() => setActiveDetailLot(lot)}>
-                                  {lot.title}
-                                </h3>
-                                <p className="list-lot-desc">{lot.description}</p>
-                                <div className="list-lot-provenance">Provenance: {lot.provenance}</div>
-                              </div>
-
-                              <div className="list-actions-col">
-                                <div className="list-bid-data">
-                                  <span className="list-bid-label">CURRENT HIGH BID</span>
-                                  <span className="list-bid-val">
-                                    ${lot.currentBid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                  <span className="list-bids-count">{lot.bidsCount} bids · Reserve Met</span>
-                                </div>
-
-                                <div className="list-btn-group">
-                                  <button
-                                    type="button"
-                                    className="btn-list-instant"
-                                    onClick={() => handleInstantBidDirect(lot)}
-                                  >
-                                    <Zap size={14} />
-                                    <span>INSTANT BID ${lot.nextBid.toLocaleString()}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn-list-inspect"
-                                    onClick={() => setActiveDetailLot(lot)}
-                                  >
-                                    <Eye size={13} />
-                                    <span>INSPECT SPECIMEN</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Active View: SALESROOM MAP */}
-              {browsingMode === 'map' && (
-                <div className="salesroom-map-card">
-                  <div className="map-card-header">
-                    <div>
-                      <h3 className="map-title">Salesroom Floorplan &amp; Exhibition Galleries</h3>
-                      <div className="map-address-banner">
-                        <MapPin size={16} color="#cba135" />
-                        <span>4200 Commercial Boulevard, Suite 100, Pittsburgh, PA 15201</span>
-                      </div>
-                    </div>
-                    <div className="past-auctions-meta-tag">
-                      <Building size={14} />
-                      <span>Security Cleared Facilities</span>
-                    </div>
-                  </div>
-
-                  <div className="floorplan-zones-grid">
-                    <div className="zone-box">
-                      <span className="zone-num">ZONE 01 · SECURE SALOON</span>
-                      <h4 className="zone-heading">Vault &amp; Certified Numismatics Gallery</h4>
-                      <p className="zone-desc">
-                        Climate-controlled museum cases with 10x-30x stereo binocular microscopes, PCGS &amp; NGC slab verification terminals, and investment gold bullion weighing scales.
-                      </p>
-                    </div>
-
-                    <div className="zone-box">
-                      <span className="zone-num">ZONE 02 · PRIVATE SALON</span>
-                      <h4 className="zone-heading">Fine Jewelry &amp; Horology Exhibition</h4>
-                      <p className="zone-desc">
-                        Diamond colorimeter, refractometer inspection desks, vintage pocket watch timing counters, and private collector viewing booths for estate silver services.
-                      </p>
-                    </div>
-
-                    <div className="zone-box">
-                      <span className="zone-num">ZONE 03 · MAIN AMPHITHEATER</span>
-                      <h4 className="zone-heading">Main Podium &amp; Live Clerking Desk</h4>
-                      <p className="zone-desc">
-                        Tiered gallery seating, dual HD projection screens, telephone clerk bank, and fast-track paddle registration desk for certified in-person bidders.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="map-visitation-bar">
-                    <div className="visit-info-left">
-                      <div className="visit-meta-item">
-                        <Clock size={15} />
-                        <span>Inspection Hours: <strong>Mon–Fri 9am–5pm</strong> (Auction Day from 8am)</span>
-                      </div>
-                      <div className="visit-meta-item">
-                        <Phone size={15} />
-                        <span>Concierge Desk: <strong>(412) 555-0199</strong></span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-directions"
-                      onClick={() => addToast('info', 'Driving Directions', 'Navigation coordinates sent: 4200 Commercial Blvd, Pittsburgh, PA.')}
-                    >
-                      <Compass size={15} />
-                      <span>GET DRIVING DIRECTIONS</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 4. Live Bidding Desk: Real-time closing soon lots (featured when browsing auctions) */}
-          {browsingMode === 'auctions' && (
-            <LiveBiddingDesk
-              lots={filteredSortedLots.slice(0, 4)}
-              timers={timers}
-              watchlist={watchlist}
-              onToggleWatchlist={handleToggleWatchlist}
-              onInstantBid={handleInstantBidDirect}
-              onViewLot={(lot) => setActiveDetailLot(lot)}
-              onManualRefresh={triggerRefresh}
-              isRefreshing={isRefreshing}
+        <main className="content-body">
+          {currentSection === 'overview' && (
+            <OverviewView 
+              auction={currentAuction}
+              lots={lots}
+              bidders={bidders}
+              bids={bids}
+              invoices={invoices}
+              logs={logs}
+              onNavigate={handleNavigateSection}
+              onSyncHiBid={triggerHiBidSync}
             />
           )}
 
-          {/* 5. Past Auctions Section: Catalogs & Realized Hammer Prices */}
-          <PastAuctionsSection
-            onNavigate={handleNavigate}
-            onInquirePast={(title) => {
-              addToast('info', 'Catalog Archive Request', `Archive details and realized price sheet requested for ${title}.`);
-            }}
-          />
+          {currentSection === 'users' && (
+            <UsersView 
+              users={bidders}
+              onUpdateUser={(updated) => setBidders(prev => prev.map(u => u.id === updated.id ? updated : u))}
+              onAddUser={(newUser) => setBidders(prev => [newUser, ...prev])}
+            />
+          )}
 
-          {/* 6. Understated Trust Section: 3 Verified Legitimacy Points */}
-          <TrustSection />
+          {currentSection === 'auctions' && (
+            <AuctionsView 
+              auctions={auctions}
+              selectedAuctionId={selectedAuctionId}
+              onSelectAuction={setSelectedAuctionId}
+              onAddAuction={(newAuc) => setAuctions(prev => [newAuc, ...prev])}
+              onNavigate={handleNavigateSection}
+              onSyncHiBid={triggerHiBidSync}
+              activeAuctionDetailId={activeAuctionDetailId}
+              onSetActiveAuctionDetailId={setActiveAuctionDetailId}
+              initialStage={auctionStage}
+              initialSubTab={auctionSubTab}
+              lots={lots}
+              onAddLot={async (newLot) => {
+                setLots(prev => [newLot, ...prev]);
+                await lotsService.createLot(newLot);
+              }}
+              onUpdateLot={async (updated) => {
+                setLots(prev => prev.map(l => l.id === updated.id ? updated : l));
+                await lotsService.updateLot(updated.id, updated);
+              }}
+              onSendToBlock={handleSendToBlock}
+              onDeleteLot={async (lotId: string) => {
+                const res = await lotsService.deleteLot(lotId);
+                if (res.success) {
+                  setLots(prev => prev.filter(l => l.id !== lotId));
+                }
+                return res;
+              }}
+            />
+          )}
+
+          {currentSection === 'lots' && (
+            <LotsView 
+              lots={lots}
+              onAddLot={async (newLot) => {
+                // Optimistic UI update
+                setLots(prev => [newLot, ...prev]);
+                // Persist to Supabase
+                const res = await lotsService.createLot(newLot);
+                if (!res.success) {
+                  console.error('[App] Failed to insert lot in Supabase:', res.error);
+                }
+              }}
+              onUpdateLot={async (updated) => {
+                setLots(prev => prev.map(l => l.id === updated.id ? updated : l));
+                await lotsService.updateLot(updated.id, updated);
+              }}
+              onSendToBlock={handleSendToBlock}
+              onDeleteLot={async (lotId: string) => {
+                const res = await lotsService.deleteLot(lotId);
+                if (res.success) {
+                  setLots(prev => prev.filter(l => l.id !== lotId));
+                }
+                return res;
+              }}
+            />
+          )}
+
+          {currentSection === 'live_clerking' && (
+            <LiveClerkingView 
+              currentLot={activeLotOnBlock}
+              allLots={lots}
+              bids={bids.filter(b => b.lotId === activeLotOnBlock?.id || b.lotNumber === activeLotOnBlock?.lotNumber)}
+              allBids={bids}
+              bidders={bidders}
+              onPlaceBid={handlePlaceBid}
+              onHammerSold={handleHammerSold}
+              onPassLot={handlePassLot}
+              onReopenLot={handleReopenLot}
+              onNextLot={handleNextLot}
+              onSelectLot={(lotId) => {
+                setActiveLotId(lotId);
+                setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: 'on_block' } : l.status === 'on_block' ? { ...l, status: 'upcoming' } : l));
+                lotsService.sendLotToBlock(lotId);
+              }}
+            />
+          )}
+
+          {currentSection === 'payments' && (
+            <PaymentsView 
+              invoices={invoices}
+              consignorSettlements={consignors}
+              onUpdateInvoiceStatus={(id, status) => {
+                setInvoices(prev => prev.map(i => i.id === id ? { ...i, paymentStatus: status } : i));
+              }}
+              onUpdateConsignorStatus={(id, status) => {
+                setConsignors(prev => prev.map(c => c.id === id ? { ...c, status, checkNumber: `CHK-${Math.floor(900000 + Math.random() * 99999)}` } : c));
+              }}
+              selectedAuctionId={selectedAuctionId}
+            />
+          )}
+
+          {currentSection === 'reports' && (
+            <ReportsView 
+              auction={currentAuction}
+              lots={lots}
+            />
+          )}
+
+          {currentSection === 'logs' && (
+            <LogsView 
+              logs={logs}
+            />
+          )}
+
+          {currentSection === 'settings' && (
+            <SettingsView />
+          )}
+
+          {currentSection === 'profile' && (
+            <ProfileView onNavigate={setCurrentSection} />
+          )}
         </main>
+      </div>
+
+      {/* HiBid AF360 Sync Progress Modal */}
+      {isSyncModalOpen && (
+        <div className="modal-overlay" onClick={() => syncStep === 4 && setIsSyncModalOpen(false)}>
+          <div className="modal-content" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="font-serif">HiBid Network Synchronization</h3>
+              {syncStep === 4 && (
+                <button className="icon-btn" onClick={() => setIsSyncModalOpen(false)}>
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: syncStep >= 1 ? 'var(--text-main)' : 'var(--text-dim)' }}>
+                  {syncStep > 1 ? <CheckCircle2 size={16} color="#059669" /> : <RefreshCw size={16} className="animate-spin" color="var(--gold-primary)" />}
+                  <span>Connecting to HiBid API Gateway...</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: syncStep >= 2 ? 'var(--text-main)' : 'var(--text-dim)' }}>
+                  {syncStep > 2 ? <CheckCircle2 size={16} color="#059669" /> : syncStep === 2 ? <RefreshCw size={16} className="animate-spin" color="var(--gold-primary)" /> : <div style={{ width: 16 }} />}
+                  <span>Pushing Lot catalog revisions & PCGS cert images...</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: syncStep >= 3 ? 'var(--text-main)' : 'var(--text-dim)' }}>
+                  {syncStep > 3 ? <CheckCircle2 size={16} color="#059669" /> : syncStep === 3 ? <RefreshCw size={16} className="animate-spin" color="var(--gold-primary)" /> : <div style={{ width: 16 }} />}
+                  <span>Syncing bidder registrations across 5 portal nodes...</span>
+                </div>
+
+                {syncStep === 4 && (
+                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', padding: 14, borderRadius: 8, marginTop: 8 }}>
+                    <div style={{ color: '#059669', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle2 size={18} /> HiBid Synchronized Successfully!
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      All lots, reserve parameters, and bidder approvals are now live on HiBid network and Gardner Auction saleroom.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {syncStep === 4 && (
+              <div className="modal-footer">
+                <button className="btn btn-gold" onClick={() => setIsSyncModalOpen(false)}>
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
-
-      {/* 8. Refined Compact Luxury Footer (rendered on Home, Current Auction, Email List, and Past Auctions pages) */}
-      {(currentRoute.view === 'home' ||
-        currentRoute.view === 'current-auction' ||
-        currentRoute.view === 'email-list' ||
-        currentRoute.view === 'catalogs' ||
-        currentRoute.view === 'auction-details' ||
-        currentRoute.view === 'catalog-lots' ||
-        currentRoute.view === 'lot-detail') && (
-        <Footer onNavigate={handleNavigate} />
-      )}
-
-      {/* Floating Watchlist Button for Easy Access (rendered on Home only) */}
-      {currentRoute.view === 'home' && watchlist.length > 0 && (
-        <button
-          className="floating-watchlist-pill"
-          onClick={() => setIsWatchlistOpen(true)}
-          title="View Monitored Lots"
-          aria-label="View Monitored Lots"
-        >
-          <Bookmark size={16} />
-          <span>Monitored Lots ({watchlist.length})</span>
-        </button>
-      )}
-
-      {/* Modals & Slide-overs */}
-      {activeBiddingLot && (
-        <BiddingModal
-          lot={activeBiddingLot}
-          onClose={() => setActiveBiddingLot(null)}
-          onConfirmBid={handleConfirmBid}
-        />
-      )}
-
-      {activeDetailLot && (
-        <LotDetailModal
-          lot={activeDetailLot}
-          timeRemaining={timers[activeDetailLot.id] || 'Closing Soon'}
-          isWatchlisted={watchlist.includes(activeDetailLot.id)}
-          onToggleWatchlist={handleToggleWatchlist}
-          onPlaceBid={(lot) => setActiveBiddingLot(lot)}
-          onClose={() => setActiveDetailLot(null)}
-        />
-      )}
-
-      {activeConditionEvent && (
-        <ConditionReportModal
-          event={activeConditionEvent}
-          onClose={() => setActiveConditionEvent(null)}
-          onSubmitReport={(email) => {
-            addToast(
-              'success',
-              'Condition Dossier Dispatched',
-              `Accredited condition report for ${activeConditionEvent.title} has been forwarded to ${email}.`
-            );
-          }}
-        />
-      )}
-
-      <WatchlistDrawer
-        isOpen={isWatchlistOpen}
-        onClose={() => setIsWatchlistOpen(false)}
-        watchlistLots={watchlistLots}
-        timers={timers}
-        onRemoveFromWatchlist={handleToggleWatchlist}
-        onPlaceBid={(lot) => setActiveBiddingLot(lot)}
-        onViewLot={(lot) => setActiveDetailLot(lot)}
-      />
-
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        initialMode={authMode}
-        onLoginSuccess={(name: string) => {
-          addToast('success', `Welcome, ${name}!`, 'Bidder credentials verified for live session participation.');
-        }}
-      />
-
-      {/* Toast Notification Container */}
-      <Toast toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
+};
+
+export const App: React.FC = () => {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <AppRoot />
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          gutter={10}
+          containerStyle={{
+            top: 20,
+            right: 20,
+            zIndex: 999999,
+          }}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#0c0e12',
+              color: '#ffffff',
+              border: '1px solid rgba(203, 161, 53, 0.45)',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 500,
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+              padding: '12px 16px',
+            },
+            success: {
+              duration: 4000,
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#0c0e12',
+              },
+            },
+            error: {
+              duration: 4500,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#0c0e12',
+              },
+              style: {
+                border: '1px solid rgba(239, 68, 68, 0.5)',
+              },
+            },
+          }}
+        />
+      </AuthProvider>
+    </ToastProvider>
+  );
+};
+
+const AppRoot: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="brand-crest" style={{ width: 56, height: 56, fontSize: 28, animation: 'pulse 1.5s infinite' }}>
+          G
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#ffffff' }}>Gardner Auction AF360</div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>Verifying Rostrum Session Security...</div>
+          <span className="auth-spinner" style={{ width: 24, height: 24, marginTop: 8 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
+  return <AdminConsole />;
 };
 
 export default App;

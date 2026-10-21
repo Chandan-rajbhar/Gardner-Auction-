@@ -2351,7 +2351,7 @@ section[id] {
 }
 
 .toast-icon-success {
-  color: #10b981;
+  color: #f59e0b;
 }
 
 .toast-icon-info {
@@ -2360,6 +2360,10 @@ section[id] {
 
 .toast-icon-warning {
   color: #f59e0b;
+}
+
+.toast-icon-error {
+  color: #ef4444;
 }
 
 .toast-text-col {
@@ -2808,7 +2812,7 @@ section[id] {
 }
 
 .success-icon {
-  color: #10b981;
+  color: #f59e0b;
   flex-shrink: 0;
 }
 
