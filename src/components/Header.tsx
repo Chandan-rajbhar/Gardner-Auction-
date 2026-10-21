@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   currentPath?: string;
   activeSection?: string;
   onNavigate?: (path: string) => void;
   onOpenLogin?: () => void;
-  onOpenSignUp?: () => void;
+  onOpenProfile?: () => void;
   watchlistCount?: number;
   onOpenWatchlist?: () => void;
   onSearch?: (term: string) => void;
@@ -19,11 +20,38 @@ export const Header: React.FC<HeaderProps> = ({
   activeSection,
   onNavigate,
   onOpenLogin,
-  onOpenSignUp,
+  onOpenProfile,
   onOpenAuth,
   currentRoute
 }) => {
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [profileDropdownOpen]);
 
   // Determine active nav item based on route in a mutually exclusive order
   const effectiveRoute = currentPath || (currentRoute ? (currentRoute === 'home' ? '/' : `#${currentRoute}`) : '/');
@@ -92,11 +120,6 @@ export const Header: React.FC<HeaderProps> = ({
     else if (onOpenAuth) onOpenAuth();
   };
 
-  const handleSignUpClick = () => {
-    if (onOpenSignUp) onOpenSignUp();
-    else if (onOpenAuth) onOpenAuth();
-  };
-
   return (
     <header className="site-header sticky-header" role="banner">
       <div className="navbar-container container-fluid">
@@ -118,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </a>
 
-        {/* Desktop Navigation: 4 Core Links in order + Login & Sign Up */}
+        {/* Desktop Navigation: 4 Core Links in order + Dynamic Auth */}
         <nav className="desktop-nav-links" role="navigation" aria-label="Main Navigation">
           <a
             href="/"
@@ -153,24 +176,114 @@ export const Header: React.FC<HeaderProps> = ({
             Email List
           </a>
 
-          {/* Authentication Controls: Login & Sign Up */}
-          <div className="nav-auth-group">
-            <button
-              type="button"
-              className="nav-btn-login"
-              onClick={handleLoginClick}
-              aria-label="Log in to bidder account"
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className="nav-btn-signup"
-              onClick={handleSignUpClick}
-              aria-label="Sign up for auction paddle"
-            >
-              Sign Up
-            </button>
+          {/* Authentication Controls: Dynamic Avatar Profile or Login Button */}
+          <div className="nav-auth-group" ref={dropdownRef}>
+            {user ? (
+              <div className="header-user-menu-wrapper">
+                <button
+                  type="button"
+                  className={`header-avatar-btn ${profileDropdownOpen ? 'active' : ''}`}
+                  onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                  aria-expanded={profileDropdownOpen}
+                  aria-haspopup="true"
+                  aria-label="User profile menu"
+                  title={`${user.name} (${user.email})`}
+                  id="btn-header-profile"
+                >
+                  <span className="header-avatar-circle font-serif">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name}
+                        className="header-avatar-image"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                    <span className="header-avatar-initials">{user.avatarText || 'GA'}</span>
+                  </span>
+                  <span className="header-avatar-status-dot" title="Authenticated session" />
+                  <ChevronDown size={14} className={`header-avatar-chevron ${profileDropdownOpen ? 'rotated' : ''}`} />
+                </button>
+
+                {profileDropdownOpen && (
+                  <div className="header-profile-dropdown" role="menu" aria-orientation="vertical">
+                    {/* User Info Header Card */}
+                    <div className="header-dropdown-user-card">
+                      <div className="header-dropdown-avatar font-serif">
+                        {user.avatarUrl ? (
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.name}
+                            className="header-avatar-image"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+                        <span className="header-avatar-initials">{user.avatarText || 'GA'}</span>
+                      </div>
+                      <div className="header-dropdown-user-details">
+                        <span className="header-dropdown-name">{user.name}</span>
+                        <span className="header-dropdown-email">{user.email}</span>
+                      </div>
+                    </div>
+
+                    <div className="header-dropdown-divider" />
+
+                    {/* Menu Actions */}
+                    <div className="header-dropdown-actions">
+                      <button
+                        type="button"
+                        className="header-dropdown-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          if (onOpenProfile) onOpenProfile();
+                        }}
+                        id="btn-dropdown-my-profile"
+                      >
+                        <User size={16} className="dropdown-item-icon" />
+                        <div className="dropdown-item-content">
+                          <span className="dropdown-item-title">My Profile</span>
+                          <span className="dropdown-item-desc">View credentials &amp; contact info</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="header-dropdown-item logout"
+                        role="menuitem"
+                        onClick={async () => {
+                          setProfileDropdownOpen(false);
+                          await logout();
+                          if (effectiveRoute.includes('profile') && onNavigate) {
+                            onNavigate('/');
+                          }
+                        }}
+                        id="btn-dropdown-logout"
+                      >
+                        <LogOut size={16} className="dropdown-item-icon" />
+                        <div className="dropdown-item-content">
+                          <span className="dropdown-item-title">Log Out</span>
+                          <span className="dropdown-item-desc">End saleroom session</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="nav-btn-login"
+                onClick={handleLoginClick}
+                aria-label="Log in to bidder account"
+              >
+                Login
+              </button>
+            )}
           </div>
         </nav>
 
@@ -185,7 +298,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Mobile Drawer Navigation: 4 Core Links + Login & Sign Up */}
+      {/* Mobile Drawer Navigation: 4 Core Links + Auth */}
       {mobileMenuOpen && (
         <div className="mobile-nav-drawer" role="dialog" aria-modal="true" aria-label="Mobile Navigation Menu">
           <div className="mobile-nav-links">
@@ -218,28 +331,70 @@ export const Header: React.FC<HeaderProps> = ({
               Email List
             </a>
 
-            {/* Mobile Auth Buttons */}
+            {/* Mobile Auth Button or User Card */}
             <div className="mobile-nav-auth">
-              <button
-                type="button"
-                className="mobile-btn-login"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleLoginClick();
-                }}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                className="mobile-btn-signup"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleSignUpClick();
-                }}
-              >
-                Sign Up
-              </button>
+              {user ? (
+                <div className="mobile-auth-user-card">
+                  <div className="mobile-auth-user-header">
+                    <div className="mobile-auth-avatar font-serif">
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.name}
+                          className="header-avatar-image"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : null}
+                      <span className="header-avatar-initials">{user.avatarText || 'GA'}</span>
+                    </div>
+                    <div className="mobile-auth-user-meta">
+                      <span className="mobile-auth-user-name">{user.name}</span>
+                      <span className="mobile-auth-user-email">{user.email}</span>
+                    </div>
+                  </div>
+
+                  <div className="mobile-auth-actions-row">
+                    <button
+                      type="button"
+                      className="mobile-btn-profile"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        if (onOpenProfile) onOpenProfile();
+                      }}
+                    >
+                      <User size={14} />
+                      <span>My Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="mobile-btn-logout"
+                      onClick={async () => {
+                        setMobileMenuOpen(false);
+                        await logout();
+                        if (effectiveRoute.includes('profile') && onNavigate) {
+                          onNavigate('/');
+                        }
+                      }}
+                    >
+                      <LogOut size={14} />
+                      <span>Log Out</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="mobile-btn-login"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleLoginClick();
+                  }}
+                >
+                  Login
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -247,3 +402,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

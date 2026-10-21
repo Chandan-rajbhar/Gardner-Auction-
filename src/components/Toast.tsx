@@ -1,9 +1,9 @@
 import React from 'react';
-import { CheckCircle2, Info, AlertTriangle, X } from 'lucide-react';
+import { CheckCircle2, Info, AlertTriangle, AlertCircle, X } from 'lucide-react';
 
 export interface ToastMessage {
   id: string;
-  type: 'success' | 'info' | 'warning';
+  type: 'success' | 'info' | 'warning' | 'error';
   title: string;
   message: string;
 }
@@ -25,6 +25,8 @@ export const Toast: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
               return <CheckCircle2 size={18} className="toast-icon-success" />;
             case 'warning':
               return <AlertTriangle size={18} className="toast-icon-warning" />;
+            case 'error':
+              return <AlertCircle size={18} className="toast-icon-error" style={{ color: '#ef4444' }} />;
             default:
               return <Info size={18} className="toast-icon-info" />;
           }

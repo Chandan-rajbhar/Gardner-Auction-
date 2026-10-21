@@ -13,6 +13,7 @@ import { LotDetailModal } from './components/LotDetailModal';
 import { ConditionReportModal } from './components/ConditionReportModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { AuthModal } from './components/AuthModal';
+import { ProfilePage } from './components/ProfilePage';
 import { Toast } from './components/Toast';
 import type { ToastMessage } from './components/Toast';
 
@@ -64,6 +65,7 @@ export type AppRoute =
   | { view: 'current-auction' }
   | { view: 'email-list' }
   | { view: 'catalogs' }
+  | { view: 'profile' }
   | { view: 'auction-details'; auctionId: string }
   | { view: 'catalog-lots'; auctionId: string }
   | { view: 'lot-detail'; lotId: string; auctionId?: string };
@@ -124,6 +126,16 @@ export const App: React.FC = () => {
 
     if (clean === 'email-list' || pathname === '/email-list') {
       return { view: 'email-list' };
+    }
+
+    if (
+      clean === 'profile' ||
+      clean === 'my-profile' ||
+      clean.startsWith('profile') ||
+      pathname === '/profile' ||
+      pathname === '/my-profile'
+    ) {
+      return { view: 'profile' };
     }
 
     if (
@@ -218,6 +230,23 @@ export const App: React.FC = () => {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
+  }, []);
+
+  // Listen to hash for opening the authentication modal without route destruction
+  useEffect(() => {
+    const handleAuthHash = () => {
+      const h = window.location.hash.toLowerCase();
+      if (h === '#signin' || h === '#login') {
+        setAuthMode('signin');
+        setIsAuthOpen(true);
+      } else if (h === '#signup' || h === '#register') {
+        setAuthMode('register');
+        setIsAuthOpen(true);
+      }
+    };
+    handleAuthHash();
+    window.addEventListener('hashchange', handleAuthHash);
+    return () => window.removeEventListener('hashchange', handleAuthHash);
   }, []);
 
   const handleNavigate = useCallback((path: string) => {
@@ -471,10 +500,12 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-root">
-      {/* 1. Navbar with 4 Core Links in order + Login & Sign Up */}
+      {/* 1. Navbar with 4 Core Links in order + Login */}
       <Header
         currentPath={
-          currentRoute.view === 'current-auction'
+          currentRoute.view === 'profile'
+            ? '#profile'
+            : currentRoute.view === 'current-auction'
             ? '#auctions'
             : currentRoute.view === 'email-list'
             ? '#email-list'
@@ -493,10 +524,7 @@ export const App: React.FC = () => {
           setAuthMode('signin');
           setIsAuthOpen(true);
         }}
-        onOpenSignUp={() => {
-          setAuthMode('register');
-          setIsAuthOpen(true);
-        }}
+        onOpenProfile={() => handleNavigate('#profile')}
         watchlistCount={watchlist.length}
         onOpenWatchlist={() => setIsWatchlistOpen(true)}
         onSearch={(term) => {
@@ -506,7 +534,10 @@ export const App: React.FC = () => {
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }
         }}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={() => {
+          setAuthMode('signin');
+          setIsAuthOpen(true);
+        }}
       />
 
       {currentRoute.view === 'current-auction' ? (
@@ -516,7 +547,10 @@ export const App: React.FC = () => {
             watchlist={watchlist}
             searchQuery={searchTerm}
             onToggleWatchlist={handleToggleWatchlist}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={() => {
+              setAuthMode('signin');
+              setIsAuthOpen(true);
+            }}
             onRequestConditionDossier={(lot: EnrichedLotItem) => {
               setActiveConditionEvent({
                 id: lot.id,
@@ -568,6 +602,10 @@ export const App: React.FC = () => {
         />
       ) : currentRoute.view === 'catalogs' ? (
         <PastCatalogsPage onShowToast={addToast} />
+      ) : currentRoute.view === 'profile' ? (
+        <main id="main-content">
+          <ProfilePage onNavigate={handleNavigate} onShowToast={addToast} />
+        </main>
       ) : (
         <main id="main-content">
           {/* 2. Hero Section: Refined, elegant, showcasing certified gold and silver numismatics */}
@@ -1003,11 +1041,12 @@ export const App: React.FC = () => {
         </main>
       )}
 
-      {/* 8. Refined Compact Luxury Footer (rendered on Home, Current Auction, Email List, and Past Auctions pages) */}
+      {/* 8. Refined Compact Luxury Footer (rendered across pages) */}
       {(currentRoute.view === 'home' ||
         currentRoute.view === 'current-auction' ||
         currentRoute.view === 'email-list' ||
         currentRoute.view === 'catalogs' ||
+        currentRoute.view === 'profile' ||
         currentRoute.view === 'auction-details' ||
         currentRoute.view === 'catalog-lots' ||
         currentRoute.view === 'lot-detail') && (
@@ -1073,7 +1112,13 @@ export const App: React.FC = () => {
 
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          const h = window.location.hash.toLowerCase();
+          if (h === '#signin' || h === '#login' || h === '#signup' || h === '#register') {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        }}
         initialMode={authMode}
         onLoginSuccess={(name: string) => {
           addToast('success', `Welcome, ${name}!`, 'Bidder credentials verified for live session participation.');
