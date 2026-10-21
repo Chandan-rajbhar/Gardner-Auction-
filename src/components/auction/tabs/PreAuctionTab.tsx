@@ -21,9 +21,27 @@ import {
   ExternalLink,
   DollarSign,
   AlertCircle,
-  Move
+  Move,
+  Search,
+  X,
+  SlidersHorizontal,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Barcode,
+  GripVertical,
+  ChevronDown,
+  Settings,
+  MoreVertical,
+  Filter
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
+import { auctionService } from '../../../services/auctionService';
+import { LotFormModal } from '../LotFormModal';
+import { INITIAL_USERS } from '../../../data/mockData';
 
 interface PreAuctionTabProps {
   currentTab: PreAuctionSubTab;
@@ -63,18 +81,70 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [csvTarget, setCsvTarget] = useState<string>('');
 
-  // Expenses Modal
+  // Expenses State & Modal
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<AuctionExpense | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<AuctionExpense | null>(null);
+  const [expType, setExpType] = useState('Auction Marketing Expense');
+  const [isCustomType, setIsCustomType] = useState(false);
+  const [customExpType, setCustomExpType] = useState('');
+  const [expAccount, setExpAccount] = useState('facebook');
+  const [isCustomAccount, setIsCustomAccount] = useState(false);
+  const [customAccount, setCustomAccount] = useState('');
+  const [expPayFrom, setExpPayFrom] = useState('Cash');
   const [expDesc, setExpDesc] = useState('');
-  const [expVendor, setExpVendor] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expReceiptName, setExpReceiptName] = useState('');
+  const [expReceiptPreview, setExpReceiptPreview] = useState<string | null>(null);
+
+  // Table filters & sorting for Expenses
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseSortColumn, setExpenseSortColumn] = useState<'type' | 'account' | 'payFrom' | 'description' | 'amount' | 'date'>('date');
+  const [expenseSortDirection, setExpenseSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [expensePageSize, setExpensePageSize] = useState<number>(10);
+  const [expensePage, setExpensePage] = useState<number>(1);
+  const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    type: true,
+    account: true,
+    payFrom: true,
+    description: true,
+    amount: true
+  });
+
+  // Sub-tab 4: Lots State & Modal
+  const [lotSearch, setLotSearch] = useState('');
+  const [selectedLots, setSelectedLots] = useState<string[]>([]);
+  const [isBulkDropdownOpen, setIsBulkDropdownOpen] = useState(false);
+  const [lotSortCol, setLotSortCol] = useState<'lotNumber' | 'saleOrder' | 'title' | 'staggerSeconds' | 'quantity' | 'status'>('lotNumber');
+  const [lotSortDir, setLotSortDir] = useState<'asc' | 'desc'>('asc');
+  const [isLotColumnMenuOpen, setIsLotColumnMenuOpen] = useState(false);
+  const [lotColsVisible, setLotColsVisible] = useState({
+    lotNumber: true,
+    saleOrder: true,
+    title: true,
+    staggerSeconds: true,
+    quantity: true,
+    status: true
+  });
+  const [isLotsNewLotModalOpen, setIsLotsNewLotModalOpen] = useState(false);
+  const [lotsEditingLot, setLotsEditingLot] = useState<LotItem | null>(null);
+  const [lotsLotToDelete, setLotsLotToDelete] = useState<LotItem | null>(null);
+  const [isScanLotModalOpen, setIsScanLotModalOpen] = useState(false);
+  const [scanInput, setScanInput] = useState('');
+  const [isSaleOrderModalOpen, setIsSaleOrderModalOpen] = useState(false);
+  const [bulkStaggerInterval, setBulkStaggerInterval] = useState(20);
+  const [hoveredSubTab, setHoveredSubTab] = useState<string | null>(null);
+  const [activeMenuLotId, setActiveMenuLotId] = useState<string | null>(null);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'not_clerked' | 'on_block' | 'sold'>('all');
 
   if (!auction) return null;
 
-  // Filter lots to this auction
+  // Filter lots to this auction (including AF360 reference lots)
   const filteredAuctionLots = lots.filter(l => 
-    !l.auctionId || l.auctionId === auction.id || l.auctionId === 'auc-001'
+    !l.auctionId || l.auctionId === auction.id || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)
   );
 
   // Link Handlers
@@ -125,26 +195,132 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     setNewOptionDesc('');
   };
 
-  // Expenses Handler
-  const handleAddExpense = (e: React.FormEvent) => {
+  // Expenses Constants & Handlers
+  const EXPENSE_TYPES = [
+    'Auction Marketing Expense',
+    'Auctioneer Fee',
+    'Labor',
+    'Shipping Supplies',
+    'Insurance',
+    'Venue',
+    'Other'
+  ];
+
+  const PAY_FROM_OPTIONS = ['Cash', 'Check', 'Credit Card', 'Bank Transfer'];
+
+  const existingAccounts = Array.from(new Set([
+    'facebook',
+    'local newspaper',
+    'miscellaneous',
+    ...(auction.expenses || []).map(e => e.account).filter(Boolean)
+  ]));
+
+  const handleOpenAddExpense = () => {
+    setEditingExpense(null);
+    setExpType('Auction Marketing Expense');
+    setIsCustomType(false);
+    setCustomExpType('');
+    setExpAccount(existingAccounts[0] || 'facebook');
+    setIsCustomAccount(false);
+    setCustomAccount('');
+    setExpPayFrom('Cash');
+    setExpDesc('');
+    setExpAmount('');
+    setExpDate(new Date().toISOString().split('T')[0]);
+    setExpReceiptName('');
+    setExpReceiptPreview(null);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleOpenEditExpense = (exp: AuctionExpense) => {
+    setEditingExpense(exp);
+    if (EXPENSE_TYPES.includes(exp.type)) {
+      setExpType(exp.type);
+      setIsCustomType(false);
+      setCustomExpType('');
+    } else {
+      setExpType('Other');
+      setIsCustomType(true);
+      setCustomExpType(exp.type);
+    }
+
+    if (existingAccounts.includes(exp.account)) {
+      setExpAccount(exp.account);
+      setIsCustomAccount(false);
+      setCustomAccount('');
+    } else {
+      setExpAccount('__new__');
+      setIsCustomAccount(true);
+      setCustomAccount(exp.account);
+    }
+
+    setExpPayFrom(exp.payFrom || 'Cash');
+    setExpDesc(exp.description);
+    setExpAmount(exp.amount !== undefined ? exp.amount.toString() : '');
+    setExpDate(exp.date || new Date().toISOString().split('T')[0]);
+    setExpReceiptName(exp.receiptUrl ? 'Receipt attached' : '');
+    setExpReceiptPreview(exp.receiptUrl || null);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleSaveExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!expDesc.trim() || !expAmount) return;
 
-    dispatch({
-      type: 'ADD_EXPENSE',
-      expense: {
+    const finalType = isCustomType && customExpType.trim() ? customExpType.trim() : expType;
+    const finalAccount = isCustomAccount && customAccount.trim() ? customAccount.trim() : expAccount;
+    const amountVal = Math.max(0, parseFloat(expAmount) || 0);
+
+    if (editingExpense) {
+      dispatch({
+        type: 'UPDATE_EXPENSE',
+        id: editingExpense.id,
+        expense: {
+          type: finalType,
+          account: finalAccount,
+          payFrom: expPayFrom,
+          description: expDesc.trim(),
+          amount: amountVal,
+          date: expDate,
+          receiptUrl: expReceiptPreview || undefined
+        }
+      });
+      auctionService.updateExpense(auction.id, editingExpense.id, {
+        type: finalType,
+        account: finalAccount,
+        payFrom: expPayFrom,
+        description: expDesc.trim(),
+        amount: amountVal,
+        date: expDate,
+        receiptUrl: expReceiptPreview || undefined
+      });
+    } else {
+      const newExp: AuctionExpense = {
         id: `exp-${Date.now()}`,
-        description: expDesc,
-        vendor: expVendor || 'Saleroom Vendor',
-        amount: parseFloat(expAmount) || 0,
-        date: expDate
-      }
-    });
+        type: finalType,
+        account: finalAccount,
+        payFrom: expPayFrom,
+        description: expDesc.trim(),
+        amount: amountVal,
+        date: expDate,
+        receiptUrl: expReceiptPreview || undefined
+      };
+      dispatch({
+        type: 'ADD_EXPENSE',
+        expense: newExp
+      });
+      auctionService.addExpense(auction.id, newExp);
+    }
 
     setIsExpenseModalOpen(false);
-    setExpDesc('');
-    setExpVendor('');
-    setExpAmount('');
+    setEditingExpense(null);
+  };
+
+  const handleConfirmDeleteExpense = () => {
+    if (!expenseToDelete) return;
+    dispatch({ type: 'REMOVE_EXPENSE', id: expenseToDelete.id });
+    auctionService.deleteExpense(auction.id, expenseToDelete.id);
+    setExpenseToDelete(null);
   };
 
   // Simulated drag-to-reorder for featured images
@@ -160,50 +336,61 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* Sub-tabs bar matching existing tab style */}
-      <div className="af360-tabs" style={{ marginBottom: 4 }}>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'details' ? 'active' : ''}`}
-          onClick={() => onSelectTab('details')}
-        >
-          Details
-        </button>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'upload-settings' ? 'active' : ''}`}
-          onClick={() => onSelectTab('upload-settings')}
-        >
-          Upload Settings
-        </button>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'preview' ? 'active' : ''}`}
-          onClick={() => onSelectTab('preview')}
-        >
-          Preview
-        </button>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'lots' ? 'active' : ''}`}
-          onClick={() => onSelectTab('lots')}
-        >
-          Lots ({filteredAuctionLots.length})
-        </button>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'lot-images' ? 'active' : ''}`}
-          onClick={() => onSelectTab('lot-images')}
-        >
-          Lot Images
-        </button>
-        <button 
-          type="button" 
-          className={`af360-tab ${currentTab === 'expenses' ? 'active' : ''}`}
-          onClick={() => onSelectTab('expenses')}
-        >
-          Expenses ({auction.expenses.length})
-        </button>
+      {/* Sub-tabs bar matching reference screenshot */}
+      <div 
+        style={{ 
+          display: 'flex', 
+          gap: 8, 
+          marginBottom: 4,
+          flexWrap: 'wrap'
+        }}
+      >
+        {[
+          { key: 'details', label: 'Details' },
+          { key: 'upload-settings', label: 'Upload Settings' },
+          { key: 'preview', label: 'Preview' },
+          { key: 'lots', label: 'Lots' },
+          { key: 'lot-images', label: 'Lot Images' },
+          { key: 'expenses', label: `Expenses (${auction.expenses.length})` }
+        ].map(tab => {
+          const isActive = currentTab === tab.key;
+          const isHovered = hoveredSubTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onMouseEnter={() => setHoveredSubTab(tab.key)}
+              onMouseLeave={() => setHoveredSubTab(null)}
+              onClick={() => onSelectTab(tab.key as PreAuctionSubTab)}
+              style={{
+                padding: '7px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 500,
+                background: isActive ? '#151922' : isHovered ? '#fffdf7' : '#ffffff',
+                color: isActive 
+                  ? (isHovered ? '#dfba52' : 'var(--gold-primary, #cba135)') 
+                  : isHovered 
+                    ? 'var(--gold-dark, #8c6428)' 
+                    : '#334155',
+                border: isActive 
+                  ? '1.5px solid var(--gold-primary, #cba135)' 
+                  : isHovered 
+                    ? '1.5px solid var(--gold-primary, #cba135)' 
+                    : '1px solid rgba(203, 161, 53, 0.35)',
+                boxShadow: isActive 
+                  ? '0 0 10px rgba(203, 161, 53, 0.3)' 
+                  : isHovered 
+                    ? '0 0 8px rgba(203, 161, 53, 0.18)' 
+                    : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* =========================================================================
@@ -1325,19 +1512,739 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
       )}
 
       {/* =========================================================================
-          SUB-TAB 4: LOTS (Embedded LotsView filtered to this auction)
+          SUB-TAB 4: LOTS (Custom Auction Lots Table matching reference)
           ========================================================================= */}
-      {currentTab === 'lots' && (
-        <div>
-          <LotsView 
-            lots={filteredAuctionLots}
-            onAddLot={onAddLot}
-            onUpdateLot={onUpdateLot}
-            onSendToBlock={onSendToBlock}
-            onDeleteLot={onDeleteLot}
-          />
-        </div>
-      )}
+      {currentTab === 'lots' && (() => {
+        const query = lotSearch.toLowerCase().trim();
+        const filtered = filteredAuctionLots.filter(l => {
+          if (statusFilter === 'not_clerked' && l.status !== 'upcoming') return false;
+          if (statusFilter === 'on_block' && l.status !== 'on_block') return false;
+          if (statusFilter === 'sold' && l.status !== 'sold') return false;
+
+          if (!query) return true;
+          return (
+            l.title.toLowerCase().includes(query) ||
+            l.lotNumber.toString().includes(query) ||
+            (l.status || '').toLowerCase().includes(query) ||
+            (l.category || '').toLowerCase().includes(query) ||
+            (l.consignorName || '').toLowerCase().includes(query)
+          );
+        });
+
+        const sorted = [...filtered].sort((a, b) => {
+          let aVal: any = '';
+          let bVal: any = '';
+
+          if (lotSortCol === 'lotNumber') {
+            aVal = a.lotNumber;
+            bVal = b.lotNumber;
+          } else if (lotSortCol === 'saleOrder') {
+            aVal = a.saleOrder ?? a.lotNumber;
+            bVal = b.saleOrder ?? b.lotNumber;
+          } else if (lotSortCol === 'title') {
+            aVal = (a.title || '').toLowerCase();
+            bVal = (b.title || '').toLowerCase();
+          } else if (lotSortCol === 'staggerSeconds') {
+            aVal = a.staggerSeconds ?? 0;
+            bVal = b.staggerSeconds ?? 0;
+          } else if (lotSortCol === 'quantity') {
+            aVal = a.quantity ?? 1;
+            bVal = b.quantity ?? 1;
+          } else if (lotSortCol === 'status') {
+            aVal = a.status === 'upcoming' ? 'not clerked' : a.status;
+            bVal = b.status === 'upcoming' ? 'not clerked' : b.status;
+          }
+
+          if (aVal < bVal) return lotSortDir === 'asc' ? -1 : 1;
+          if (aVal > bVal) return lotSortDir === 'asc' ? 1 : -1;
+          return 0;
+        });
+
+        const allSelected = sorted.length > 0 && selectedLots.length === sorted.length;
+
+        const toggleSelectAll = () => {
+          if (allSelected) {
+            setSelectedLots([]);
+          } else {
+            setSelectedLots(sorted.map(l => l.id));
+          }
+        };
+
+        const toggleSelectLot = (id: string) => {
+          setSelectedLots(prev => 
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+          );
+        };
+
+        const toggleLotSort = (col: typeof lotSortCol) => {
+          if (lotSortCol === col) {
+            setLotSortDir(d => d === 'asc' ? 'desc' : 'asc');
+          } else {
+            setLotSortCol(col);
+            setLotSortDir('asc');
+          }
+        };
+
+        const renderLotSortIcon = (col: typeof lotSortCol) => {
+          if (lotSortCol !== col) {
+            return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: 6, verticalAlign: 'middle' }} />;
+          }
+          return lotSortDir === 'asc'
+            ? <ArrowUp size={12} style={{ color: 'var(--gold-primary, #cba135)', marginLeft: 6, verticalAlign: 'middle' }} />
+            : <ArrowDown size={12} style={{ color: 'var(--gold-primary, #cba135)', marginLeft: 6, verticalAlign: 'middle' }} />;
+        };
+
+        const formatLotStatus = (status: string) => {
+          if (status === 'upcoming') return 'Not Clerked';
+          if (status === 'on_block') return 'On Block';
+          if (status === 'sold') return 'Sold';
+          if (status === 'passed') return 'Passed';
+          if (status === 'withdrawn') return 'Withdrawn';
+          return status || 'Not Clerked';
+        };
+
+        return (
+          <div className="syndication-card" style={{ padding: 24, borderRadius: 12, background: '#ffffff', border: '1px solid #e2e8f0' }}>
+            {/* Top Card Header matching reference screenshot */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              marginBottom: 20,
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h2 className="font-serif" style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main, #0f172a)', margin: 0 }}>
+                    Lots
+                  </h2>
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: '2px 10px',
+                    borderRadius: 9999,
+                    background: '#f1f5f9',
+                    color: '#64748b'
+                  }}>
+                    {sorted.length} items
+                  </span>
+                </div>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
+                  Manage the lots for this auction. Add lots manually, scan lots, or import from a sale order.
+                </p>
+              </div>
+
+              {/* Action Buttons matching screenshot */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {/* + Add Lot */}
+                <button
+                  type="button"
+                  onClick={() => setIsLotsNewLotModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '9px 18px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    background: '#151922',
+                    color: '#ffffff',
+                    border: '1.5px solid #cba135',
+                    boxShadow: '0 0 10px rgba(203, 161, 53, 0.2)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 14px rgba(203, 161, 53, 0.35)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 10px rgba(203, 161, 53, 0.2)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <Plus size={15} color="#cba135" strokeWidth={2.5} />
+                  <span>Add Lot</span>
+                </button>
+
+                {/* Scan Lot */}
+                <button
+                  type="button"
+                  onClick={() => setIsScanLotModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '9px 18px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    background: '#151922',
+                    color: '#ffffff',
+                    border: '1.5px solid #cba135',
+                    boxShadow: '0 0 10px rgba(203, 161, 53, 0.2)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 14px rgba(203, 161, 53, 0.35)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 10px rgba(203, 161, 53, 0.2)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <Barcode size={16} color="#cba135" />
+                  <span>Scan Lot</span>
+                </button>
+
+                {/* Sale Order */}
+                <button
+                  type="button"
+                  onClick={() => setIsSaleOrderModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '9px 18px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    background: '#151922',
+                    color: '#ffffff',
+                    border: '1.5px solid #cba135',
+                    boxShadow: '0 0 10px rgba(203, 161, 53, 0.2)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 14px rgba(203, 161, 53, 0.35)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 10px rgba(203, 161, 53, 0.2)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <Settings size={15} color="#cba135" />
+                  <span>Sale Order</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search Bar Row with Filters & Column Settings Gear */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 16
+            }}>
+              {/* Search input */}
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  value={lotSearch}
+                  onChange={(e) => setLotSearch(e.target.value)}
+                  placeholder="Search lots by number, title, or keyword..."
+                  style={{
+                    width: '100%',
+                    height: 40,
+                    paddingLeft: 38,
+                    paddingRight: 32,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                    background: '#ffffff',
+                    color: '#1e293b',
+                    outline: 'none',
+                    transition: 'border-color 0.15s ease'
+                  }}
+                  onFocus={(e) => e.currentTarget.style.borderColor = 'var(--gold-primary, #cba135)'}
+                  onBlur={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
+                />
+                {lotSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setLotSearch('')}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94a3b8' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Filters dropdown button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    height: 40,
+                    padding: '0 16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    background: '#ffffff',
+                    color: '#1e293b',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Filter size={15} color="#64748b" />
+                  <span>Filters</span>
+                  <ChevronDown size={14} color="#64748b" />
+                </button>
+
+                {isFilterMenuOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '100%',
+                    marginTop: 6,
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    boxShadow: 'var(--shadow-dropdown)',
+                    padding: 8,
+                    minWidth: 170,
+                    zIndex: 50,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8', padding: '4px 8px' }}>
+                      Filter by Status
+                    </div>
+                    {[
+                      { key: 'all', label: 'All Lots' },
+                      { key: 'not_clerked', label: 'Not Clerked' },
+                      { key: 'on_block', label: 'On Block' },
+                      { key: 'sold', label: 'Sold' }
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(opt.key as any);
+                          setIsFilterMenuOpen(false);
+                        }}
+                        style={{
+                          textAlign: 'left',
+                          padding: '6px 10px',
+                          fontSize: 12.5,
+                          borderRadius: 4,
+                          background: statusFilter === opt.key ? '#f1f5f9' : 'none',
+                          color: statusFilter === opt.key ? 'var(--gold-dark, #8c6428)' : '#334155',
+                          fontWeight: statusFilter === opt.key ? 700 : 500,
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Column Settings Gear button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsLotColumnMenuOpen(!isLotColumnMenuOpen)}
+                  title="Column Settings"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    background: '#ffffff',
+                    color: '#64748b',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Settings size={16} />
+                </button>
+
+                {isLotColumnMenuOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '100%',
+                    marginTop: 6,
+                    background: '#ffffff',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 8,
+                    boxShadow: 'var(--shadow-dropdown)',
+                    padding: 12,
+                    minWidth: 180,
+                    zIndex: 50,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>
+                      Toggle Columns
+                    </div>
+                    {[
+                      { key: 'lotNumber', label: 'Lot #' },
+                      { key: 'saleOrder', label: 'Sale Order' },
+                      { key: 'title', label: 'Title' },
+                      { key: 'staggerSeconds', label: 'Hibid Lot Stagger' },
+                      { key: 'quantity', label: 'Quantity' },
+                      { key: 'status', label: 'Status' }
+                    ].map(({ key, label }) => (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: '#1e293b' }}>
+                        <input
+                          type="checkbox"
+                          checked={lotColsVisible[key as keyof typeof lotColsVisible]}
+                          onChange={() => setLotColsVisible(prev => ({ ...prev, [key]: !prev[key as keyof typeof lotColsVisible] }))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Table matching reference screenshot */}
+            <div style={{ border: '1px solid #f1f5f9', borderRadius: 8, overflow: 'hidden', background: '#ffffff' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#fafbfc', borderBottom: '1px solid #f1f5f9' }}>
+                    <th style={{ width: 44, padding: '12px 10px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        style={{ width: 16, height: 16, cursor: 'pointer', borderRadius: 4 }}
+                      />
+                    </th>
+
+                    {lotColsVisible.lotNumber && (
+                      <th
+                        onClick={() => toggleLotSort('lotNumber')}
+                        style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none', width: 90 }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Lot # {renderLotSortIcon('lotNumber')}
+                        </span>
+                      </th>
+                    )}
+
+                    {lotColsVisible.saleOrder && (
+                      <th
+                        onClick={() => toggleLotSort('saleOrder')}
+                        style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none', width: 110 }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Sale Order {renderLotSortIcon('saleOrder')}
+                        </span>
+                      </th>
+                    )}
+
+                    {lotColsVisible.title && (
+                      <th
+                        onClick={() => toggleLotSort('title')}
+                        style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Title {renderLotSortIcon('title')}
+                        </span>
+                      </th>
+                    )}
+
+                    {lotColsVisible.staggerSeconds && (
+                      <th
+                        onClick={() => toggleLotSort('staggerSeconds')}
+                        style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none', width: 150 }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Hibid Lot Stagger {renderLotSortIcon('staggerSeconds')}
+                        </span>
+                      </th>
+                    )}
+
+                    {lotColsVisible.quantity && (
+                      <th
+                        onClick={() => toggleLotSort('quantity')}
+                        style={{ textAlign: 'center', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none', width: 90 }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                          Quantity {renderLotSortIcon('quantity')}
+                        </span>
+                      </th>
+                    )}
+
+                    {lotColsVisible.status && (
+                      <th
+                        onClick={() => toggleLotSort('status')}
+                        style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none', width: 140 }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Status {renderLotSortIcon('status')}
+                        </span>
+                      </th>
+                    )}
+
+                    <th style={{ textAlign: 'center', padding: '12px 14px', width: 50 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((lot, idx) => (
+                    <tr
+                      key={lot.id}
+                      style={{
+                        borderBottom: '1px solid #f8fafc',
+                        background: selectedLots.includes(lot.id) ? '#fbfcfe' : '#ffffff',
+                        transition: 'background 0.12s ease'
+                      }}
+                    >
+                      {/* Checkbox */}
+                      <td style={{ textAlign: 'center', padding: '12px 10px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedLots.includes(lot.id)}
+                          onChange={() => toggleSelectLot(lot.id)}
+                          style={{ width: 16, height: 16, cursor: 'pointer', borderRadius: 4 }}
+                        />
+                      </td>
+
+                      {/* Lot # */}
+                      {lotColsVisible.lotNumber && (
+                        <td style={{ padding: '12px 14px', color: '#1e293b', fontSize: 13.5, fontWeight: 600 }}>
+                          {lot.lotNumber}
+                        </td>
+                      )}
+
+                      {/* Sale Order input */}
+                      {lotColsVisible.saleOrder && (
+                        <td style={{ padding: '8px 14px' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            value={lot.saleOrder ?? lot.lotNumber}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 1;
+                              onUpdateLot({ ...lot, saleOrder: val });
+                            }}
+                            style={{
+                              width: 62,
+                              height: 32,
+                              padding: '0 6px',
+                              borderRadius: 6,
+                              border: '1px solid #e2e8f0',
+                              fontSize: 13,
+                              textAlign: 'center',
+                              background: '#ffffff',
+                              color: '#1e293b',
+                              outline: 'none'
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {/* Title */}
+                      {lotColsVisible.title && (
+                        <td style={{ padding: '12px 14px', color: '#1e293b', fontWeight: 500, fontSize: 13.5 }}>
+                          {lot.title}
+                        </td>
+                      )}
+
+                      {/* Hibid Lot Stagger input */}
+                      {lotColsVisible.staggerSeconds && (
+                        <td style={{ padding: '8px 14px' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="10"
+                            value={lot.staggerSeconds ?? ((idx + 1) * 20)}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              onUpdateLot({ ...lot, staggerSeconds: val });
+                            }}
+                            style={{
+                              width: 62,
+                              height: 32,
+                              padding: '0 6px',
+                              borderRadius: 6,
+                              border: '1px solid #e2e8f0',
+                              fontSize: 13,
+                              textAlign: 'center',
+                              background: '#ffffff',
+                              color: '#1e293b',
+                              outline: 'none'
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {/* Quantity */}
+                      {lotColsVisible.quantity && (
+                        <td style={{ padding: '12px 14px', textAlign: 'center', color: '#1e293b', fontSize: 13.5 }}>
+                          {lot.quantity || 1}
+                        </td>
+                      )}
+
+                      {/* Status */}
+                      {lotColsVisible.status && (
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 12px',
+                            borderRadius: 9999,
+                            background: '#f1f5f9',
+                            color: '#475569',
+                            fontSize: 12,
+                            fontWeight: 600
+                          }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#64748b' }} />
+                            <span>{formatLotStatus(lot.status)}</span>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Actions: Three-dot action menu */}
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <button
+                            type="button"
+                            onClick={() => setActiveMenuLotId(activeMenuLotId === lot.id ? null : lot.id)}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 6,
+                              border: '1px solid #e2e8f0',
+                              background: '#ffffff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              color: '#64748b',
+                              transition: 'all 0.15s ease'
+                            }}
+                            title="Lot options"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {activeMenuLotId === lot.id && (
+                            <div style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: '100%',
+                              marginTop: 4,
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: 8,
+                              boxShadow: 'var(--shadow-dropdown)',
+                              padding: 4,
+                              minWidth: 130,
+                              zIndex: 50,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 2
+                            }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLotsEditingLot(lot);
+                                  setActiveMenuLotId(null);
+                                }}
+                                style={{
+                                  textAlign: 'left',
+                                  padding: '8px 12px',
+                                  fontSize: 12.5,
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  borderRadius: 4,
+                                  color: '#1e293b',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8
+                                }}
+                              >
+                                <Edit3 size={14} color="#64748b" />
+                                <span>Edit Lot</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLotsLotToDelete(lot);
+                                  setActiveMenuLotId(null);
+                                }}
+                                style={{
+                                  textAlign: 'left',
+                                  padding: '8px 12px',
+                                  fontSize: 12.5,
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  borderRadius: 4,
+                                  color: '#dc2626',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8
+                                }}
+                              >
+                                <Trash2 size={14} color="#dc2626" />
+                                <span>Delete Lot</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {sorted.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '36px 16px', color: '#94a3b8' }}>
+                        {lotSearch ? 'No lots match search criteria.' : 'No lots assigned to this auction yet. Click "+ Add Lot" to catalog your first item.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer matching reference screenshot */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 4px 0',
+              fontSize: 13,
+              color: '#64748b'
+            }}>
+              <div>
+                Showing {sorted.length} items in this auction
+              </div>
+              {selectedLots.length > 0 && (
+                <div style={{ color: 'var(--gold-dark, #8c6428)', fontWeight: 600 }}>
+                  {selectedLots.length} lot{selectedLots.length !== 1 ? 's' : ''} selected
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* =========================================================================
           SUB-TAB 5: LOT IMAGES (Grid with upload & No Image placeholder)
@@ -1431,78 +2338,386 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
       {/* =========================================================================
           SUB-TAB 6: EXPENSES
           ========================================================================= */}
-      {currentTab === 'expenses' && (
-        <div className="syndication-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <h3 className="font-serif" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                Auction Operating Expenses
-              </h3>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Track marketing, syndication advertising, grading fees, and saleroom security
-              </p>
+      {currentTab === 'expenses' && (() => {
+        const query = expenseSearch.toLowerCase().trim();
+        const filtered = (auction.expenses || []).filter(exp => {
+          if (!query) return true;
+          return (
+            (exp.type || '').toLowerCase().includes(query) ||
+            (exp.account || '').toLowerCase().includes(query) ||
+            (exp.payFrom || '').toLowerCase().includes(query) ||
+            (exp.description || '').toLowerCase().includes(query) ||
+            (exp.amount !== undefined ? exp.amount.toString() : '').includes(query) ||
+            (exp.date || '').toLowerCase().includes(query)
+          );
+        });
+
+        const sorted = [...filtered].sort((a, b) => {
+          let aVal: any = a[expenseSortColumn as keyof AuctionExpense] || '';
+          let bVal: any = b[expenseSortColumn as keyof AuctionExpense] || '';
+          if (expenseSortColumn === 'amount') {
+            aVal = Number(a.amount) || 0;
+            bVal = Number(b.amount) || 0;
+          } else {
+            aVal = aVal.toString().toLowerCase();
+            bVal = bVal.toString().toLowerCase();
+          }
+          if (aVal < bVal) return expenseSortDirection === 'asc' ? -1 : 1;
+          if (aVal > bVal) return expenseSortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+
+        const totalItems = sorted.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / expensePageSize));
+        const safePage = Math.min(expensePage, totalPages);
+        const paged = sorted.slice((safePage - 1) * expensePageSize, safePage * expensePageSize);
+
+        const totalExpensesAmount = (auction.expenses || []).reduce(
+          (sum, exp) => sum + (Number(exp.amount) || 0), 0
+        );
+
+        const toggleSort = (col: typeof expenseSortColumn) => {
+          if (expenseSortColumn === col) {
+            setExpenseSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+          } else {
+            setExpenseSortColumn(col);
+            setExpenseSortDirection('asc');
+          }
+        };
+
+        const renderSortIcon = (col: typeof expenseSortColumn) => {
+          if (expenseSortColumn !== col) {
+            return <ArrowUpDown size={12} style={{ color: 'var(--text-dim)', marginLeft: 4 }} />;
+          }
+          return expenseSortDirection === 'asc'
+            ? <ArrowUp size={12} style={{ color: 'var(--gold-primary)', marginLeft: 4 }} />
+            : <ArrowDown size={12} style={{ color: 'var(--gold-primary)', marginLeft: 4 }} />;
+        };
+
+        return (
+          <div className="syndication-card">
+            {/* Toolbar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              marginBottom: 16,
+              flexWrap: 'wrap'
+            }}>
+              <button 
+                type="button" 
+                className="btn btn-gold"
+                onClick={handleOpenAddExpense}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={15} />
+                <span>+ New Expense</span>
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+                <div style={{ position: 'relative', width: 260 }}>
+                  <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+                  <input 
+                    type="text"
+                    placeholder="Search expenses..."
+                    value={expenseSearch}
+                    onChange={(e) => {
+                      setExpenseSearch(e.target.value);
+                      setExpensePage(1);
+                    }}
+                    className="catalog-search-input"
+                    style={{ width: '100%', height: 34, paddingLeft: 30, fontSize: 12.5 }}
+                  />
+                  {expenseSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setExpenseSearch('')}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)' }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Column-settings gear */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsColumnSettingsOpen(!isColumnSettingsOpen)}
+                    title="Column settings"
+                    style={{ width: 34, height: 34, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <SlidersHorizontal size={15} />
+                  </button>
+
+                  {isColumnSettingsOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: '100%',
+                      marginTop: 6,
+                      background: '#ffffff',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 8,
+                      boxShadow: 'var(--shadow-card-hover)',
+                      padding: 12,
+                      minWidth: 190,
+                      zIndex: 50,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+                        Column Settings
+                      </div>
+                      {[
+                        { key: 'type', label: 'Type' },
+                        { key: 'account', label: 'Account' },
+                        { key: 'payFrom', label: 'Pay From' },
+                        { key: 'description', label: 'Expense Description' },
+                        { key: 'amount', label: 'Amount' }
+                      ].map(({ key, label }) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: 'var(--text-main)' }}>
+                          <input 
+                            type="checkbox"
+                            checked={visibleColumns[key as keyof typeof visibleColumns]}
+                            onChange={() => setVisibleColumns(prev => ({ ...prev, [key]: !prev[key as keyof typeof visibleColumns] }))}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <button 
-              type="button" 
-              className="btn btn-gold"
-              onClick={() => setIsExpenseModalOpen(true)}
-            >
-              <Plus size={15} />
-              <span>+ Add Expense</span>
-            </button>
-          </div>
 
-          <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600 }}>Description</th>
-                  <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600 }}>Vendor</th>
-                  <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600 }}>Amount</th>
-                  <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: 600, width: 120 }}>Date</th>
-                  <th style={{ textAlign: 'center', padding: '10px 14px', width: 60 }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auction.expenses.map((exp) => (
-                  <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 500, color: 'var(--text-main)' }}>
-                      {exp.description}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
-                      {exp.vendor}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#dc2626' }}>
-                      {formatCurrency(exp.amount)}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center', color: 'var(--text-dim)' }}>
-                      {formatDate(exp.date)}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <button 
-                        type="button"
-                        onClick={() => dispatch({ type: 'REMOVE_EXPENSE', id: exp.id })}
-                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}
-                        title="Delete expense"
+            {/* Table */}
+            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border-subtle)' }}>
+                    {visibleColumns.type && (
+                      <th 
+                        onClick={() => toggleSort('type')}
+                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
                       >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Type {renderSortIcon('type')}
+                        </span>
+                      </th>
+                    )}
+                    {visibleColumns.account && (
+                      <th 
+                        onClick={() => toggleSort('account')}
+                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Account {renderSortIcon('account')}
+                        </span>
+                      </th>
+                    )}
+                    {visibleColumns.payFrom && (
+                      <th 
+                        onClick={() => toggleSort('payFrom')}
+                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Pay From {renderSortIcon('payFrom')}
+                        </span>
+                      </th>
+                    )}
+                    {visibleColumns.description && (
+                      <th 
+                        onClick={() => toggleSort('description')}
+                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Expense Description {renderSortIcon('description')}
+                        </span>
+                      </th>
+                    )}
+                    {visibleColumns.amount && (
+                      <th 
+                        onClick={() => toggleSort('amount')}
+                        style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                          Amount {renderSortIcon('amount')}
+                        </span>
+                      </th>
+                    )}
+                    <th style={{ textAlign: 'center', padding: '10px 14px', width: 90, fontWeight: 600 }}>
+                      Actions
+                    </th>
                   </tr>
-                ))}
+                </thead>
+                <tbody>
+                  {paged.map((exp) => (
+                    <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: '#ffffff' }}>
+                      {visibleColumns.type && (
+                        <td style={{ padding: '10px 14px', color: 'var(--text-main)', fontWeight: 500 }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            background: '#f1f5f9',
+                            color: '#334155'
+                          }}>
+                            {exp.type}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.account && (
+                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
+                          <span style={{ textTransform: 'lowercase' }}>{exp.account}</span>
+                        </td>
+                      )}
+                      {visibleColumns.payFrom && (
+                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
+                          <span style={{ textTransform: 'capitalize' }}>{exp.payFrom || 'Cash'}</span>
+                        </td>
+                      )}
+                      {visibleColumns.description && (
+                        <td style={{ padding: '10px 14px', color: 'var(--text-main)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{exp.description}</span>
+                            {exp.receiptUrl && (
+                              <span 
+                                title="Receipt attached" 
+                                style={{ fontSize: 10.5, padding: '1px 5px', borderRadius: 3, background: '#ecfdf5', color: '#047857', fontWeight: 600 }}
+                              >
+                                Receipt
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.amount && (
+                        <td style={{
+                          padding: '10px 14px',
+                          textAlign: 'right',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 600,
+                          color: exp.amount > 0 ? '#dc2626' : 'var(--text-main)'
+                        }}>
+                          ${(Number(exp.amount) || 0).toFixed(2)}
+                        </td>
+                      )}
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          <button 
+                            type="button"
+                            onClick={() => handleOpenEditExpense(exp)}
+                            style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', padding: 4 }}
+                            title="Edit expense"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setExpenseToDelete(exp)}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 4 }}
+                            title="Delete expense"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
 
-                {auction.expenses.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
-                      No expenses logged for this auction event.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  {paged.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
+                        {expenseSearch ? 'No expenses match search criteria.' : 'No expenses logged for this auction event.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Summary Row */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                padding: '12px 18px',
+                background: '#fafaf8',
+                borderTop: '1.5px solid var(--border-subtle)',
+                fontSize: 13.5,
+                fontWeight: 600,
+                color: 'var(--text-main)'
+              }}>
+                <span>Total expenses:&nbsp;</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>
+                  ${totalExpensesAmount.toFixed(2)}
+                </span>
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                borderTop: '1px solid var(--border-subtle)',
+                fontSize: 12.5,
+                background: '#ffffff',
+                color: 'var(--text-secondary)',
+                flexWrap: 'wrap',
+                gap: 10
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Show</span>
+                  <select
+                    value={expensePageSize}
+                    onChange={(e) => {
+                      setExpensePageSize(Number(e.target.value));
+                      setExpensePage(1);
+                    }}
+                    className="catalog-search-input"
+                    style={{ height: 28, padding: '0 8px', fontSize: 12 }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setExpensePage(p => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                  >
+                    Prev
+                  </button>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                    {safePage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setExpensePage(p => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* =========================================================================
           MODALS
@@ -1613,20 +2828,152 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
         </div>
       </FormModal>
 
-      {/* Add Expense Modal */}
+      {/* New / Edit Expense Modal */}
       <FormModal
         isOpen={isExpenseModalOpen}
-        title="Add Auction Operating Expense"
-        onClose={() => setIsExpenseModalOpen(false)}
-        onSubmit={handleAddExpense}
-        submitLabel="Log Expense"
+        title={editingExpense ? 'Edit Operating Expense' : 'Log New Operating Expense'}
+        onClose={() => {
+          setIsExpenseModalOpen(false);
+          setEditingExpense(null);
+        }}
+        onSubmit={handleSaveExpense}
+        submitLabel={editingExpense ? 'Update Expense' : 'Save Expense'}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Type with + New type */}
+          <FormField label="Expense Type *" required>
+            {!isCustomType ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  value={expType}
+                  onChange={(e) => {
+                    if (e.target.value === '__new_type__') {
+                      setIsCustomType(true);
+                      setCustomExpType('');
+                    } else {
+                      setExpType(e.target.value);
+                    }
+                  }}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 36 }}
+                >
+                  {EXPENSE_TYPES.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  <option value="__new_type__">+ New type...</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsCustomType(true)}
+                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
+                >
+                  + New type
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter custom expense type"
+                  value={customExpType}
+                  onChange={(e) => setCustomExpType(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 36 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setIsCustomType(false);
+                    setExpType(EXPENSE_TYPES[0]);
+                  }}
+                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </FormField>
+
+          {/* Account (creatable) */}
+          <FormField label="Account *" required>
+            {!isCustomAccount ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  value={expAccount}
+                  onChange={(e) => {
+                    if (e.target.value === '__new_account__') {
+                      setIsCustomAccount(true);
+                      setCustomAccount('');
+                    } else {
+                      setExpAccount(e.target.value);
+                    }
+                  }}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 36 }}
+                >
+                  {existingAccounts.map(acc => (
+                    <option key={acc} value={acc}>{acc}</option>
+                  ))}
+                  <option value="__new_account__">+ New account...</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsCustomAccount(true)}
+                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
+                >
+                  + New
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. google ads, storage locker"
+                  value={customAccount}
+                  onChange={(e) => setCustomAccount(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 36 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setIsCustomAccount(false);
+                    setExpAccount(existingAccounts[0] || 'facebook');
+                  }}
+                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </FormField>
+
+          {/* Pay From */}
+          <FormField label="Pay From *" required>
+            <select
+              value={expPayFrom}
+              onChange={(e) => setExpPayFrom(e.target.value)}
+              className="catalog-search-input"
+              style={{ width: '100%', height: 36 }}
+            >
+              {PAY_FROM_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </FormField>
+
+          {/* Expense Description */}
           <FormField label="Expense Description *" required>
             <input 
               type="text"
               required
-              placeholder="e.g. HiBid Banner Advertising & Feature Listing"
+              placeholder="e.g. Facebook Campaign Ads"
               value={expDesc}
               onChange={(e) => setExpDesc(e.target.value)}
               className="catalog-search-input"
@@ -1634,34 +2981,29 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             />
           </FormField>
 
-          <FormField label="Vendor">
-            <input 
-              type="text"
-              placeholder="e.g. HiBid Auction Network"
-              value={expVendor}
-              onChange={(e) => setExpVendor(e.target.value)}
-              className="catalog-search-input"
-              style={{ width: '100%', height: 36 }}
-            />
-          </FormField>
-
+          {/* Amount and Date */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Amount ($) *" required>
-              <input 
-                type="number"
-                step="0.01"
-                required
-                placeholder="0.00"
-                value={expAmount}
-                onChange={(e) => setExpAmount(e.target.value)}
-                className="catalog-search-input"
-                style={{ width: '100%', height: 36 }}
-              />
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontWeight: 600, color: 'var(--text-dim)' }}>$</span>
+                <input 
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  placeholder="0.00"
+                  value={expAmount}
+                  onChange={(e) => setExpAmount(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 36, paddingLeft: 24, fontFamily: 'var(--font-mono)' }}
+                />
+              </div>
             </FormField>
 
-            <FormField label="Date">
+            <FormField label="Date *" required>
               <input 
                 type="date"
+                required
                 value={expDate}
                 onChange={(e) => setExpDate(e.target.value)}
                 className="catalog-search-input"
@@ -1669,6 +3011,223 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
               />
             </FormField>
           </div>
+
+          {/* Optional Receipt Upload */}
+          <FormField label="Receipt (Optional image or PDF)">
+            {expReceiptPreview || expReceiptName ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: '#f8fafc',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 6
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                  {expReceiptPreview && expReceiptPreview.startsWith('data:image') ? (
+                    <img src={expReceiptPreview} alt="Receipt preview" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} />
+                  ) : (
+                    <FileText size={18} color="var(--gold-primary)" />
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    {expReceiptName || 'Attached receipt document'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpReceiptName('');
+                    setExpReceiptPreview(null);
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 4 }}
+                  title="Remove receipt"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ) : (
+              <label style={{
+                display: 'block',
+                border: '1.5px dashed var(--border-subtle)',
+                borderRadius: 6,
+                padding: '16px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: '#fafaf8'
+              }}>
+                <Upload size={18} color="var(--gold-primary)" style={{ margin: '0 auto 6px' }} />
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Click to upload receipt (JPG, PNG, PDF)
+                </div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setExpReceiptName(file.name);
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setExpReceiptPreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+            )}
+          </FormField>
+        </div>
+      </FormModal>
+
+      {/* Delete Expense Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!expenseToDelete}
+        title="Delete Expense"
+        message={`Are you sure you want to delete this expense record for "${expenseToDelete?.description}"? This action cannot be undone.`}
+        confirmLabel="Delete Expense"
+        isDestructive={true}
+        onConfirm={handleConfirmDeleteExpense}
+        onCancel={() => setExpenseToDelete(null)}
+      />
+
+      {/* Pre-Auction Lot Form Modal (Single 4-Card Modal) */}
+      <LotFormModal
+        isOpen={isLotsNewLotModalOpen || !!lotsEditingLot}
+        onClose={() => {
+          setIsLotsNewLotModalOpen(false);
+          setLotsEditingLot(null);
+        }}
+        onSave={async (lotData) => {
+          if (lotsEditingLot) {
+            onUpdateLot(lotData);
+          } else {
+            onAddLot(lotData);
+          }
+          setIsLotsNewLotModalOpen(false);
+          setLotsEditingLot(null);
+        }}
+        editingLot={lotsEditingLot}
+        lots={lots}
+        auctions={[auction as any]}
+        defaultAuctionId={auction.id}
+        lockAuction={true}
+        consignors={INITIAL_USERS}
+      />
+
+      {/* Delete Lot Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!lotsLotToDelete}
+        title="Delete Catalog Lot"
+        message={`Are you sure you want to delete Lot #${lotsLotToDelete?.lotNumber} (${lotsLotToDelete?.title})? This will permanently remove the lot from this auction.`}
+        confirmLabel="Delete Lot"
+        isDestructive={true}
+        onConfirm={async () => {
+          if (lotsLotToDelete) {
+            await onDeleteLot(lotsLotToDelete.id);
+            setLotsLotToDelete(null);
+          }
+        }}
+        onCancel={() => setLotsLotToDelete(null)}
+      />
+
+      {/* Scan Lot Modal */}
+      <FormModal
+        isOpen={isScanLotModalOpen}
+        title="Scan Lot / Quick Find"
+        onClose={() => {
+          setIsScanLotModalOpen(false);
+          setScanInput('');
+        }}
+        submitLabel="Open Lot"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const target = filteredAuctionLots.find(
+            l => l.lotNumber.toString() === scanInput.trim() ||
+                 (l.certNumber && l.certNumber.toLowerCase() === scanInput.trim().toLowerCase())
+          );
+          if (target) {
+            setIsScanLotModalOpen(false);
+            setScanInput('');
+            setLotsEditingLot(target);
+          } else {
+            alert(`No lot found matching "${scanInput}". Please enter a valid lot number (e.g. 101) or certification number.`);
+          }
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{
+            border: '2px dashed var(--border-subtle)',
+            borderRadius: 8,
+            padding: '24px 16px',
+            textAlign: 'center',
+            background: '#fafaf8'
+          }}>
+            <Barcode size={36} color="var(--gold-primary)" style={{ margin: '0 auto 8px' }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+              Scan Barcode / Enter Lot Number
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              Scan with handheld scanner or type lot number below
+            </div>
+          </div>
+
+          <FormField label="Lot # or Certification Number *" required>
+            <input
+              type="text"
+              autoFocus
+              required
+              placeholder="e.g. 101 or 48291044"
+              value={scanInput}
+              onChange={(e) => setScanInput(e.target.value)}
+              className="catalog-search-input"
+              style={{ width: '100%', height: 38 }}
+            />
+          </FormField>
+        </div>
+      </FormModal>
+
+      {/* Sale Order Sequencing Modal */}
+      <FormModal
+        isOpen={isSaleOrderModalOpen}
+        title="Auto-Sequence Sale Order & HiBid Stagger"
+        onClose={() => setIsSaleOrderModalOpen(false)}
+        submitLabel="Apply Sequencing"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const sorted = [...filteredAuctionLots].sort((a, b) => a.lotNumber - b.lotNumber);
+          sorted.forEach((l, idx) => {
+            onUpdateLot({
+              ...l,
+              saleOrder: idx + 1,
+              staggerSeconds: (idx + 1) * bulkStaggerInterval
+            });
+          });
+          setIsSaleOrderModalOpen(false);
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+            Automatically numbers the <strong>Sale Order</strong> from 1 to {filteredAuctionLots.length} in ascending lot number sequence, and assigns incremental HiBid stagger countdown seconds for the catalog.
+          </p>
+
+          <FormField label="HiBid Stagger Increment (seconds per lot) *" required>
+            <input
+              type="number"
+              min="5"
+              step="5"
+              required
+              value={bulkStaggerInterval}
+              onChange={(e) => setBulkStaggerInterval(parseInt(e.target.value) || 20)}
+              className="catalog-search-input"
+              style={{ width: '100%', height: 38 }}
+            />
+            <span style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 4, display: 'block' }}>
+              e.g. 20s will set Lot 1 to 20s, Lot 2 to 40s, Lot 3 to 60s, Lot 4 to 80s...
+            </span>
+          </FormField>
         </div>
       </FormModal>
     </div>

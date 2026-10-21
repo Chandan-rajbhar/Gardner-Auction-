@@ -638,13 +638,14 @@ body {
 }
 
 .af360-tab:hover {
-  color: var(--text-main);
+  color: var(--gold-primary, #cba135);
 }
 
 .af360-tab.active {
-  background: #ffffff;
-  color: var(--text-main);
-  box-shadow: var(--shadow-xs);
+  background: #151922;
+  color: var(--gold-primary, #cba135);
+  border: 1.5px solid var(--gold-primary, #cba135);
+  box-shadow: 0 0 10px rgba(203, 161, 53, 0.25);
 }
 
 /* ==========================================================================

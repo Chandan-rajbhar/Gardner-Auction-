@@ -4,13 +4,10 @@ import {
   useAuctionDetail 
 } from '../../context/AuctionDetailContext';
 import { 
-  StageType, 
-  PreAuctionSubTab, 
-  AuctionDaySubTab 
+  StageType,
+  PreAuctionSubTab 
 } from '../../types/auctionDetail';
 import { PreAuctionTab } from './tabs/PreAuctionTab';
-import { AuctionDayTab } from './tabs/AuctionDayTab';
-import { SettlementTab } from './tabs/SettlementTab';
 import { ConfirmModal } from '../Common/ConfirmModal';
 import { LotItem } from '../../types';
 import { 
@@ -18,13 +15,7 @@ import {
   Save, 
   FileText, 
   Trash2, 
-  CheckCircle, 
-  AlertTriangle,
-  Gavel,
-  Radio,
-  Handshake,
-  Settings2,
-  Calendar
+  AlertTriangle
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { auctionService } from '../../services/auctionService';
@@ -70,25 +61,15 @@ const AuctionDetailContent: React.FC<{
   const { showToast } = useToast();
   const auction = state.data;
 
-  const [currentStage, setCurrentStage] = useState<StageType>(initialStage);
   const [preAuctionSubTab, setPreAuctionSubTab] = useState<PreAuctionSubTab>(
     (initialSubTab as PreAuctionSubTab) || 'details'
   );
-  const [auctionDaySubTab, setAuctionDaySubTab] = useState<AuctionDaySubTab>(
-    (initialSubTab as AuctionDaySubTab) || 'dashboard'
-  );
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   // Modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Sync stage if props change
-  useEffect(() => {
-    if (initialStage) setCurrentStage(initialStage);
-  }, [initialStage]);
 
   // Handle Return to All Auctions with unsaved changes check
   const handleReturnClick = () => {
@@ -105,7 +86,7 @@ const AuctionDetailContent: React.FC<{
     const success = await saveAuction();
     setIsSaving(false);
     if (success) {
-      showToast('Auction configuration saved successfully!', 'success');
+      showToast('success', 'Saved', 'Auction configuration saved successfully!');
     }
   };
 
@@ -115,11 +96,11 @@ const AuctionDetailContent: React.FC<{
     setIsDeleting(true);
     try {
       await auctionService.deleteAuction(auction.id);
-      showToast(`Auction "${auction.name}" deleted.`, 'info');
+      showToast('info', 'Deleted', `Auction "${auction.name}" deleted.`);
       setIsDeleteModalOpen(false);
       onReturnToList();
     } catch (e) {
-      showToast('Failed to delete auction', 'error');
+      showToast('error', 'Error', 'Failed to delete auction');
     } finally {
       setIsDeleting(false);
     }
@@ -227,117 +208,16 @@ const AuctionDetailContent: React.FC<{
         </div>
       </div>
 
-      {/* Full-width segmented control for 3 stages: Pre Auction, Auction Day, Settlement (active = gold) */}
-      <div 
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          background: '#ffffff',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 8,
-          padding: 4,
-          boxShadow: 'var(--shadow-xs)'
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setCurrentStage('pre-auction')}
-          style={{
-            padding: '12px 16px',
-            border: 'none',
-            borderRadius: 6,
-            background: currentStage === 'pre-auction' ? 'var(--gold-primary)' : 'transparent',
-            color: currentStage === 'pre-auction' ? '#ffffff' : 'var(--text-secondary)',
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Settings2 size={16} />
-          <span>Pre Auction</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentStage('auction-day')}
-          style={{
-            padding: '12px 16px',
-            border: 'none',
-            borderRadius: 6,
-            background: currentStage === 'auction-day' ? 'var(--gold-primary)' : 'transparent',
-            color: currentStage === 'auction-day' ? '#ffffff' : 'var(--text-secondary)',
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Gavel size={16} />
-          <span>Auction Day</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentStage('settlement')}
-          style={{
-            padding: '12px 16px',
-            border: 'none',
-            borderRadius: 6,
-            background: currentStage === 'settlement' ? 'var(--gold-primary)' : 'transparent',
-            color: currentStage === 'settlement' ? '#ffffff' : 'var(--text-secondary)',
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Handshake size={16} />
-          <span>Settlement</span>
-        </button>
-      </div>
-
-      {/* Stage Views */}
-      {currentStage === 'pre-auction' && (
-        <PreAuctionTab
-          currentTab={preAuctionSubTab}
-          onSelectTab={setPreAuctionSubTab}
-          lots={lots}
-          onAddLot={onAddLot}
-          onUpdateLot={onUpdateLot}
-          onSendToBlock={onSendToBlock}
-          onDeleteLot={onDeleteLot}
-        />
-      )}
-
-      {currentStage === 'auction-day' && (
-        <AuctionDayTab
-          currentTab={auctionDaySubTab}
-          onSelectTab={setAuctionDaySubTab}
-          onNavigateClerking={() => {
-            if (onNavigateClerking) onNavigateClerking();
-          }}
-        />
-      )}
-
-      {currentStage === 'settlement' && (
-        <SettlementTab
-          selectedCustomerId={selectedCustomerId}
-          onSelectCustomer={setSelectedCustomerId}
-        />
-      )}
+      {/* Pre-Auction View */}
+      <PreAuctionTab
+        currentTab={preAuctionSubTab}
+        onSelectTab={setPreAuctionSubTab}
+        lots={lots}
+        onAddLot={onAddLot}
+        onUpdateLot={onUpdateLot}
+        onSendToBlock={onSendToBlock}
+        onDeleteLot={onDeleteLot}
+      />
 
       {/* Sticky Bottom Save Bar when there are unsaved changes */}
       {state.isDirty && (
@@ -420,8 +300,8 @@ export const AuctionDetailView: React.FC<AuctionDetailViewProps> = (props) => {
   return (
     <AuctionDetailProvider
       auctionId={props.auctionId}
-      onSavedSuccess={() => showToast('Auction saved successfully!', 'success')}
-      onSavedError={(err) => showToast(err, 'error')}
+      onSavedSuccess={() => showToast('success', 'Saved', 'Auction saved successfully!')}
+      onSavedError={(err) => showToast('error', 'Error', err)}
     >
       <AuctionDetailContent {...props} />
     </AuctionDetailProvider>

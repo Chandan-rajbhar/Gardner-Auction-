@@ -80,6 +80,17 @@ export interface LotItem {
   hammerPrice?: number;
   passReason?: string;
   clerkingState?: ClerkingState;
+  quantity?: number;
+  description?: string;
+  images?: string[];
+  sellerId?: string;
+  sellerName?: string;
+  staggerSeconds?: number;
+  saleOrder?: number;
+  commission?: string;
+  buyerPremium?: string;
+  buyerTax?: string;
+  chargesOverridden?: boolean;
 }
 
 export type BidderStatus = 'verified' | 'pending_verification' | 'suspended' | 'vip';

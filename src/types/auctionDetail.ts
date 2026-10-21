@@ -34,10 +34,14 @@ export interface AuctionLink {
 
 export interface AuctionExpense {
   id: string;
+  type: string;
+  account: string;
+  payFrom: string;
   description: string;
-  vendor: string;
+  vendor?: string;
   amount: number;
   date: string;
+  receiptUrl?: string;
 }
 
 export interface HiBidSiteStat {

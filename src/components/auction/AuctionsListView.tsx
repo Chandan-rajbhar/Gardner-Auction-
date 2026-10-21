@@ -124,7 +124,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       key: 'name',
       header: 'EVENT NAME',
       sortable: true,
-      minWidth: 280,
+      width: 280,
       render: (a) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

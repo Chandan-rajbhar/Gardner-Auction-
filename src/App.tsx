@@ -34,11 +34,13 @@ import { ReportsView } from './components/views/ReportsView';
 import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
 import { ProfileView } from './components/views/ProfileView';
-import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
+import { CheckCircle2, RefreshCw, X, Radio, ArrowLeft } from 'lucide-react';
 import { recordBidToSupabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
 import { auctionService } from './services/auctionService';
-import { StageType } from './types/auctionDetail';
+import { StageType, AuctionDaySubTab } from './types/auctionDetail';
+import { AuctionDayTab } from './components/auction/tabs/AuctionDayTab';
+import { AuctionDetailProvider } from './context/AuctionDetailContext';
 
 function mapDetailToAuction(d: any): Auction {
   return {
@@ -71,6 +73,105 @@ function mapDetailToAuction(d: any): Auction {
     syndications: d.dayStats?.siteStats || []
   };
 }
+
+const AuctionDaySection: React.FC<{
+  auctionId: string;
+  lots: LotItem[];
+  activeLotOnBlock: LotItem | undefined;
+  bids: LiveBid[];
+  bidders: UserBidder[];
+  handlePlaceBid: (amount: number, paddleNumber: string, bidderName: string, source: LiveBid['source']) => void;
+  handleHammerSold: (lotId: string, finalAmount: number, paddleNumber: string, overrideReserve?: boolean) => void;
+  handlePassLot: (lotId: string, reason?: string) => void;
+  handleReopenLot: (lotId: string) => void;
+  handleNextLot: () => void;
+  setActiveLotId: (id: string) => void;
+  setLots: React.Dispatch<React.SetStateAction<LotItem[]>>;
+}> = ({
+  auctionId,
+  lots,
+  activeLotOnBlock,
+  bids,
+  bidders,
+  handlePlaceBid,
+  handleHammerSold,
+  handlePassLot,
+  handleReopenLot,
+  handleNextLot,
+  setActiveLotId,
+  setLots
+}) => {
+  const [currentTab, setCurrentTab] = useState<AuctionDaySubTab>('dashboard');
+  const [isLiveRostrumActive, setIsLiveRostrumActive] = useState<boolean>(false);
+
+  return (
+    <AuctionDetailProvider auctionId={auctionId} initialLots={lots}>
+      {isLiveRostrumActive ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              type="button"
+              onClick={() => setIsLiveRostrumActive(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--gold-dark)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: 0
+              }}
+            >
+              <ArrowLeft size={15} />
+              <span>← Return to Auction Day Console</span>
+            </button>
+          </div>
+
+          <LiveClerkingView 
+            currentLot={activeLotOnBlock}
+            allLots={lots}
+            bids={bids.filter(b => b.lotId === activeLotOnBlock?.id || b.lotNumber === activeLotOnBlock?.lotNumber)}
+            allBids={bids}
+            bidders={bidders}
+            onPlaceBid={handlePlaceBid}
+            onHammerSold={handleHammerSold}
+            onPassLot={handlePassLot}
+            onReopenLot={handleReopenLot}
+            onNextLot={handleNextLot}
+            onSelectLot={(lotId) => {
+              setActiveLotId(lotId);
+              setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: 'on_block' } : l.status === 'on_block' ? { ...l, status: 'upcoming' } : l));
+              lotsService.sendLotToBlock(lotId);
+            }}
+          />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="card-header-flex">
+            <div>
+              <h2 className="font-serif" style={{ fontSize: 22, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
+                Auction Day
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Rostrum clerking controls, bidder check-in, HiBid syndication monitors, and alternate floor bids
+              </p>
+            </div>
+          </div>
+
+          <AuctionDayTab
+            currentTab={currentTab}
+            onSelectTab={setCurrentTab}
+            onNavigateClerking={() => setIsLiveRostrumActive(true)}
+            lots={lots}
+          />
+        </div>
+      )}
+    </AuctionDetailProvider>
+  );
+};
 
 const AdminConsole: React.FC = () => {
   const { user } = useAuth();
@@ -562,22 +663,19 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'live_clerking' && (
-            <LiveClerkingView 
-              currentLot={activeLotOnBlock}
-              allLots={lots}
-              bids={bids.filter(b => b.lotId === activeLotOnBlock?.id || b.lotNumber === activeLotOnBlock?.lotNumber)}
-              allBids={bids}
+            <AuctionDaySection
+              auctionId={selectedAuctionId || 'auc-002'}
+              lots={lots}
+              activeLotOnBlock={activeLotOnBlock}
+              bids={bids}
               bidders={bidders}
-              onPlaceBid={handlePlaceBid}
-              onHammerSold={handleHammerSold}
-              onPassLot={handlePassLot}
-              onReopenLot={handleReopenLot}
-              onNextLot={handleNextLot}
-              onSelectLot={(lotId) => {
-                setActiveLotId(lotId);
-                setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: 'on_block' } : l.status === 'on_block' ? { ...l, status: 'upcoming' } : l));
-                lotsService.sendLotToBlock(lotId);
-              }}
+              handlePlaceBid={handlePlaceBid}
+              handleHammerSold={handleHammerSold}
+              handlePassLot={handlePassLot}
+              handleReopenLot={handleReopenLot}
+              handleNextLot={handleNextLot}
+              setActiveLotId={setActiveLotId}
+              setLots={setLots}
             />
           )}
 

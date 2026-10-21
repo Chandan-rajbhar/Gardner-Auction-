@@ -19,20 +19,30 @@ import {
   Search,
   Check,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Layers,
+  Users,
+  UserCheck,
+  Globe,
+  TrendingDown,
+  TrendingUp,
+  DollarSign
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
+import { LotItem } from '../../../types';
 
 interface AuctionDayTabProps {
   currentTab: AuctionDaySubTab;
   onSelectTab: (tab: AuctionDaySubTab) => void;
   onNavigateClerking: () => void;
+  lots?: LotItem[];
 }
 
 export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   currentTab,
   onSelectTab,
-  onNavigateClerking
+  onNavigateClerking,
+  lots = []
 }) => {
   const { state, dispatch } = useAuctionDetail();
   const auction = state.data;
@@ -55,6 +65,41 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   if (!auction) return null;
   const dayStats = auction.dayStats;
+
+  // Dynamic calculations from auction lots
+  const auctionLots = (lots && lots.length > 0)
+    ? lots.filter(l => !l.auctionId || l.auctionId === auction.id || l.auctionId === 'auc-001')
+    : [];
+
+  const computedLotCount = auctionLots.length > 0 ? auctionLots.length : dayStats.lotCount;
+
+  const uniqueSellerNames = new Set(
+    auctionLots
+      .map(l => l.sellerId || l.sellerName || l.consignorName)
+      .filter(Boolean)
+  );
+  const computedUniqueSellers = uniqueSellerNames.size > 0 ? uniqueSellerNames.size : dayStats.uniqueSellers;
+
+  const computedPresaleMin = auctionLots.length > 0
+    ? auctionLots.reduce((acc, l) => acc + (Number(l.estimateLow) || 0), 0)
+    : dayStats.presaleMin;
+
+  const computedPresaleMax = auctionLots.length > 0
+    ? auctionLots.reduce((acc, l) => acc + (Number(l.estimateHigh) || 0), 0)
+    : dayStats.presaleMax;
+
+  const computedAvgEstimate = computedLotCount > 0
+    ? (computedPresaleMin + computedPresaleMax) / 2 / computedLotCount
+    : 0;
+
+  const soldLots = auctionLots.filter(l => l.status === 'sold');
+  let computedAvgSalesPrice: string;
+  if (soldLots.length === 0) {
+    computedAvgSalesPrice = '--';
+  } else {
+    const totalSales = soldLots.reduce((acc, l) => acc + (l.hammerPrice || l.currentBid || 0), 0);
+    computedAvgSalesPrice = formatCurrency(totalSales / soldLots.length);
+  }
 
   // Calculate Site Stats Total Row
   const totalSiteStats = dayStats.siteStats.reduce(
@@ -168,23 +213,281 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           ========================================================================= */}
       {currentTab === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* 2x4 grid of stat cards in existing style */}
+          {/* 2x4 grid of stat cards with circular icons and right-aligned values */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-            <StatCard label="Lot Count" value={dayStats.lotCount} subtext="Catalogued lots" />
-            <StatCard label="Check In Count" value={dayStats.checkInCount} valueColor="#0284c7" subtext="Approved bidders" />
-            <StatCard label="Unique Sellers" value={dayStats.uniqueSellers} subtext="Consignor trusts" />
-            <StatCard 
-              label="HiBid Network" 
-              value="View on HiBid" 
-              isLink={true} 
-              linkUrl={dayStats.hibidUrl}
-              linkText="HiBid - View on HiBid"
-              subtext="Live syndication portal"
-            />
-            <StatCard label="Presale Estimate Min" value={formatCurrency(dayStats.presaleMin)} subtext="Reserve aggregate" />
-            <StatCard label="Presale Estimate Max" value={formatCurrency(dayStats.presaleMax)} valueColor="var(--gold-bright)" subtext="Catalog valuation" />
-            <StatCard label="Avg Estimate Per Lot" value={formatCurrency(dayStats.avgEstimate)} subtext="Per catalog item" />
-            <StatCard label="Avg Sales Price" value={formatCurrency(dayStats.avgSalesPrice)} valueColor="#059669" subtext="Realized average" />
+            {/* 1. Lot Count */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#f8fafc',
+                  border: '1.5px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--gold-primary)',
+                  flexShrink: 0
+                }}>
+                  <Layers size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Lot Count
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    {computedLotCount}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Catalogued lots
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Check In Count */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#eff6ff',
+                  border: '1.5px solid #bfdbfe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#0284c7',
+                  flexShrink: 0
+                }}>
+                  <UserCheck size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Check In Count
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: '#0284c7', lineHeight: 1.2 }}>
+                    {dayStats.checkInCount}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Approved bidders
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Unique Sellers */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#fefce8',
+                  border: '1.5px solid #fef08a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ca8a04',
+                  flexShrink: 0
+                }}>
+                  <Users size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Unique Sellers
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    {computedUniqueSellers}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Distinct consignors
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. HiBid - View on HiBid */}
+            <div 
+              className="metric-card-af360"
+              style={{ cursor: 'pointer', background: '#fcfbf9' }}
+              onClick={() => window.open(dayStats.hibidUrl || 'https://hibid.com', '_blank', 'noreferrer')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#eff6ff',
+                  border: '1.5px solid #bfdbfe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#0369a1',
+                  flexShrink: 0
+                }}>
+                  <Globe size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    HiBid Network
+                  </div>
+                  <a 
+                    href={dayStats.hibidUrl || 'https://hibid.com'}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 13.5,
+                      fontWeight: 700,
+                      color: '#0369a1',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span>HiBid - View on HiBid</span>
+                    <ExternalLink size={13} />
+                  </a>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Live syndication portal
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Presale Estimate Min */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#f8fafc',
+                  border: '1.5px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--gold-primary)',
+                  flexShrink: 0
+                }}>
+                  <TrendingDown size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Presale Estimate Min
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    {formatCurrency(computedPresaleMin)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Sum of low estimates
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Presale Estimate Max */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#fefce8',
+                  border: '1.5px solid #fef08a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--gold-bright)',
+                  flexShrink: 0
+                }}>
+                  <TrendingUp size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Presale Estimate Max
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--gold-bright)', lineHeight: 1.2 }}>
+                    {formatCurrency(computedPresaleMax)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    Sum of high estimates
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Avg Estimate Per Lot */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#f8fafc',
+                  border: '1.5px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6366f1',
+                  flexShrink: 0
+                }}>
+                  <DollarSign size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Avg Estimate Per Lot
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    {formatCurrency(computedAvgEstimate)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    (Min + Max) / 2 / lot count
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 8. Avg Sales Price (shows "--" when no sales) */}
+            <div className="metric-card-af360">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  background: '#ecfdf5',
+                  border: '1.5px solid #a7f3d0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#059669',
+                  flexShrink: 0
+                }}>
+                  <Gavel size={20} />
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
+                    Avg Sales Price
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: computedAvgSalesPrice === '--' ? 'var(--text-dim)' : '#059669',
+                    lineHeight: 1.2
+                  }}>
+                    {computedAvgSalesPrice}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
+                    {soldLots.length === 0 ? 'No sales yet' : 'Realized average'}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Site stats table */}

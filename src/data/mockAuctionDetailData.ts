@@ -183,23 +183,29 @@ export const MOCK_AUCTIONS_DETAIL: AuctionDetail[] = [
     expenses: [
       {
         id: 'exp-1',
-        description: 'HiBid Featured Catalog Syndication Package',
-        vendor: 'HiBid Auction Network',
-        amount: 350.00,
+        type: 'Auction Marketing Expense',
+        account: 'facebook',
+        payFrom: 'Cash',
+        description: 'Facebook Campaign Ads',
+        amount: 0.00,
         date: '2026-10-12'
       },
       {
         id: 'exp-2',
-        description: 'Numismatic Grading & PCGS TrueView Photography',
-        vendor: 'Professional Coin Grading Service',
-        amount: 1240.00,
+        type: 'Auction Marketing Expense',
+        account: 'local newspaper',
+        payFrom: 'Cash',
+        description: 'Local Newspaper Print Ad',
+        amount: 0.00,
         date: '2026-10-13'
       },
       {
         id: 'exp-3',
-        description: 'Saleroom Security & Insured Vault Storage',
-        vendor: 'Montana Armored & Vault Services',
-        amount: 450.00,
+        type: 'Auction Marketing Expense',
+        account: 'miscellaneous',
+        payFrom: 'Cash',
+        description: 'Miscellaneous Marketing Flyers',
+        amount: 0.00,
         date: '2026-10-14'
       }
     ],

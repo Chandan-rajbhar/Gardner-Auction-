@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { LotItem, LotCategory, LotStatus } from '../../types';
+import { LotItem, LotCategory, LotStatus, Auction, UserBidder } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { lotsService } from '../../services/lotsService';
+import { INITIAL_AUCTIONS, INITIAL_USERS } from '../../data/mockData';
+import { LotFormModal } from '../auction/LotFormModal';
 import { 
   Search, 
   Plus, 
@@ -98,6 +100,11 @@ interface LotsViewProps {
   onUpdateLot: (lot: LotItem) => void;
   onSendToBlock: (lot: LotItem) => void;
   onDeleteLot?: (lotId: string) => Promise<{ success: boolean; error?: string } | void>;
+  defaultAuctionId?: string;
+  lockAuction?: boolean;
+  auctions?: Auction[];
+  consignors?: UserBidder[];
+  onAddConsignor?: (newConsignor: UserBidder) => void;
 }
 
 export const LotsView: React.FC<LotsViewProps> = ({
@@ -105,7 +112,12 @@ export const LotsView: React.FC<LotsViewProps> = ({
   onAddLot,
   onUpdateLot,
   onSendToBlock,
-  onDeleteLot
+  onDeleteLot,
+  defaultAuctionId,
+  lockAuction = false,
+  auctions = INITIAL_AUCTIONS,
+  consignors = INITIAL_USERS,
+  onAddConsignor
 }) => {
   // Filter and display states
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,19 +141,6 @@ export const LotsView: React.FC<LotsViewProps> = ({
 
   // Edit modal state
   const [editingLot, setEditingLot] = useState<LotItem | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editCategory, setEditCategory] = useState<LotCategory>('Rare US Gold');
-  const [editLotNum, setEditLotNum] = useState('');
-  const [editStartBid, setEditStartBid] = useState('');
-  const [editReserve, setEditReserve] = useState('');
-  const [editEstLow, setEditEstLow] = useState('');
-  const [editEstHigh, setEditEstHigh] = useState('');
-  const [editCert, setEditCert] = useState<'PCGS' | 'NGC' | 'CAC' | 'ANACS' | 'Raw' | 'GIA'>('PCGS');
-  const [editGrade, setEditGrade] = useState('');
-  const [editCondition, setEditCondition] = useState('');
-  const [editProvenance, setEditProvenance] = useState('');
-  const [editConsignor, setEditConsignor] = useState('');
-  const [editImage, setEditImage] = useState('/assets/gold-coin.jpg');
 
   // Close three dots dropdown when clicking outside
   useEffect(() => {
@@ -153,21 +152,6 @@ export const LotsView: React.FC<LotsViewProps> = ({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
-
-  // New Lot Form State
-  const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<LotCategory>('Rare US Gold');
-  const [newLotNum, setNewLotNum] = useState('');
-  const [newStartBid, setNewStartBid] = useState('10000');
-  const [newReserve, setNewReserve] = useState('15000');
-  const [newEstLow, setNewEstLow] = useState('18000');
-  const [newEstHigh, setNewEstHigh] = useState('25000');
-  const [newCert, setNewCert] = useState<'PCGS' | 'NGC' | 'CAC' | 'ANACS' | 'Raw' | 'GIA'>('PCGS');
-  const [newGrade, setNewGrade] = useState('MS-65 Gem Uncirculated');
-  const [newCondition, setNewCondition] = useState('');
-  const [newProvenance, setNewProvenance] = useState('');
-  const [newConsignor, setNewConsignor] = useState('Estate of Henry Vance');
-  const [newImage, setNewImage] = useState('/assets/gold-coin.jpg');
 
   // Filter computation
   const filteredLots = lots.filter(lot => {
@@ -236,88 +220,9 @@ export const LotsView: React.FC<LotsViewProps> = ({
 
   const isFiltered = searchTerm !== '' || categoryFilter !== 'all' || statusFilter !== 'all' || reserveFilter !== 'all';
 
-  // Create Lot Handler
-  const handleCreateLot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle) return;
-
-    const nextLotNum = newLotNum ? parseInt(newLotNum) : Math.max(...lots.map(l => l.lotNumber), 100) + 1;
-
-    const created: LotItem = {
-      id: `lot-${Date.now()}`,
-      auctionId: 'auc-001',
-      lotNumber: nextLotNum,
-      title: newTitle,
-      category: newCategory,
-      image: newImage,
-      startingBid: parseFloat(newStartBid) || 5000,
-      reservePrice: parseFloat(newReserve) || 8000,
-      estimateLow: parseFloat(newEstLow) || 10000,
-      estimateHigh: parseFloat(newEstHigh) || 15000,
-      currentBid: parseFloat(newStartBid) || 5000,
-      highBidderPaddle: null,
-      highBidderName: null,
-      status: 'upcoming',
-      certification: newCert,
-      grade: newGrade,
-      certNumber: `${Math.floor(10000000 + Math.random() * 89999999)}`,
-      consignorId: 'c-01',
-      consignorName: newConsignor,
-      conditionReport: newCondition || 'High-grade state of preservation with excellent surface luster.',
-      provenance: newProvenance || 'Private Collector Vault Dispersion, Gardner Certified.',
-      bidsCount: 0
-    };
-
-    onAddLot(created);
-    setIsNewLotModalOpen(false);
-    setNewTitle('');
-    setNewLotNum('');
-    setNewCondition('');
-  };
-
   // Start Edit Handler
   const handleStartEdit = (lot: LotItem) => {
     setEditingLot(lot);
-    setEditTitle(lot.title);
-    setEditCategory(lot.category);
-    setEditLotNum(lot.lotNumber.toString());
-    setEditStartBid(lot.startingBid.toString());
-    setEditReserve(lot.reservePrice.toString());
-    setEditEstLow(lot.estimateLow.toString());
-    setEditEstHigh(lot.estimateHigh.toString());
-    setEditCert((lot.certification || 'PCGS') as any);
-    setEditGrade(lot.grade || 'MS-65 Gem Uncirculated');
-    setEditCondition(lot.conditionReport || '');
-    setEditProvenance(lot.provenance || '');
-    setEditConsignor(lot.consignorName || 'Estate Consignor');
-    setEditImage(lot.image || '/assets/gold-coin.jpg');
-  };
-
-  // Save Edit Handler
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingLot || !editTitle) return;
-
-    const updated: LotItem = {
-      ...editingLot,
-      lotNumber: parseInt(editLotNum) || editingLot.lotNumber,
-      title: editTitle,
-      category: editCategory,
-      image: editImage,
-      startingBid: parseFloat(editStartBid) || editingLot.startingBid,
-      reservePrice: parseFloat(editReserve) || editingLot.reservePrice,
-      estimateLow: parseFloat(editEstLow) || editingLot.estimateLow,
-      estimateHigh: parseFloat(editEstHigh) || editingLot.estimateHigh,
-      certification: editCert,
-      grade: editGrade,
-      conditionReport: editCondition,
-      provenance: editProvenance,
-      consignorName: editConsignor,
-    };
-
-    onUpdateLot(updated);
-    await lotsService.updateLot(updated.id, updated);
-    setEditingLot(null);
   };
 
   // Confirm Delete Handler (Backend Connected)
@@ -1031,490 +936,32 @@ export const LotsView: React.FC<LotsViewProps> = ({
         </div>
       )}
 
-      {/* Edit Lot Modal (Requirement 3) */}
-      {editingLot && (
-        <div className="modal-overlay" onClick={() => setEditingLot(null)}>
-          <div className="modal-content catalog-lot-modal" style={{ maxWidth: 760, width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '90vh', overflow: 'hidden' }}>
-              <div className="modal-header" style={{ padding: '20px 26px', background: 'linear-gradient(180deg, #ffffff 0%, #fafaf8 100%)', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div className="catalog-modal-crest">
-                    <Edit3 size={20} color="#b48316" />
-                  </div>
-                  <div>
-                    <h3 className="font-serif" style={{ fontSize: 20, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                      Edit Lot #{editingLot.lotNumber}
-                    </h3>
-                    <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                      Update numismatic specifications, appraisal boundaries, and catalog details.
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  type="button" 
-                  className="icon-btn" 
-                  onClick={() => setEditingLot(null)}
-                  aria-label="Close dialog"
-                >
-                  <X size={18} />
-                </button>
-              </div>
 
-              <div className="modal-body" style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', flex: 1 }}>
-                {/* SECTION 1: Item Identification & Category */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Layers size={14} color="#b48316" />
-                    <span>ITEM IDENTIFICATION & CATEGORY</span>
-                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 14 }}>
-                    <div className="form-group">
-                      <label>Lot Number *</label>
-                      <input 
-                        type="number" 
-                        required
-                        value={editLotNum}
-                        onChange={(e) => setEditLotNum(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Category Department *</label>
-                      <select value={editCategory} onChange={(e) => setEditCategory(e.target.value as LotCategory)}>
-                        <option value="Rare US Gold">Rare US Gold (Historical Coinage)</option>
-                        <option value="Fine Silver & Morgan Dollars">Fine Silver & Morgan Dollars</option>
-                        <option value="Ancient & World Numismatics">Ancient & World Numismatics</option>
-                        <option value="Rare Paper Currency">Rare Paper Currency & Banknotes</option>
-                        <option value="Estate Jewelry & Watches">Estate Jewelry & Luxury Watches</option>
-                        <option value="Historic Bullion">Historic Bullion & Ingot Bars</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Lot Title / Description Header *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* SECTION 2: Authentication & Official Grading */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Award size={14} color="#b48316" />
-                    <span>AUTHENTICATION & OFFICIAL GRADING</span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    <div className="form-group">
-                      <label>Grading Service / Authority</label>
-                      <select value={editCert} onChange={(e) => setEditCert(e.target.value as any)}>
-                        <option value="PCGS">PCGS (Professional Coin Grading Service)</option>
-                        <option value="NGC">NGC (Numismatic Guaranty Company)</option>
-                        <option value="CAC">CAC (Certified Acceptance Corporation)</option>
-                        <option value="GIA">GIA (Gemological Institute of America)</option>
-                        <option value="ANACS">ANACS (America's Oldest Grading Service)</option>
-                        <option value="Raw">Raw / Uncertified (In-House Authenticated)</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Assigned Grade</label>
-                      <input 
-                        type="text" 
-                        value={editGrade}
-                        onChange={(e) => setEditGrade(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 3: Pricing & Reserve */}
-                <div className="catalog-form-section pricing-highlight-box">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <div className="catalog-section-eyebrow" style={{ color: '#0f172a' }}>
-                      <DollarSign size={15} color="#b48316" />
-                      <span>PRICING, APPRAISAL & RESERVE RULES</span>
-                    </div>
-                    <span className="usd-currency-pill">CURRENCY: USD ($)</span>
-                  </div>
-
-                  <div className="pricing-grid-4col">
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Opening Bid ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          value={editStartBid}
-                          onChange={(e) => setEditStartBid(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Reserve Price ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          value={editReserve}
-                          onChange={(e) => setEditReserve(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Estimate Low ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          value={editEstLow}
-                          onChange={(e) => setEditEstLow(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Estimate High ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          value={editEstHigh}
-                          onChange={(e) => setEditEstHigh(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 4: Artwork & Condition */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Camera size={14} color="#b48316" />
-                    <span>PHOTOGRAPHY & CONDITION REPORT</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Catalog Item Artwork / Photo</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div className="lot-modal-preview-thumb">
-                        <img src={editImage} alt="Selected preview" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <select value={editImage} onChange={(e) => setEditImage(e.target.value)}>
-                          <option value="/assets/gold-coin.jpg">1907 Saint-Gaudens High Relief Gold Coin</option>
-                          <option value="/assets/silver-dollar.jpg">1881-S Morgan Silver Dollar Prooflike</option>
-                          <option value="/assets/rolex-watch.jpg">Vintage 1978 Rolex Submariner 18k Yellow Gold</option>
-                          <option value="/images/gold_bullion.jpg">Credit Suisse 1 Kilo Fine Gold Ingot Bar</option>
-                          <option value="/images/diamond_ring.jpg">GIA Certified Estate Diamond Solitaire Ring</option>
-                          <option value="/images/antique_silver.jpg">Victorian Repoussé Sterling Silver 5-Piece Service</option>
-                          <option value="/images/grandfather_clock.jpg">Chippendale Walnut Tall Case Moon Dial Clock</option>
-                          <option value="/images/gorson_painting.jpg">A.H. Gorson 'Golden Monongahela' Oil on Canvas</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Physical Condition Report</label>
-                    <textarea 
-                      rows={2} 
-                      value={editCondition}
-                      onChange={(e) => setEditCondition(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer" style={{ padding: '16px 26px', background: '#fafaf8', borderTop: '1.5px solid #eae5dc', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexShrink: 0 }}>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setEditingLot(null)}
-                  style={{ padding: '10px 22px', fontWeight: 600 }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-gold"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 26px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
-                >
-                  <Check size={16} />
-                  <span>Save Changes</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* New Lot Modal */}
-      {isNewLotModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsNewLotModalOpen(false)}>
-          <div className="modal-content catalog-lot-modal" style={{ maxWidth: 760, width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleCreateLot} style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '90vh', overflow: 'hidden' }}>
-              {/* Luxury Header */}
-              <div className="modal-header" style={{ padding: '20px 26px', background: 'linear-gradient(180deg, #ffffff 0%, #fafaf8 100%)', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div className="catalog-modal-crest">
-                    <Tag size={20} color="#b48316" />
-                  </div>
-                  <div>
-                    <h3 className="font-serif" style={{ fontSize: 20, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                      Catalog New Numismatic Lot
-                    </h3>
-                    <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                      Enter lot details, grading certification, and appraisal estimates for auction cataloging.
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  type="button" 
-                  className="icon-btn" 
-                  onClick={() => setIsNewLotModalOpen(false)}
-                  aria-label="Close dialog"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="modal-body" style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', flex: 1 }}>
-                {/* SECTION 1: Item Identification & Category */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Layers size={14} color="#b48316" />
-                    <span>ITEM IDENTIFICATION & CATEGORY</span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 14 }}>
-                    <div className="form-group">
-                      <label>Lot Number</label>
-                      <input 
-                        type="number" 
-                        placeholder="Auto (#)"
-                        value={newLotNum}
-                        onChange={(e) => setNewLotNum(e.target.value)}
-                      />
-                      <span className="field-hint">Auto-assigned if left blank</span>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Category Department *</label>
-                      <select value={newCategory} onChange={(e) => setNewCategory(e.target.value as LotCategory)}>
-                        <option value="Rare US Gold">Rare US Gold (Historical Coinage)</option>
-                        <option value="Fine Silver & Morgan Dollars">Fine Silver & Morgan Dollars</option>
-                        <option value="Ancient & World Numismatics">Ancient & World Numismatics</option>
-                        <option value="Rare Paper Currency">Rare Paper Currency & Banknotes</option>
-                        <option value="Estate Jewelry & Watches">Estate Jewelry & Luxury Watches</option>
-                        <option value="Historic Bullion">Historic Bullion & Ingot Bars</option>
-                      </select>
-                      <span className="field-hint">Department group for catalog & website filter</span>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Lot Title / Description Header *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      placeholder="e.g. 1907 Saint-Gaudens Double Eagle $20 High Relief, Wire Rim"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                    />
-                    <span className="field-hint">Main headline shown to all bidders on website and floor catalog</span>
-                  </div>
-                </div>
-
-                {/* SECTION 2: Authentication & Official Grading */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Award size={14} color="#b48316" />
-                    <span>AUTHENTICATION & OFFICIAL GRADING</span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    <div className="form-group">
-                      <label>Grading Service / Authority</label>
-                      <select value={newCert} onChange={(e) => setNewCert(e.target.value as any)}>
-                        <option value="PCGS">PCGS (Professional Coin Grading Service)</option>
-                        <option value="NGC">NGC (Numismatic Guaranty Company)</option>
-                        <option value="CAC">CAC (Certified Acceptance Corporation)</option>
-                        <option value="GIA">GIA (Gemological Institute of America)</option>
-                        <option value="ANACS">ANACS (America's Oldest Grading Service)</option>
-                        <option value="Raw">Raw / Uncertified (In-House Authenticated)</option>
-                      </select>
-                      <span className="field-hint">Official third-party authentication slab</span>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Assigned Grade</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. MS-65 Gem Uncirculated"
-                        value={newGrade}
-                        onChange={(e) => setNewGrade(e.target.value)}
-                      />
-                      <span className="field-hint">Condition score (e.g. MS-65, Proof-68, Choice AU)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 3: Valuation, Reserve & Bidding */}
-                <div className="catalog-form-section pricing-highlight-box">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <div className="catalog-section-eyebrow" style={{ color: '#0f172a' }}>
-                      <DollarSign size={15} color="#b48316" />
-                      <span>PRICING, APPRAISAL & RESERVE RULES</span>
-                    </div>
-                    <span className="usd-currency-pill">CURRENCY: USD ($)</span>
-                  </div>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 14px' }}>
-                    Set the starting price, the secret reserve minimum, and expert valuation boundaries.
-                  </p>
-
-                  <div className="pricing-grid-4col">
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Opening Bid ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder="5,000"
-                          value={newStartBid}
-                          onChange={(e) => setNewStartBid(e.target.value)}
-                        />
-                      </div>
-                      <span className="field-hint">First bid amount when auction opens</span>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Reserve Price ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder="8,000"
-                          value={newReserve}
-                          onChange={(e) => setNewReserve(e.target.value)}
-                        />
-                      </div>
-                      <span className="field-hint">Secret minimum price — won't sell below this</span>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Estimate Low ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder="10,000"
-                          value={newEstLow}
-                          onChange={(e) => setNewEstLow(e.target.value)}
-                        />
-                      </div>
-                      <span className="field-hint">Conservative expert appraisal value</span>
-                    </div>
-
-                    <div className="form-group">
-                      <label style={{ color: '#0f172a' }}>Estimate High ($)</label>
-                      <div className="currency-input-wrap">
-                        <span className="currency-prefix">$</span>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder="15,000"
-                          value={newEstHigh}
-                          onChange={(e) => setNewEstHigh(e.target.value)}
-                        />
-                      </div>
-                      <span className="field-hint">Top expected market hammer value</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 4: Photography & Condition Report */}
-                <div className="catalog-form-section">
-                  <div className="catalog-section-eyebrow">
-                    <Camera size={14} color="#b48316" />
-                    <span>PHOTOGRAPHY & CONDITION REPORT</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Catalog Item Artwork / Photo</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div className="lot-modal-preview-thumb">
-                        <img src={newImage} alt="Selected preview" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <select value={newImage} onChange={(e) => setNewImage(e.target.value)}>
-                          <option value="/assets/gold-coin.jpg">1907 Saint-Gaudens High Relief Gold Coin</option>
-                          <option value="/assets/silver-dollar.jpg">1881-S Morgan Silver Dollar Prooflike</option>
-                          <option value="/assets/rolex-watch.jpg">Vintage 1978 Rolex Submariner 18k Yellow Gold</option>
-                          <option value="/images/gold_bullion.jpg">Credit Suisse 1 Kilo Fine Gold Ingot Bar</option>
-                          <option value="/images/diamond_ring.jpg">GIA Certified Estate Diamond Solitaire Ring</option>
-                          <option value="/images/antique_silver.jpg">Victorian Repoussé Sterling Silver 5-Piece Service</option>
-                          <option value="/images/grandfather_clock.jpg">Chippendale Walnut Tall Case Moon Dial Clock</option>
-                          <option value="/images/gorson_painting.jpg">A.H. Gorson 'Golden Monongahela' Oil on Canvas</option>
-                        </select>
-                        <span className="field-hint" style={{ marginTop: 4, display: 'block' }}>
-                          Verified high-resolution museum archival image shown in public catalog
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Physical Condition Report</label>
-                    <textarea 
-                      rows={2} 
-                      placeholder="e.g. Radiant satiny roman gold luster, flawless strike, sharp wire rim definition, no contact marks or hairlines."
-                      value={newCondition}
-                      onChange={(e) => setNewCondition(e.target.value)}
-                    />
-                    <span className="field-hint">Detailed assessment visible to prospective bidders on the item detail page</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Luxury Footer */}
-              <div className="modal-footer" style={{ padding: '16px 26px', background: '#fafaf8', borderTop: '1.5px solid #eae5dc', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexShrink: 0, position: 'sticky', bottom: 0, zIndex: 10 }}>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setIsNewLotModalOpen(false)}
-                  style={{ padding: '10px 22px', fontWeight: 600 }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-gold"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 26px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
-                >
-                  <Check size={16} />
-                  <span>Save to Catalog</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modern 4-Card Lot Form Modal */}
+      <LotFormModal
+        isOpen={isNewLotModalOpen || !!editingLot}
+        onClose={() => {
+          setIsNewLotModalOpen(false);
+          setEditingLot(null);
+        }}
+        onSave={async (lotData) => {
+          if (editingLot) {
+            onUpdateLot(lotData);
+          } else {
+            onAddLot(lotData);
+          }
+          setIsNewLotModalOpen(false);
+          setEditingLot(null);
+        }}
+        editingLot={editingLot}
+        lots={lots}
+        auctions={auctions}
+        defaultAuctionId={defaultAuctionId}
+        lockAuction={lockAuction}
+        consignors={consignors}
+        onAddConsignor={onAddConsignor}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { AuctionDetail, SettlementCustomer, SettlementCharge } from '../types/auctionDetail';
+import { AuctionDetail, SettlementCustomer, SettlementCharge, AuctionExpense } from '../types/auctionDetail';
 import { MOCK_AUCTIONS_DETAIL } from '../data/mockAuctionDetailData';
 
 const STORAGE_KEY = 'gardner_auctions_detail_v1';
@@ -199,6 +199,48 @@ class AuctionService {
       return true;
     }
     return false;
+  }
+
+  public async getAuctionExpenses(auctionId: string): Promise<AuctionExpense[]> {
+    const auction = await this.getAuctionById(auctionId);
+    return auction?.expenses || [];
+  }
+
+  public async getTotalExpensesForAuction(auctionId: string): Promise<number> {
+    const expenses = await this.getAuctionExpenses(auctionId);
+    return expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+  }
+
+  public async addExpense(auctionId: string, expense: Omit<AuctionExpense, 'id'>): Promise<AuctionExpense | null> {
+    const auction = await this.getAuctionById(auctionId);
+    if (!auction) return null;
+    const newExpense: AuctionExpense = {
+      ...expense,
+      id: `exp-${Date.now()}`
+    };
+    auction.expenses = [newExpense, ...(auction.expenses || [])];
+    await this.saveAuction(auction);
+    return newExpense;
+  }
+
+  public async updateExpense(auctionId: string, expenseId: string, updated: Partial<AuctionExpense>): Promise<boolean> {
+    const auction = await this.getAuctionById(auctionId);
+    if (!auction) return false;
+    const idx = (auction.expenses || []).findIndex(e => e.id === expenseId);
+    if (idx >= 0) {
+      auction.expenses[idx] = { ...auction.expenses[idx], ...updated };
+      await this.saveAuction(auction);
+      return true;
+    }
+    return false;
+  }
+
+  public async deleteExpense(auctionId: string, expenseId: string): Promise<boolean> {
+    const auction = await this.getAuctionById(auctionId);
+    if (!auction) return false;
+    auction.expenses = (auction.expenses || []).filter(e => e.id !== expenseId);
+    await this.saveAuction(auction);
+    return true;
   }
 }
 

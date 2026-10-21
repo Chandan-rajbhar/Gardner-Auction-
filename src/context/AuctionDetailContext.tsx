@@ -22,6 +22,7 @@ type Action =
   | { type: 'UPDATE_AUCTION_LINK'; index: number; link: AuctionLink }
   | { type: 'REMOVE_AUCTION_LINK'; index: number }
   | { type: 'ADD_EXPENSE'; expense: AuctionExpense }
+  | { type: 'UPDATE_EXPENSE'; id: string; expense: Partial<AuctionExpense> }
   | { type: 'REMOVE_EXPENSE'; id: string }
   | { type: 'RESET_DIRTY' };
 
@@ -164,6 +165,16 @@ function auctionDetailReducer(state: AuctionDetailState, action: Action): Auctio
         data: {
           ...state.data,
           expenses: [action.expense, ...state.data.expenses]
+        },
+        isDirty: true
+      };
+
+    case 'UPDATE_EXPENSE':
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          expenses: state.data.expenses.map(e => e.id === action.id ? { ...e, ...action.expense } : e)
         },
         isDirty: true
       };
