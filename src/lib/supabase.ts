@@ -51,6 +51,21 @@ export const supabase: SupabaseClient = createClient(
   }
 );
 
+export const supabaseAdmin: SupabaseClient = createClient(
+  SUPABASE_URL,
+  DEFAULT_SUPABASE_SECRET_KEY || SUPABASE_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      fetch: syncingFetch,
+    },
+  }
+);
+
+
 /**
  * Immediate server time calibration on startup
  */

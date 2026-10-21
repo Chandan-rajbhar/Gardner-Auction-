@@ -3689,3 +3689,924 @@ html, body {
   }
 }
 
+/* ==========================================================================
+   CATALOG NEW LOT MODAL — CLASSIC LUXURY & STUDENT-FRIENDLY SPECIFICATION
+   ========================================================================== */
+.catalog-lot-modal {
+  border: 1.5px solid #eae5dc !important;
+  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.25) !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 90vh !important;
+}
+
+.catalog-lot-modal form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.catalog-lot-modal .modal-header {
+  flex-shrink: 0;
+}
+
+.catalog-lot-modal .modal-body {
+  flex: 1;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.catalog-lot-modal .modal-footer {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: #fafaf8;
+  border-top: 1.5px solid #eae5dc;
+}
+
+.catalog-modal-crest {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(180, 131, 22, 0.1);
+  border: 1px solid rgba(180, 131, 22, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.catalog-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.catalog-section-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b48316;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.field-hint {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.pricing-highlight-box {
+  background: #fbfaf8;
+  border: 1.5px solid #eae5dc;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.usd-currency-pill {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.pricing-grid-4col {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .pricing-grid-4col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.currency-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.currency-prefix {
+  position: absolute;
+  left: 12px;
+  color: #b48316;
+  font-weight: 700;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.currency-input-wrap input {
+  padding-left: 26px !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lot-modal-preview-thumb {
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  border: 1.5px solid #dcd5ca;
+  overflow: hidden;
+  background: #0f172a;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.lot-modal-preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ==========================================================================
+   ADMIN DASHBOARD — LOTS & CATALOG LUXURY TABLE & FILTER CONTROLS
+   ========================================================================== */
+.catalog-filters-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  flex-wrap: wrap;
+}
+
+.catalog-search-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+}
+
+.catalog-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.catalog-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 38px;
+  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.catalog-search-input:focus {
+  border-color: #b48316;
+  box-shadow: 0 0 0 3px rgba(180, 131, 22, 0.12);
+}
+
+.catalog-filter-select {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.catalog-filter-select:focus {
+  border-color: #b48316;
+}
+
+.catalog-reset-btn {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.catalog-reset-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.catalog-table-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.catalog-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.catalog-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.catalog-table-scroll::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.catalog-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.catalog-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.catalog-luxury-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  text-align: left;
+}
+
+.catalog-luxury-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #ffffff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 14px;
+  border-bottom: 1.5px solid #e2e8f0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.catalog-luxury-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  background-color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+.catalog-luxury-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+.catalog-luxury-table tr.row-selected td {
+  background-color: #f0fdf4;
+}
+
+.catalog-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  cursor: pointer;
+  accent-color: #0f172a;
+}
+
+.lot-num-text {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.lot-item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   STANDARDIZED CATEGORY BADGES
+   ========================================================================== */
+.cat-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-sizing: border-box;
+  text-align: center;
+  cursor: default;
+  transition: all 0.15s ease;
+}
+
+.cat-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cat-badge-gold {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.cat-badge-silver {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.cat-badge-jewelry {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid #e9d5ff;
+}
+
+.cat-badge-ancient {
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+
+.cat-badge-currency {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.cat-badge-bullion {
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fef08a;
+}
+
+.cat-badge-default {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.current-bid-amount {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.bids-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 6px;
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Reserve Status Pills with Dot */
+.reserve-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reserve-badge-met,
+.reserve-badge-hammered {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.reserve-badge-under {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.reserve-badge-pending {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.reserve-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.reserve-indicator-dot.green {
+  background-color: #10b981;
+}
+
+.reserve-indicator-dot.red {
+  background-color: #ef4444;
+}
+
+.reserve-indicator-dot.gray {
+  background-color: #94a3b8;
+}
+
+/* ==========================================================================
+   STANDARDIZED LOT STATUS BADGES
+   ========================================================================== */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  min-width: 95px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.status-pill-onblock {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.status-pill-sold {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.status-pill-passed {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.status-pill-upcoming {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot-pulsing {
+  background: #2563eb;
+  animation: statusPulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+.status-dot-passed {
+  background: #dc2626;
+}
+
+@keyframes statusPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(37, 99, 235, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+/* Pagination Bar matching screenshot */
+.catalog-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.pagination-info strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.pagination-pagesize {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.pagination-pagesize select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  cursor: pointer;
+}
+
+.pagination-pagesize select:focus {
+  border-color: #b48316;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-page-step {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-page-step:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.btn-page-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-page-num {
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-page-num:hover:not(.active) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.btn-page-num.active {
+  background: #0f172a;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Three Dots Action Menu & Dropdown */
+.lot-action-menu-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-three-dots {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-three-dots:hover,
+.btn-three-dots.active {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.lot-action-dropdown {
+  position: absolute;
+  right: 0;
+  z-index: 50;
+  min-width: 175px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.14), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: dropdownIn 0.15s ease-out;
+}
+
+.lot-action-dropdown.drop-down {
+  top: 100%;
+  margin-top: 4px;
+}
+
+.lot-action-dropdown.drop-up {
+  bottom: 100%;
+  margin-bottom: 4px;
+}
+
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-action-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 11px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dropdown-action-item:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.dropdown-action-item .action-item-icon {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.dropdown-action-item .action-item-icon.gold {
+  color: #b48316;
+}
+
+.dropdown-action-item:hover .action-item-icon {
+  color: #0f172a;
+}
+
+.dropdown-action-item:hover .action-item-icon.gold {
+  color: #d97706;
+}
+
+.dropdown-action-item.destructive {
+  color: #dc2626;
+}
+
+.dropdown-action-item.destructive .action-item-icon {
+  color: #dc2626;
+}
+
+.dropdown-action-item.destructive:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.dropdown-action-item.destructive:hover .action-item-icon {
+  color: #b91c1c;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px 0;
+}
+
+/* ==========================================================================
+   DELETE LOT CONFIRMATION MODAL & BULK ACTIONS
+   ========================================================================== */
+.delete-lot-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #fee2e2;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.delete-lot-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+}
+
+.delete-lot-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.delete-lot-body {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.delete-lot-target-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.delete-lot-target-card img {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-danger-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  background: #dc2626;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger-delete:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-danger-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bulk-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   VIEW MODE TOGGLE & ADD LOT BUTTON
+   ========================================================================== */
+.view-mode-toggle-group {
+  display: inline-flex;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-toggle-btn:hover:not(.active) {
+  color: #0f172a;
+}
+
+.view-toggle-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.btn-add-catalog-lot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, #b48316 0%, #92400e 100%);
+  color: #ffffff;
+  border: 1px solid #92400e;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(180, 131, 22, 0.2);
+  transition: all 0.15s ease;
+}
+
+.btn-add-catalog-lot:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  box-shadow: 0 4px 8px rgba(180, 131, 22, 0.3);
+  transform: translateY(-1px);
+}

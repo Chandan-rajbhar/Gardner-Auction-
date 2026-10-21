@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   NavigationSection, 
   Auction, 
@@ -34,6 +34,7 @@ import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
 import { CheckCircle2, RefreshCw, X, Radio } from 'lucide-react';
 import { recordBidToSupabase } from './lib/supabase';
+import { lotsService } from './services/lotsService';
 
 const AdminConsole: React.FC = () => {
   const { user } = useAuth();
@@ -53,6 +54,40 @@ const AdminConsole: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>(INITIAL_LOGS);
 
   const [activeLotId, setActiveLotId] = useState<string>('lot-001');
+
+  // Load lots dynamically from Supabase on startup & subscribe to Realtime updates
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDynamicLots = async () => {
+      try {
+        const fetched = await lotsService.fetchLots();
+        if (isMounted && fetched && fetched.length > 0) {
+          setLots(fetched);
+          // Set active lot to whichever is currently on_block, or the first lot
+          const liveLot = fetched.find(l => l.status === 'on_block') || fetched[0];
+          if (liveLot) {
+            setActiveLotId(liveLot.id);
+          }
+        }
+      } catch (err) {
+        console.warn('[App] Could not fetch dynamic lots from Supabase:', err);
+      }
+    };
+
+    loadDynamicLots();
+
+    // Listen for Realtime database changes
+    const unsubscribe = lotsService.subscribeToLots(() => {
+      loadDynamicLots();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
   const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
   const activeLotOnBlock = lots.find(l => l.id === activeLotId) || lots.find(l => l.status === 'on_block') || lots[0];
 
@@ -112,6 +147,15 @@ const AdminConsole: React.FC = () => {
       }
       return lot;
     }));
+
+    // Synchronize lot bid update to Supabase database
+    lotsService.updateLot(activeLotOnBlock.id, {
+      currentBid: amount,
+      highBidderPaddle: paddleNumber,
+      highBidderName: bidderName,
+      bidsCount: (activeLotOnBlock.bidsCount || 0) + 1,
+      status: 'on_block'
+    });
 
     // Asynchronously synchronize bid to Supabase & Edge Function
     recordBidToSupabase({
@@ -173,13 +217,19 @@ const AdminConsole: React.FC = () => {
 
     setInvoices(prev => [newInvoice, ...prev]);
 
-    // Mark lot sold (do NOT auto-advance; auctioneer advances explicitly)
+    // Mark lot sold
     setLots(prev => prev.map(l => {
       if (l.id === lotId) {
         return { ...l, status: 'sold', hammerPrice: finalAmount };
       }
       return l;
     }));
+
+    // Persist sold state to Supabase
+    lotsService.updateLot(lotId, {
+      status: 'sold',
+      hammerPrice: finalAmount
+    });
 
     // Update bidder spending
     setBidders(prev => prev.map(b => {
@@ -215,6 +265,11 @@ const AdminConsole: React.FC = () => {
       return l;
     }));
 
+    // Persist passed state to Supabase
+    lotsService.updateLot(lotId, {
+      status: 'passed'
+    });
+
     const lot = lots.find(l => l.id === lotId);
     const audit: ActivityLog = {
       id: `log-${Date.now()}`,
@@ -236,6 +291,9 @@ const AdminConsole: React.FC = () => {
       }
       return l;
     }));
+
+    // Persist to Supabase
+    lotsService.sendLotToBlock(lotId);
 
     const lot = lots.find(l => l.id === lotId);
     const audit: ActivityLog = {
@@ -264,6 +322,9 @@ const AdminConsole: React.FC = () => {
         }
         return l;
       }));
+
+      // Persist to Supabase
+      lotsService.sendLotToBlock(nextLot.id);
     } else {
       alert('All catalog lots for this session have been presented on the rostrum block!');
     }
@@ -280,6 +341,9 @@ const AdminConsole: React.FC = () => {
       }
       return l;
     }));
+
+    // Persist to Supabase
+    lotsService.sendLotToBlock(lot.id);
     setCurrentSection('live_clerking');
   };
 
@@ -342,9 +406,27 @@ const AdminConsole: React.FC = () => {
           {currentSection === 'lots' && (
             <LotsView 
               lots={lots}
-              onAddLot={(newLot) => setLots(prev => [newLot, ...prev])}
-              onUpdateLot={(updated) => setLots(prev => prev.map(l => l.id === updated.id ? updated : l))}
+              onAddLot={async (newLot) => {
+                // Optimistic UI update
+                setLots(prev => [newLot, ...prev]);
+                // Persist to Supabase
+                const res = await lotsService.createLot(newLot);
+                if (!res.success) {
+                  console.error('[App] Failed to insert lot in Supabase:', res.error);
+                }
+              }}
+              onUpdateLot={async (updated) => {
+                setLots(prev => prev.map(l => l.id === updated.id ? updated : l));
+                await lotsService.updateLot(updated.id, updated);
+              }}
               onSendToBlock={handleSendToBlock}
+              onDeleteLot={async (lotId: string) => {
+                const res = await lotsService.deleteLot(lotId);
+                if (res.success) {
+                  setLots(prev => prev.filter(l => l.id !== lotId));
+                }
+                return res;
+              }}
             />
           )}
 
@@ -363,6 +445,7 @@ const AdminConsole: React.FC = () => {
               onSelectLot={(lotId) => {
                 setActiveLotId(lotId);
                 setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: 'on_block' } : l.status === 'on_block' ? { ...l, status: 'upcoming' } : l));
+                lotsService.sendLotToBlock(lotId);
               }}
             />
           )}

@@ -239,9 +239,9 @@ export const INITIAL_LOTS: LotItem[] = [
     reservePrice: 12000.00,
     estimateLow: 14000.00,
     estimateHigh: 22000.00,
-    currentBid: 16500.00,
-    highBidderPaddle: '219',
-    highBidderName: 'Eleanor Sterling',
+    currentBid: 8500.00,
+    highBidderPaddle: null,
+    highBidderName: null,
     status: 'upcoming',
     certification: 'PCGS',
     grade: 'MS-65+ DMPL CAC',
@@ -250,7 +250,7 @@ export const INITIAL_LOTS: LotItem[] = [
     consignorName: 'Helena Numismatic Trust',
     conditionReport: 'Mirror reflectivity exceeding 8 inches with intense cameo frosting on portrait of Lady Liberty. Original album toning rim periphery.',
     provenance: 'Acquired 1974 directly from original bag dispersal; Gardner Certified.',
-    bidsCount: 14
+    bidsCount: 0
   },
   {
     id: 'lot-003',
@@ -263,9 +263,9 @@ export const INITIAL_LOTS: LotItem[] = [
     reservePrice: 42000.00,
     estimateLow: 48000.00,
     estimateHigh: 68000.00,
-    currentBid: 51000.00,
-    highBidderPaddle: '302',
-    highBidderName: 'Marcus Sterling Vance',
+    currentBid: 32000.00,
+    highBidderPaddle: null,
+    highBidderName: null,
     status: 'upcoming',
     certification: 'GIA',
     grade: 'Excellent Unpolished / Original Nipple Dial',
@@ -274,7 +274,7 @@ export const INITIAL_LOTS: LotItem[] = [
     consignorName: 'Estate of Henry Vance',
     conditionReport: 'Case retains crisp factory chamfers, minimal stretch in matching 18k Oyster bracelet. Movement serviced by certified chronometer horologist in Sept 2026.',
     provenance: 'Single family ownership since purchased new in Geneva, 1979.',
-    bidsCount: 22
+    bidsCount: 0
   },
   {
     id: 'lot-004',
@@ -287,9 +287,9 @@ export const INITIAL_LOTS: LotItem[] = [
     reservePrice: 130000.00,
     estimateLow: 150000.00,
     estimateHigh: 220000.00,
-    currentBid: 142000.00,
-    highBidderPaddle: '118',
-    highBidderName: 'Dr. Harrison Pierce',
+    currentBid: 95000.00,
+    highBidderPaddle: null,
+    highBidderName: null,
     status: 'upcoming',
     certification: 'NGC',
     grade: 'AU-58 CAC Approved',
@@ -298,7 +298,7 @@ export const INITIAL_LOTS: LotItem[] = [
     consignorName: 'Columbia River Trust',
     conditionReport: 'First year of type. Exceptional strike boldness with warm amber-orange patina. Outstanding eye appeal for an 18th-century US federal gold emission.',
     provenance: 'The Garrett Family Collection; Stack’s Bowers 1980 sale.',
-    bidsCount: 8
+    bidsCount: 0
   },
   {
     id: 'lot-005',
@@ -311,9 +311,9 @@ export const INITIAL_LOTS: LotItem[] = [
     reservePrice: 38000.00,
     estimateLow: 45000.00,
     estimateHigh: 65000.00,
-    currentBid: 41500.00,
-    highBidderPaddle: '145',
-    highBidderName: 'Sundance Precious Metals',
+    currentBid: 28000.00,
+    highBidderPaddle: null,
+    highBidderName: null,
     status: 'upcoming',
     certification: 'PCGS',
     grade: 'XF-45 TrueView',
@@ -322,7 +322,7 @@ export const INITIAL_LOTS: LotItem[] = [
     consignorName: 'Helena Numismatic Trust',
     conditionReport: 'Honest cabinet friction with complete bold feathers on eagle and sharp wing details. Genuine uncleaned patina with deep silver gray luster.',
     provenance: 'Montana Private Banker collection, held in safe deposit box since 1952.',
-    bidsCount: 16
+    bidsCount: 0
   },
   {
     id: 'lot-006',
@@ -335,9 +335,9 @@ export const INITIAL_LOTS: LotItem[] = [
     reservePrice: 16000.00,
     estimateLow: 18000.00,
     estimateHigh: 26000.00,
-    currentBid: 19500.00,
-    highBidderPaddle: '277',
-    highBidderName: 'Lady Catherine Thorne',
+    currentBid: 12000.00,
+    highBidderPaddle: null,
+    highBidderName: null,
     status: 'upcoming',
     certification: 'NGC',
     grade: 'Choice VF, Strike 5/5, Surface 4/5',
@@ -346,7 +346,7 @@ export const INITIAL_LOTS: LotItem[] = [
     consignorName: 'Ancient Arts Foundation',
     conditionReport: 'Rome mint, struck AD 64-65. Laureate head right / Jupiter Custos seated left holding thunderbolt and scepter. RIC I 52; Calicó 412.',
     provenance: 'Ex. Münzen & Medaillen AG, Basel (1971).',
-    bidsCount: 11
+    bidsCount: 0
   },
   {
     id: 'lot-007',
