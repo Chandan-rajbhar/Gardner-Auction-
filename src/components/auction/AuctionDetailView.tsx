@@ -171,7 +171,7 @@ const AuctionDetailContent: React.FC<{
 
   // Filtered lots & expenses total for tab badges
   const filteredAuctionLots = lots.filter(l => 
-    !l.auctionId || l.auctionId === auction.id || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)
+    l.auctionId === auction.id || (auction.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
   );
   const expensesTotal = (auction.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
 

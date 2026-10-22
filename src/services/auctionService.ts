@@ -4,6 +4,95 @@ import { supabaseAdmin, supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'gardner_auctions_detail_v1';
 
+export function createEmptyAuctionDetail(data?: Partial<AuctionDetail>): AuctionDetail {
+  const generatedId = `auc-${Date.now()}`;
+  return {
+    id: data?.id || generatedId,
+    code: (data?.code || `AUC-${Date.now().toString().slice(-4)}`).toUpperCase(),
+    name: data?.name || '',
+    description: data?.description || '',
+    auctionType: data?.auctionType || 'HiBid',
+    status: data?.status || 'Open',
+    startDate: data?.startDate || new Date().toISOString().split('T')[0],
+    endDate: data?.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    paymentInfo: '',
+    taxExemptAll: false,
+    currency: data?.currency || 'USD',
+    liveStartingBidCard: 1,
+    terms: '',
+    shortBpExplanation: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: '',
+    useConsolidatedInvoicing: false,
+    shippingAvailability: '',
+    shippingAccount: '',
+    addHandlingCharge: false,
+    handlingChargeType: 'Fixed',
+    handlingAmount: 0,
+    featuredImages: [],
+    auctionLinks: [],
+    lotDefaults: {
+      commission: '',
+      buyerTax: '',
+      buyerPremium: '',
+      sellerTax: '',
+      buyerLotCharge1: '',
+      buyerLotCharge2: ''
+    },
+    uploadSettings: {
+      previewDateTimes: '',
+      auctionDateTimes: '',
+      checkoutDateTimes: '',
+      paymentInfo: '',
+      shippingPickup: '',
+      ccRegistrationType: 'Authentication',
+      authDays: 30,
+      acceptedCards: {
+        mastercard: true,
+        visa: true,
+        amex: true,
+        discover: true
+      },
+      biddingNotice: '',
+      auctionNotice: '',
+      biddingType: 'Internet Only Auction',
+      minBidType: 'Public Bidding',
+      bidAmountType: 'Maximum Bidding',
+      timezone: '(UTC-07:00) Mountain Time (US & Canada)',
+      openBiddingDate: '',
+      openBiddingTime: '',
+      closeBiddingDate: '',
+      closeBiddingTime: '',
+      softCloseSeconds: 15,
+      autoSyncStagger: false,
+      showImmediateBidStatus: false,
+      hideBidderUsernames: false,
+      allowRetractBids: false
+    },
+    expenses: [],
+    settlements: [],
+    dayStats: {
+      lotCount: 0,
+      checkInCount: 0,
+      uniqueSellers: 0,
+      presaleMin: 0,
+      presaleMax: 0,
+      avgEstimate: 0,
+      avgSalesPrice: 0,
+      hibidUrl: '',
+      siteStats: [],
+      registrations: [],
+      lotStats: [],
+      alternateBids: []
+    },
+    ...(data || {})
+  };
+}
+
 class AuctionService {
   private auctions: AuctionDetail[] = [];
 
@@ -15,7 +104,53 @@ class AuctionService {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        this.auctions = JSON.parse(stored);
+        const parsed: AuctionDetail[] = JSON.parse(stored);
+        // Clean any dynamically created auctions that previously inherited mock data
+        this.auctions = parsed.map(a => {
+          if (a.id !== 'auc-001') {
+            if (a.address1 === '119 Jewel Basin Ct') a.address1 = '';
+            if (a.address2 === 'Suite 100') a.address2 = '';
+            if (a.city === 'Bigfork') a.city = '';
+            if (a.state === 'MT') a.state = '';
+            if (a.zip === '59911') a.zip = '';
+            if (a.shippingAccount === 'shipping & handling') a.shippingAccount = '';
+            if (a.handlingAmount === 4.5 || a.handlingAmount === 4.50) {
+              a.handlingAmount = 0;
+              a.addHandlingCharge = false;
+            }
+            if (a.useConsolidatedInvoicing && (a.address1 === '' || !a.address1)) {
+              a.useConsolidatedInvoicing = false;
+            }
+            if (a.terms && a.terms.includes('HGS Terms & Conditions')) {
+              a.terms = '';
+            }
+            if (a.paymentInfo && a.paymentInfo.includes('3% processing fee applied')) {
+              a.paymentInfo = '';
+            }
+            if (a.shortBpExplanation && a.shortBpExplanation.includes("15% Buyer's Premium")) {
+              a.shortBpExplanation = '';
+            }
+            if (a.uploadSettings && a.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
+              a.uploadSettings = createEmptyAuctionDetail().uploadSettings;
+            }
+            if (a.lotDefaults) {
+              if (a.lotDefaults.commission?.includes('CSS_52F3ABA3')) a.lotDefaults.commission = '';
+              if (a.lotDefaults.buyerTax?.includes('BTAX_0%')) a.lotDefaults.buyerTax = '';
+              if (a.lotDefaults.buyerPremium?.includes('BP_15')) a.lotDefaults.buyerPremium = '';
+            }
+            if (a.featuredImages && a.featuredImages.length === 4 && a.featuredImages[0]?.title?.includes('Morgan')) {
+              a.featuredImages = [];
+            }
+            if (a.auctionLinks && a.auctionLinks.length === 2 && a.auctionLinks[0]?.url?.includes('highlandcrggoldandsilver')) {
+              a.auctionLinks = [];
+            }
+            if (a.expenses && a.expenses.length > 0 && a.expenses[0]?.amount === 1200) {
+              a.expenses = [];
+            }
+          }
+          return a;
+        });
+        this.persist();
       } else {
         this.auctions = MOCK_AUCTIONS_DETAIL;
         this.persist();
@@ -43,29 +178,71 @@ class AuctionService {
 
       if (!error && data && data.length > 0) {
         const fromDb: AuctionDetail[] = data.map((row: any) => {
+          const isMockAuction = row.id === 'auc-001';
           const existing = this.auctions.find(a => a.id === row.id);
-          const base = existing || this.auctions[0] || MOCK_AUCTIONS_DETAIL[0];
+          const base = isMockAuction
+            ? (existing || MOCK_AUCTIONS_DETAIL[0])
+            : (existing || createEmptyAuctionDetail({ id: row.id }));
+
+          // Sanitize any residual mock defaults for newly created/custom auctions
+          if (!isMockAuction) {
+            if (base.address1 === '119 Jewel Basin Ct') base.address1 = '';
+            if (base.address2 === 'Suite 100') base.address2 = '';
+            if (base.city === 'Bigfork') base.city = '';
+            if (base.state === 'MT') base.state = '';
+            if (base.zip === '59911') base.zip = '';
+            if (base.shippingAccount === 'shipping & handling') base.shippingAccount = '';
+            if (base.handlingAmount === 4.5 || base.handlingAmount === 4.50) {
+              base.handlingAmount = 0;
+              base.addHandlingCharge = false;
+            }
+            if (base.shortBpExplanation === "15% Buyer's Premium") base.shortBpExplanation = '';
+            if (base.terms && base.terms.includes('HGS Terms & Conditions')) base.terms = '';
+            if (base.paymentInfo && base.paymentInfo.includes('3% processing fee applied')) base.paymentInfo = '';
+            if (base.uploadSettings && base.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
+              base.uploadSettings = createEmptyAuctionDetail().uploadSettings;
+            }
+          }
+
           return {
             ...JSON.parse(JSON.stringify(base)),
             id: row.id,
             code: row.code || `AUC-${row.id.toString().slice(-4)}`,
-            name: row.name,
+            name: row.name || '',
             description: row.description || '',
             status: row.status || 'Open',
             startDate: row.start_date || new Date().toISOString().split('T')[0],
             endDate: row.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
             auctionType: row.auction_type || 'HiBid',
             currency: row.currency || 'USD',
-            featuredImages: Array.isArray(row.featured_images) && row.featured_images.length > 0 ? row.featured_images : base.featuredImages,
-            auctionLinks: Array.isArray(row.auction_links) ? row.auction_links : base.auctionLinks,
+            taxExemptAll: row.tax_exempt_all !== undefined ? Boolean(row.tax_exempt_all) : (isMockAuction ? base.taxExemptAll : false),
+            liveStartingBidCard: row.live_starting_bid_card !== undefined ? Number(row.live_starting_bid_card) : (isMockAuction ? base.liveStartingBidCard : 1),
+            paymentInfo: row.payment_info !== undefined ? row.payment_info : (isMockAuction ? base.paymentInfo : ''),
+            terms: row.terms !== undefined ? row.terms : (isMockAuction ? base.terms : ''),
+            shortBpExplanation: row.short_bp_explanation !== undefined ? row.short_bp_explanation : (isMockAuction ? base.shortBpExplanation : ''),
+            address1: row.address1 !== undefined ? (row.address1 === '119 Jewel Basin Ct' && !isMockAuction ? '' : row.address1) : (isMockAuction ? base.address1 : (base.address1 === '119 Jewel Basin Ct' ? '' : base.address1 || '')),
+            address2: row.address2 !== undefined ? (row.address2 === 'Suite 100' && !isMockAuction ? '' : row.address2) : (isMockAuction ? base.address2 : (base.address2 === 'Suite 100' ? '' : base.address2 || '')),
+            city: row.city !== undefined ? (row.city === 'Bigfork' && !isMockAuction ? '' : row.city) : (isMockAuction ? base.city : (base.city === 'Bigfork' ? '' : base.city || '')),
+            state: row.state !== undefined ? (row.state === 'MT' && !isMockAuction ? '' : row.state) : (isMockAuction ? base.state : (base.state === 'MT' ? '' : base.state || '')),
+            zip: row.zip !== undefined ? (row.zip === '59911' && !isMockAuction ? '' : row.zip) : (isMockAuction ? base.zip : (base.zip === '59911' ? '' : base.zip || '')),
+            country: row.country !== undefined ? row.country : (isMockAuction ? base.country : (base.country || '')),
+            useConsolidatedInvoicing: row.use_consolidated_invoicing !== undefined ? Boolean(row.use_consolidated_invoicing) : (isMockAuction ? base.useConsolidatedInvoicing : false),
+            shippingAvailability: row.shipping_availability !== undefined ? row.shipping_availability : (isMockAuction ? base.shippingAvailability : ''),
+            shippingAccount: row.shipping_account !== undefined ? (row.shipping_account === 'shipping & handling' && !isMockAuction ? '' : row.shipping_account) : (isMockAuction ? base.shippingAccount : ''),
+            addHandlingCharge: row.add_handling_charge !== undefined ? Boolean(row.add_handling_charge) : (isMockAuction ? base.addHandlingCharge : false),
+            handlingChargeType: row.handling_charge_type || (isMockAuction ? base.handlingChargeType : 'Fixed'),
+            handlingAmount: row.handling_amount !== undefined ? (row.handling_amount === 4.5 && !isMockAuction ? 0 : Number(row.handling_amount)) : (isMockAuction ? base.handlingAmount : 0),
+            featuredImages: Array.isArray(row.featured_images) ? row.featured_images : (isMockAuction ? base.featuredImages : []),
+            auctionLinks: Array.isArray(row.auction_links) ? row.auction_links : (isMockAuction ? base.auctionLinks : []),
             uploadSettings: {
-              ...base.uploadSettings,
+              ...(isMockAuction ? base.uploadSettings : createEmptyAuctionDetail().uploadSettings),
               ...(row.upload_settings || {})
             },
             lotDefaults: {
-              ...base.lotDefaults,
+              ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
               ...(row.lot_defaults || {})
-            }
+            },
+            expenses: isMockAuction ? base.expenses : (base.expenses || [])
           };
         });
 
@@ -82,8 +259,34 @@ class AuctionService {
   }
 
   public async getAuctionById(id: string): Promise<AuctionDetail | null> {
+    const isMockAuction = id === 'auc-001';
     const found = this.auctions.find(a => a.id === id);
-    if (found) return JSON.parse(JSON.stringify(found));
+    if (found) {
+      if (!isMockAuction) {
+        if (found.address1 === '119 Jewel Basin Ct') found.address1 = '';
+        if (found.address2 === 'Suite 100') found.address2 = '';
+        if (found.city === 'Bigfork') found.city = '';
+        if (found.state === 'MT') found.state = '';
+        if (found.zip === '59911') found.zip = '';
+        if (found.shippingAccount === 'shipping & handling') found.shippingAccount = '';
+        if (found.handlingAmount === 4.5 || found.handlingAmount === 4.50) {
+          found.handlingAmount = 0;
+          found.addHandlingCharge = false;
+        }
+        if (found.shortBpExplanation === "15% Buyer's Premium") found.shortBpExplanation = '';
+        if (found.terms && found.terms.includes('HGS Terms & Conditions')) found.terms = '';
+        if (found.paymentInfo && found.paymentInfo.includes('3% processing fee applied')) found.paymentInfo = '';
+        if (found.uploadSettings && found.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
+          found.uploadSettings = createEmptyAuctionDetail().uploadSettings;
+        }
+        if (found.lotDefaults) {
+          if (found.lotDefaults.commission?.includes('CSS_52F3ABA3')) found.lotDefaults.commission = '';
+          if (found.lotDefaults.buyerTax?.includes('BTAX_0%')) found.lotDefaults.buyerTax = '';
+          if (found.lotDefaults.buyerPremium?.includes('BP_15')) found.lotDefaults.buyerPremium = '';
+        }
+      }
+      return JSON.parse(JSON.stringify(found));
+    }
 
     // Fallback: Check Supabase directly if auction was created elsewhere
     try {
@@ -94,28 +297,46 @@ class AuctionService {
         .maybeSingle();
 
       if (!error && data) {
-        const base = this.auctions[0] || MOCK_AUCTIONS_DETAIL[0];
+        const base = isMockAuction ? MOCK_AUCTIONS_DETAIL[0] : createEmptyAuctionDetail({ id: data.id });
         const loaded: AuctionDetail = {
           ...JSON.parse(JSON.stringify(base)),
           id: data.id,
           code: data.code || `AUC-${data.id.toString().slice(-4)}`,
-          name: data.name,
+          name: data.name || '',
           description: data.description || '',
           status: data.status || 'Open',
           startDate: data.start_date || new Date().toISOString().split('T')[0],
           endDate: data.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
           auctionType: data.auction_type || 'HiBid',
           currency: data.currency || 'USD',
-          featuredImages: Array.isArray(data.featured_images) ? data.featured_images : base.featuredImages,
-          auctionLinks: Array.isArray(data.auction_links) ? data.auction_links : base.auctionLinks,
+          taxExemptAll: data.tax_exempt_all !== undefined ? Boolean(data.tax_exempt_all) : (isMockAuction ? base.taxExemptAll : false),
+          liveStartingBidCard: data.live_starting_bid_card !== undefined ? Number(data.live_starting_bid_card) : (isMockAuction ? base.liveStartingBidCard : 1),
+          paymentInfo: data.payment_info || '',
+          terms: data.terms || '',
+          shortBpExplanation: data.short_bp_explanation || '',
+          address1: data.address1 !== undefined ? (data.address1 === '119 Jewel Basin Ct' && !isMockAuction ? '' : data.address1) : (isMockAuction ? base.address1 : ''),
+          address2: data.address2 !== undefined ? (data.address2 === 'Suite 100' && !isMockAuction ? '' : data.address2) : (isMockAuction ? base.address2 : ''),
+          city: data.city !== undefined ? (data.city === 'Bigfork' && !isMockAuction ? '' : data.city) : (isMockAuction ? base.city : ''),
+          state: data.state !== undefined ? (data.state === 'MT' && !isMockAuction ? '' : data.state) : (isMockAuction ? base.state : ''),
+          zip: data.zip !== undefined ? (data.zip === '59911' && !isMockAuction ? '' : data.zip) : (isMockAuction ? base.zip : ''),
+          country: data.country !== undefined ? data.country : (isMockAuction ? base.country : ''),
+          useConsolidatedInvoicing: data.use_consolidated_invoicing !== undefined ? Boolean(data.use_consolidated_invoicing) : (isMockAuction ? base.useConsolidatedInvoicing : false),
+          shippingAvailability: data.shipping_availability !== undefined ? data.shipping_availability : (isMockAuction ? base.shippingAvailability : ''),
+          shippingAccount: data.shipping_account !== undefined ? (data.shipping_account === 'shipping & handling' && !isMockAuction ? '' : data.shipping_account) : (isMockAuction ? base.shippingAccount : ''),
+          addHandlingCharge: data.add_handling_charge !== undefined ? Boolean(data.add_handling_charge) : (isMockAuction ? base.addHandlingCharge : false),
+          handlingChargeType: data.handling_charge_type || 'Fixed',
+          handlingAmount: data.handling_amount !== undefined ? (data.handling_amount === 4.5 && !isMockAuction ? 0 : Number(data.handling_amount)) : (isMockAuction ? base.handlingAmount : 0),
+          featuredImages: Array.isArray(data.featured_images) ? data.featured_images : (isMockAuction ? base.featuredImages : []),
+          auctionLinks: Array.isArray(data.auction_links) ? data.auction_links : (isMockAuction ? base.auctionLinks : []),
           uploadSettings: {
-            ...base.uploadSettings,
+            ...(isMockAuction ? base.uploadSettings : createEmptyAuctionDetail().uploadSettings),
             ...(data.upload_settings || {})
           },
           lotDefaults: {
-            ...base.lotDefaults,
+            ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
             ...(data.lot_defaults || {})
-          }
+          },
+          expenses: isMockAuction ? base.expenses : []
         };
         this.auctions.unshift(loaded);
         this.persist();
@@ -149,6 +370,23 @@ class AuctionService {
         end_date: updated.endDate,
         auction_type: updated.auctionType || 'HiBid',
         currency: updated.currency || 'USD',
+        tax_exempt_all: Boolean(updated.taxExemptAll),
+        live_starting_bid_card: Number(updated.liveStartingBidCard) || 1,
+        country: updated.country || '',
+        address1: updated.address1 ?? '',
+        address2: updated.address2 ?? '',
+        city: updated.city ?? '',
+        state: updated.state ?? '',
+        zip: updated.zip ?? '',
+        use_consolidated_invoicing: Boolean(updated.useConsolidatedInvoicing),
+        shipping_availability: updated.shippingAvailability ?? '',
+        shipping_account: updated.shippingAccount ?? '',
+        add_handling_charge: Boolean(updated.addHandlingCharge),
+        handling_charge_type: updated.handlingChargeType ?? 'Fixed',
+        handling_amount: Number(updated.handlingAmount) || 0,
+        payment_info: updated.paymentInfo || '',
+        terms: updated.terms || '',
+        short_bp_explanation: updated.shortBpExplanation || '',
         featured_images: updated.featuredImages || [],
         auction_links: updated.auctionLinks || [],
         upload_settings: updated.uploadSettings || {},
@@ -168,21 +406,7 @@ class AuctionService {
   }
 
   public async createAuction(data: Partial<AuctionDetail>): Promise<AuctionDetail> {
-    const base = this.auctions[0] || MOCK_AUCTIONS_DETAIL[0];
-    const generatedId = `auc-${Date.now()}`;
-    const newAuction: AuctionDetail = {
-      ...JSON.parse(JSON.stringify(base)),
-      id: data.id || generatedId,
-      code: (data.code || `AUC-${Date.now().toString().slice(-4)}`).toUpperCase(),
-      name: data.name || 'New Catalog Auction',
-      status: data.status || 'Open',
-      startDate: data.startDate || new Date().toISOString().split('T')[0],
-      endDate: data.endDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      description: data.description || 'Fine curated catalog items from private collections.',
-      auctionType: data.auctionType || 'HiBid',
-      settlements: [],
-      ...data
-    };
+    const newAuction = createEmptyAuctionDetail(data);
 
     this.auctions.unshift(newAuction);
     this.persist();
@@ -199,8 +423,24 @@ class AuctionService {
           status: newAuction.status || 'Open',
           start_date: newAuction.startDate,
           end_date: newAuction.endDate,
-          currency: 'USD',
-          country: 'United States',
+          currency: newAuction.currency || 'USD',
+          tax_exempt_all: Boolean(newAuction.taxExemptAll),
+          live_starting_bid_card: Number(newAuction.liveStartingBidCard) || 1,
+          country: newAuction.country || '',
+          address1: newAuction.address1 ?? '',
+          address2: newAuction.address2 ?? '',
+          city: newAuction.city ?? '',
+          state: newAuction.state ?? '',
+          zip: newAuction.zip ?? '',
+          use_consolidated_invoicing: Boolean(newAuction.useConsolidatedInvoicing),
+          shipping_availability: newAuction.shippingAvailability ?? '',
+          shipping_account: newAuction.shippingAccount ?? '',
+          add_handling_charge: Boolean(newAuction.addHandlingCharge),
+          handling_charge_type: newAuction.handlingChargeType ?? 'Fixed',
+          handling_amount: Number(newAuction.handlingAmount) || 0,
+          payment_info: newAuction.paymentInfo || '',
+          terms: newAuction.terms || '',
+          short_bp_explanation: newAuction.shortBpExplanation || '',
           featured_images: newAuction.featuredImages || [],
           auction_links: newAuction.auctionLinks || [],
           upload_settings: newAuction.uploadSettings || {},
@@ -223,21 +463,34 @@ class AuctionService {
     return newAuction;
   }
 
+  private auctionListeners: Set<() => void> = new Set();
+  private realtimeChannel: any = null;
+
   public subscribeToAuctions(onRefreshNeeded: () => void): () => void {
-    const channel = supabase
-      .channel('realtime:auctions')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'auctions' },
-        (payload) => {
-          console.log('[AuctionService Realtime] Auction changed:', payload.eventType);
-          onRefreshNeeded();
-        }
-      )
-      .subscribe();
+    this.auctionListeners.add(onRefreshNeeded);
+
+    if (!this.realtimeChannel) {
+      this.realtimeChannel = supabase
+        .channel(`realtime_auctions_shared_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'auctions' },
+          (payload) => {
+            console.log('[AuctionService Realtime] Auction changed:', payload.eventType);
+            this.auctionListeners.forEach(listener => {
+              try { listener(); } catch (err) { console.warn(err); }
+            });
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      this.auctionListeners.delete(onRefreshNeeded);
+      if (this.auctionListeners.size === 0 && this.realtimeChannel) {
+        supabase.removeChannel(this.realtimeChannel);
+        this.realtimeChannel = null;
+      }
     };
   }
 

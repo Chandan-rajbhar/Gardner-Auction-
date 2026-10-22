@@ -169,9 +169,9 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
   if (!auction) return null;
 
-  // Filter lots to this auction (including AF360 reference lots)
+  // Filter lots to this auction (including AF360 reference lots for demo auction only)
   const filteredAuctionLots = lots.filter(l => 
-    !l.auctionId || l.auctionId === auction.id || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)
+    l.auctionId === auction.id || (auction.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
   );
 
   // Link Handlers
@@ -687,8 +687,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       <label className="ecomm-form-label">Address Line 1</label>
                       <input 
                         type="text"
-                        placeholder="119 Jewel Basin Ct"
-                        value={auction.address1}
+                        placeholder="e.g. 119 Jewel Basin Ct"
+                        value={auction.address1 || ''}
                         onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address1', value: e.target.value })}
                         className="ecomm-input"
                       />
@@ -697,8 +697,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       <label className="ecomm-form-label">Address Line 2 / Suite</label>
                       <input 
                         type="text"
-                        placeholder="Suite 100"
-                        value={auction.address2}
+                        placeholder="e.g. Suite 100"
+                        value={auction.address2 || ''}
                         onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'address2', value: e.target.value })}
                         className="ecomm-input"
                       />
@@ -710,8 +710,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       <label className="ecomm-form-label">City</label>
                       <input 
                         type="text"
-                        placeholder="Bigfork"
-                        value={auction.city}
+                        placeholder="e.g. Bigfork"
+                        value={auction.city || ''}
                         onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'city', value: e.target.value })}
                         className="ecomm-input"
                       />
@@ -720,8 +720,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       <label className="ecomm-form-label">State</label>
                       <input 
                         type="text"
-                        placeholder="MT"
-                        value={auction.state}
+                        placeholder="e.g. MT"
+                        value={auction.state || ''}
                         onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'state', value: e.target.value })}
                         className="ecomm-input"
                       />
@@ -730,8 +730,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       <label className="ecomm-form-label">ZIP</label>
                       <input 
                         type="text"
-                        placeholder="59911"
-                        value={auction.zip}
+                        placeholder="e.g. 59911"
+                        value={auction.zip || ''}
                         onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'zip', value: e.target.value })}
                         className="ecomm-input"
                       />
@@ -741,10 +741,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
                     <label className="ecomm-form-label">Country</label>
                     <select 
-                      value={auction.country}
+                      value={auction.country || ''}
                       onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'country', value: e.target.value })}
                       className="ecomm-select"
                     >
+                      <option value="">Select country...</option>
                       <option value="United States">United States</option>
                       <option value="Canada">Canada</option>
                       <option value="United Kingdom">United Kingdom</option>
@@ -757,7 +758,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
                     <input 
                       type="checkbox"
-                      checked={auction.useConsolidatedInvoicing}
+                      checked={Boolean(auction.useConsolidatedInvoicing)}
                       onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'useConsolidatedInvoicing', value: e.target.checked })}
                       style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
                     />
@@ -779,10 +780,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                 <div className="ecomm-form-group">
                   <label className="ecomm-form-label">Availability</label>
                   <select 
-                    value={auction.shippingAvailability}
+                    value={auction.shippingAvailability || ''}
                     onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAvailability', value: e.target.value })}
                     className="ecomm-select"
                   >
+                    <option value="">Select availability...</option>
                     <option value="Shipping Offered On All Lots">Shipping Offered On All Lots</option>
                     <option value="Selected Lots Only">Selected Lots Only</option>
                     <option value="No Shipping">No Shipping</option>
@@ -794,7 +796,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   <input 
                     type="text"
                     placeholder="e.g. shipping & handling"
-                    value={auction.shippingAccount}
+                    value={auction.shippingAccount || ''}
                     onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAccount', value: e.target.value })}
                     className="ecomm-input"
                   />
@@ -811,7 +813,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
                     <input 
                       type="checkbox"
-                      checked={auction.addHandlingCharge}
+                      checked={Boolean(auction.addHandlingCharge)}
                       onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'addHandlingCharge', value: e.target.checked })}
                       style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
                     />
@@ -857,11 +859,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                           <input 
                             type="number"
                             step="0.01"
-                            value={auction.handlingAmount}
+                            value={auction.handlingAmount !== undefined && auction.handlingAmount !== null && auction.handlingAmount !== 0 ? auction.handlingAmount : ''}
                             onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingAmount', value: parseFloat(e.target.value) || 0 })}
                             className="ecomm-input"
                             style={{ paddingLeft: 26 }}
-                            placeholder="4.50"
+                            placeholder="0.00"
                           />
                         </div>
                       </div>

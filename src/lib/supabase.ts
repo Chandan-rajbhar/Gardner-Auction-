@@ -56,9 +56,15 @@ export const supabase: SupabaseClient = createClient(
   }
 );
 
+// In browser environments, use SUPABASE_ANON_KEY to avoid security rejections.
+// Secret service-role keys are reserved for backend/server environments.
+const clientAdminKey = typeof window !== 'undefined' 
+  ? SUPABASE_ANON_KEY 
+  : (DEFAULT_SUPABASE_SECRET_KEY || SUPABASE_KEY);
+
 export const supabaseAdmin: SupabaseClient = createClient(
   SUPABASE_URL,
-  DEFAULT_SUPABASE_SECRET_KEY || SUPABASE_KEY,
+  clientAdminKey,
   {
     auth: {
       persistSession: false,

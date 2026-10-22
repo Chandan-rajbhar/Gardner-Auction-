@@ -267,20 +267,33 @@ export const lotsService = {
    * Realtime WebSockets subscription to listen for live database changes
    */
   subscribeToLots(onRefreshNeeded: () => void): () => void {
-    const channel = supabase
-      .channel('realtime:lots')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'lots' },
-        (payload) => {
-          console.log('[lotsService Realtime] Lot changed:', payload.eventType);
-          onRefreshNeeded();
-        }
-      )
-      .subscribe();
+    if (!globalThis.__lotListeners) {
+      globalThis.__lotListeners = new Set();
+    }
+    globalThis.__lotListeners.add(onRefreshNeeded);
+
+    if (!globalThis.__lotRealtimeChannel) {
+      globalThis.__lotRealtimeChannel = supabase
+        .channel(`realtime_lots_shared_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'lots' },
+          (payload) => {
+            console.log('[lotsService Realtime] Lot changed:', payload.eventType);
+            globalThis.__lotListeners?.forEach((listener: () => void) => {
+              try { listener(); } catch (err) { console.warn(err); }
+            });
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      globalThis.__lotListeners?.delete(onRefreshNeeded);
+      if (globalThis.__lotListeners?.size === 0 && globalThis.__lotRealtimeChannel) {
+        supabase.removeChannel(globalThis.__lotRealtimeChannel);
+        globalThis.__lotRealtimeChannel = null;
+      }
     };
   }
 };
