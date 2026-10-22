@@ -65,6 +65,14 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
   useEffect(() => {
     loadAuctions();
+
+    const unsubscribe = auctionService.subscribeToAuctions(() => {
+      loadAuctions();
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleCreateAuction = async (e: React.FormEvent) => {

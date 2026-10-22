@@ -223,7 +223,7 @@ const AdminConsole: React.FC = () => {
 
   const [activeLotId, setActiveLotId] = useState<string>('lot-001');
 
-  // Load 10+ auctions from auctionService
+  // Load 10+ auctions from auctionService and subscribe to live changes
   useEffect(() => {
     const loadAllAuctions = async () => {
       try {
@@ -237,6 +237,14 @@ const AdminConsole: React.FC = () => {
       }
     };
     loadAllAuctions();
+
+    const unsubscribe = auctionService.subscribeToAuctions(() => {
+      loadAllAuctions();
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // URL Routing Sync

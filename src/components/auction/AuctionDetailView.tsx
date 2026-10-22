@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Eye,
   Check,
-  MoreHorizontal
+  MoreHorizontal,
+  Radio
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { auctionService } from '../../services/auctionService';
@@ -61,7 +62,7 @@ const AuctionDetailContent: React.FC<{
   onSendToBlock,
   onDeleteLot
 }) => {
-  const { state, saveAuction, isLoading } = useAuctionDetail();
+  const { state, saveAuction, isLoading, dispatch } = useAuctionDetail();
   const { showToast } = useToast();
   const auction = state.data;
 
@@ -108,6 +109,39 @@ const AuctionDetailContent: React.FC<{
     setIsSaving(false);
     if (success) {
       showToast('success', 'Saved', 'Auction configuration saved successfully!');
+    }
+  };
+
+  const isPublished = auction?.status === 'In Progress';
+
+  // Publish Live handler: toggles status to 'In Progress', persists to Supabase, and updates UI
+  const handlePublishLive = async () => {
+    if (!auction) return;
+    setIsSaving(true);
+
+    const nextStatus = isPublished ? 'Open' : 'In Progress';
+    dispatch({ type: 'UPDATE_FIELD', field: 'status', value: nextStatus });
+
+    const updated = {
+      ...auction,
+      status: nextStatus
+    };
+
+    try {
+      const res = await auctionService.saveAuction(updated);
+      setIsSaving(false);
+      if (res.success) {
+        if (nextStatus === 'In Progress') {
+          showToast('success', 'Published Live', `"${auction.name}" is now live on the public website catalog!`);
+        } else {
+          showToast('info', 'Status Updated', `Auction reverted to Draft / Open state.`);
+        }
+      } else {
+        showToast('error', 'Publish Error', res.error || 'Failed to update live status in Supabase');
+      }
+    } catch (e) {
+      setIsSaving(false);
+      showToast('error', 'Error', 'Failed to publish auction');
     }
   };
 
@@ -206,13 +240,17 @@ const AuctionDetailContent: React.FC<{
 
           <button
             type="button"
-            className="btn-screenshot-publish"
-            onClick={handleSave}
+            className={`btn-screenshot-publish ${isPublished ? 'published' : 'draft'}`}
+            onClick={handlePublishLive}
             disabled={isSaving}
-            title="Publish and Save Configuration"
+            title={isPublished ? 'Auction is Live (Click to switch back to Open / Draft)' : 'Publish Live to Public Website'}
           >
-            <Check size={14} strokeWidth={2.5} color="#10b981" />
-            <span>Publish Live</span>
+            {isPublished ? (
+              <Check size={14} strokeWidth={2.8} color="#10b981" />
+            ) : (
+              <Radio size={14} color="#94a3b8" />
+            )}
+            <span>{isSaving ? 'Updating...' : isPublished ? 'Published Live' : 'Publish Live'}</span>
           </button>
 
           {/* More actions dropdown for Reports & Delete Auction */}

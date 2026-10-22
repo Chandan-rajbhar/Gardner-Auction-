@@ -39,7 +39,8 @@ import {
   Filter,
   UploadCloud,
   Copy,
-  Download
+  Download,
+  Save
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
@@ -81,6 +82,22 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkDesc, setLinkDesc] = useState('');
+
+  const handleSaveUploadSettings = async () => {
+    setIsSavingLocal(true);
+    try {
+      const success = await saveAuction();
+      setIsSavingLocal(false);
+      if (success) {
+        showToast('success', 'Upload Settings Saved', 'Bidding schedule, notices, and registration settings saved to database.');
+      } else {
+        showToast('error', 'Save Failed', 'Could not save upload settings.');
+      }
+    } catch (e) {
+      setIsSavingLocal(false);
+      showToast('error', 'Error', 'Failed to save upload settings.');
+    }
+  };
 
   // Modals for New Lot Defaults
   const [isCreateOptionModalOpen, setIsCreateOptionModalOpen] = useState(false);
@@ -1314,7 +1331,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
           SUB-TAB 2: UPLOAD SETTINGS
           ========================================================================= */}
       {currentTab === 'upload-settings' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: 20, alignItems: 'start' }}>
           {/* LEFT COLUMN */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Card: Dates */}
@@ -1673,7 +1691,64 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             </div>
           </div>
         </div>
-      )}
+
+        {/* Bottom Save Action Bar for Upload Settings */}
+        <div style={{
+          marginTop: 8,
+          padding: '16px 20px',
+          background: 'var(--bg-card, #ffffff)',
+          border: '1px solid var(--border-subtle, #e2e8f0)',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: '#fef3c7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#b45309'
+            }}>
+              <Settings size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-main, #0f172a)' }}>
+                Upload & Syndication Configuration
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim, #64748b)' }}>
+                Sync bidding schedules, registration rules, card acceptance, and notices to Supabase.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-gold"
+            onClick={handleSaveUploadSettings}
+            disabled={isSavingLocal}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 22px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: isSavingLocal ? 'not-allowed' : 'pointer',
+              borderRadius: 6
+            }}
+          >
+            <Save size={15} />
+            <span>{isSavingLocal ? 'Saving...' : 'Save Upload Settings'}</span>
+          </button>
+        </div>
+      </div>
+    )}
 
       {/* =========================================================================
           SUB-TAB 3: PREVIEW (Read-only public preview)
