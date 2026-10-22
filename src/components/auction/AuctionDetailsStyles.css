@@ -303,6 +303,49 @@
 /* ==========================================================================
    REFERENCE BUTTONS: DARK CHARCOAL, GOLD BORDER, GOLD ICON, SLIM GOLD ACCENT
    ========================================================================== */
+.btn-clean-white {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 8px 18px;
+  height: 36px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.18s ease;
+  line-height: 1;
+  outline: none;
+}
+
+.btn-clean-white:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-clean-white:active {
+  transform: translateY(0);
+  background: #f1f5f9;
+}
+
+.btn-clean-white svg {
+  color: #64748b;
+  transition: color 0.15s ease;
+}
+
+.btn-clean-white:hover svg {
+  color: #0f172a;
+}
+
 .btn-executive-gold {
   position: relative;
   display: inline-flex;
@@ -313,28 +356,36 @@
   color: #ffffff !important;
   border: 1px solid var(--ecomm-primary-gold);
   border-left: 3.5px solid var(--ecomm-gold-bright) !important;
-  padding: 7px 16px;
+  padding: 8px 20px;
+  height: 36px;
   border-radius: 6px;
-  font-family: var(--font-ecomm);
-  font-size: 12.5px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   transition: all 0.18s ease;
   overflow: hidden;
+  line-height: 1;
+  outline: none;
 }
 
 .btn-executive-gold:hover:not(:disabled) {
   background: var(--ecomm-charcoal-hover);
   border-color: #dfba52;
-  box-shadow: 0 3px 10px rgba(197, 155, 39, 0.25);
+  box-shadow: 0 4px 12px rgba(197, 155, 39, 0.28);
   transform: translateY(-1px);
+}
+
+.btn-executive-gold:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-executive-gold:disabled {
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .btn-executive-gold svg {

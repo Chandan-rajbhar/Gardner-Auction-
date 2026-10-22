@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuctionDetail } from '../../../context/AuctionDetailContext';
 import { PreAuctionSubTab, FeaturedImage, AuctionLink, AuctionExpense } from '../../../types/auctionDetail';
 import { FormField } from '../../Common/FormField';
@@ -40,13 +40,15 @@ import {
   UploadCloud,
   Copy,
   Download,
-  Save
+  Save,
+  RotateCcw
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
 import { LotFormModal } from '../LotFormModal';
 import { INITIAL_USERS } from '../../../data/mockData';
 import { useToast } from '../../../context/ToastContext';
+import { lotsService } from '../../../services/lotsService';
 
 interface PreAuctionTabProps {
   currentTab: PreAuctionSubTab;
@@ -82,6 +84,71 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkDesc, setLinkDesc] = useState('');
+  const featuredFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleProcessFeaturedFiles = async (files: FileList | File[]) => {
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (validFiles.length === 0) {
+      showToast('error', 'Invalid File', 'Please select a valid image file (PNG, JPG, WEBP).');
+      return;
+    }
+
+    for (const file of validFiles) {
+      try {
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const result = e.target?.result as string;
+            if (!result) return resolve('');
+            const img = new Image();
+            img.onload = () => {
+              const maxDim = 1600;
+              let width = img.width;
+              let height = img.height;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0, width, height);
+                  resolve(canvas.toDataURL(file.type || 'image/jpeg', 0.88));
+                  return;
+                }
+              }
+              resolve(result);
+            };
+            img.onerror = () => resolve(result);
+            img.src = result;
+          };
+          reader.readAsDataURL(file);
+        });
+
+        if (dataUrl) {
+          const currentCount = auction?.featuredImages?.length || 0;
+          dispatch({
+            type: 'ADD_FEATURED_IMAGE',
+            image: {
+              id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              url: dataUrl,
+              title: file.name.replace(/\.[^/.]+$/, ''),
+              isPrimary: currentCount === 0,
+              order: currentCount + 1
+            }
+          });
+          showToast('success', 'Asset Added', `"${file.name}" attached to catalog gallery.`);
+        }
+      } catch (err) {
+        console.error('Error reading image file:', err);
+      }
+    }
+  };
 
   const handleSaveUploadSettings = async () => {
     setIsSavingLocal(true);
@@ -158,6 +225,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const [isLotsNewLotModalOpen, setIsLotsNewLotModalOpen] = useState(false);
   const [lotsEditingLot, setLotsEditingLot] = useState<LotItem | null>(null);
   const [lotsLotToDelete, setLotsLotToDelete] = useState<LotItem | null>(null);
+  const [isDeleteAllLotsModalOpen, setIsDeleteAllLotsModalOpen] = useState(false);
+  const [isDeletingAllLots, setIsDeletingAllLots] = useState(false);
   const [isScanLotModalOpen, setIsScanLotModalOpen] = useState(false);
   const [scanInput, setScanInput] = useState('');
   const [isSaleOrderModalOpen, setIsSaleOrderModalOpen] = useState(false);
@@ -173,6 +242,24 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const filteredAuctionLots = lots.filter(l => 
     l.auctionId === auction.id || (auction.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
   );
+
+  const handleDeleteAllLots = async () => {
+    setIsDeletingAllLots(true);
+    try {
+      const lotsToDelete = [...filteredAuctionLots];
+      for (const lot of lotsToDelete) {
+        await onDeleteLot(lot.id);
+      }
+      setSelectedLots([]);
+      setIsDeleteAllLotsModalOpen(false);
+      showToast('success', 'Lots Deleted', `Successfully deleted all ${lotsToDelete.length} lots from this auction.`);
+    } catch (err) {
+      console.error('Failed to delete all lots:', err);
+      showToast('error', 'Error', 'Failed to delete some lots.');
+    } finally {
+      setIsDeletingAllLots(false);
+    }
+  };
 
   // Link Handlers
   const handleOpenLinkModal = (index?: number) => {
@@ -902,24 +989,37 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   </button>
                 </div>
 
+                <input
+                  type="file"
+                  ref={featuredFileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleProcessFeaturedFiles(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  multiple
+                  style={{ display: 'none' }}
+                />
+
                 {/* Upload Drag & Drop Zone */}
                 <div 
                   className="featured-upload-zone"
-                  onClick={() => {
-                    const sampleImages = ['/images/hero_coin.jpg', '/images/morgan_dollar.jpg', '/images/gold_bullion.jpg', '/images/antique_silver.jpg'];
-                    const randomImg = sampleImages[Math.floor(Math.random() * sampleImages.length)];
-                    dispatch({
-                      type: 'ADD_FEATURED_IMAGE',
-                      image: {
-                        id: `img-${Date.now()}`,
-                        url: randomImg,
-                        title: `Catalog Banner Asset #${auction.featuredImages.length + 1}`,
-                        order: auction.featuredImages.length + 1
-                      }
-                    });
-                    showToast('info', 'Asset Added', 'Banner image attached to catalog gallery.');
+                  onClick={() => featuredFileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                   }}
-                  title="Click to browse files or add sample banner asset"
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      handleProcessFeaturedFiles(e.dataTransfer.files);
+                    }
+                  }}
+                  title="Click to browse files from your computer or drag files here"
+                  style={{ cursor: 'pointer' }}
                 >
                   <UploadCloud size={28} color="var(--ecomm-primary-gold, #c59b27)" style={{ margin: '0 auto 6px' }} />
                   <p className="primary-text">
@@ -1303,11 +1403,19 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             <button
               type="button"
               className="btn-clean-white"
-              onClick={() => {
+              onClick={async () => {
+                if (auction?.id) {
+                  const saved = await auctionService.getAuctionById(auction.id);
+                  if (saved) {
+                    dispatch({ type: 'SET_AUCTION', payload: saved });
+                  }
+                }
                 showToast('info', 'Discard', 'Reset changes to saved state.');
               }}
+              title="Revert unsaved changes"
             >
-              Discard
+              <RotateCcw size={13} strokeWidth={2.2} />
+              <span>Discard</span>
             </button>
             <button
               type="button"
@@ -1321,6 +1429,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   showToast('success', 'Saved', 'Auction configuration saved successfully!');
                 }
               }}
+              title="Save all Details tab settings"
             >
               <Check size={14} strokeWidth={2.5} />
               <span>{isSavingLocal ? 'Saving...' : 'Save Settings'}</span>
@@ -1749,6 +1858,37 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             <span>{isSavingLocal ? 'Saving...' : 'Save Upload Settings'}</span>
           </button>
         </div>
+
+        {/* Upload Settings Page Footer Actions (Discard & Save Settings) */}
+        <div className="details-page-footer-actions">
+          <button
+            type="button"
+            className="btn-clean-white"
+            onClick={async () => {
+              if (auction?.id) {
+                const saved = await auctionService.getAuctionById(auction.id);
+                if (saved) {
+                  dispatch({ type: 'SET_AUCTION', payload: saved });
+                }
+              }
+              showToast('info', 'Discard', 'Reset changes to saved state.');
+            }}
+            title="Revert unsaved changes"
+          >
+            <RotateCcw size={13} strokeWidth={2.2} />
+            <span>Discard</span>
+          </button>
+          <button
+            type="button"
+            className="btn-executive-gold"
+            disabled={isSavingLocal}
+            onClick={handleSaveUploadSettings}
+            title="Save all Upload Settings to database"
+          >
+            <Check size={14} strokeWidth={2.5} />
+            <span>{isSavingLocal ? 'Saving...' : 'Save Settings'}</span>
+          </button>
+        </div>
       </div>
     )}
 
@@ -2042,6 +2182,46 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   <Settings size={15} color="#cba135" />
                   <span>Sale Order</span>
                 </button>
+
+                {/* Delete All Lots */}
+                {filteredAuctionLots.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteAllLotsModalOpen(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '9px 18px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      background: '#fff1f2',
+                      color: '#e11d48',
+                      border: '1.5px solid #fecdd3',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#e11d48';
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.borderColor = '#e11d48';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(225, 29, 72, 0.25)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff1f2';
+                      e.currentTarget.style.color = '#e11d48';
+                      e.currentTarget.style.borderColor = '#fecdd3';
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.transform = 'none';
+                    }}
+                    title="Delete all lots in this auction"
+                  >
+                    <Trash2 size={15} />
+                    <span>Delete All Lots</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2231,7 +2411,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             </div>
 
             {/* Table matching reference screenshot */}
-            <div style={{ border: '1px solid #f1f5f9', borderRadius: 8, overflow: 'hidden', background: '#ffffff' }}>
+            <div style={{ border: '1px solid #f1f5f9', borderRadius: 8, overflow: 'visible', background: '#ffffff' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: '#fafbfc', borderBottom: '1px solid #f1f5f9' }}>
@@ -2439,8 +2619,9 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                               width: 32,
                               height: 32,
                               borderRadius: 6,
-                              border: '1px solid #e2e8f0',
-                              background: '#ffffff',
+                              border: 'none',
+                              background: 'transparent',
+                              outline: 'none',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -2457,15 +2638,16 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                             <div style={{
                               position: 'absolute',
                               right: 0,
-                              top: '100%',
-                              marginTop: 4,
+                              ...(idx >= sorted.length - 2 && sorted.length > 1
+                                ? { bottom: '100%', marginBottom: 4 }
+                                : { top: '100%', marginTop: 4 }),
                               background: '#ffffff',
                               border: '1px solid #e2e8f0',
                               borderRadius: 8,
-                              boxShadow: 'var(--shadow-dropdown)',
+                              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                               padding: 4,
                               minWidth: 130,
-                              zIndex: 50,
+                              zIndex: 100,
                               display: 'flex',
                               flexDirection: 'column',
                               gap: 2
@@ -3429,10 +3611,21 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
           setLotsEditingLot(null);
         }}
         onSave={async (lotData) => {
-          if (lotsEditingLot) {
-            onUpdateLot(lotData);
-          } else {
-            onAddLot(lotData);
+          try {
+            if (lotsEditingLot) {
+              await lotsService.updateLot(lotData.id, lotData);
+              onUpdateLot(lotData);
+            } else {
+              await lotsService.createLot(lotData);
+              onAddLot(lotData);
+            }
+          } catch (err) {
+            console.error('Error saving lot to database:', err);
+            if (lotsEditingLot) {
+              onUpdateLot(lotData);
+            } else {
+              onAddLot(lotData);
+            }
           }
           setIsLotsNewLotModalOpen(false);
           setLotsEditingLot(null);
@@ -3459,6 +3652,18 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
           }
         }}
         onCancel={() => setLotsLotToDelete(null)}
+      />
+
+      {/* Delete All Lots Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteAllLotsModalOpen}
+        title="Delete All Lots"
+        message={`Are you sure you want to permanently delete ALL ${filteredAuctionLots.length} lots from "${auction.name}"? This action cannot be undone.`}
+        confirmLabel="Delete All Lots"
+        isDestructive={true}
+        isLoading={isDeletingAllLots}
+        onConfirm={handleDeleteAllLots}
+        onCancel={() => setIsDeleteAllLotsModalOpen(false)}
       />
 
       {/* Scan Lot Modal */}

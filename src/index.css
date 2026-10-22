@@ -1111,6 +1111,40 @@ body {
   color: #0f172a;
 }
 
+.btn-clean-white {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 8px 18px;
+  height: 36px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.18s ease;
+  line-height: 1;
+  outline: none;
+}
+
+.btn-clean-white:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-clean-white:active {
+  transform: translateY(0);
+  background: #f1f5f9;
+}
+
 .btn-danger {
   background: #fef2f2;
   border-color: #fecaca;
@@ -4656,12 +4690,14 @@ body {
   justify-content: center;
 }
 
-.btn-three-dots {
+.btn-three-dots,
+.lot-action-dots-btn {
   width: 32px;
   height: 32px;
   border-radius: 6px;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
+  outline: none;
   color: #64748b;
   display: inline-flex;
   align-items: center;
@@ -4671,9 +4707,11 @@ body {
 }
 
 .btn-three-dots:hover,
-.btn-three-dots.active {
+.btn-three-dots.active,
+.lot-action-dots-btn:hover,
+.lot-action-dots-btn.active {
   background: #f1f5f9;
-  border-color: #cbd5e1;
+  border: none;
   color: #0f172a;
 }
 

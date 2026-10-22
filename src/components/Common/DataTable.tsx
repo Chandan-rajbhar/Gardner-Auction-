@@ -346,12 +346,24 @@ export function DataTable<T>({
                         <div className="datatable-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
                           <button 
                             type="button"
-                            className="lot-action-dots-btn"
+                            className={`btn-three-dots ${openMenuId === id ? 'active' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenMenuId(openMenuId === id ? null : id);
                             }}
                             title="Row actions"
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 6,
+                              borderRadius: 6,
+                              color: openMenuId === id ? '#0f172a' : '#64748b',
+                              outline: 'none'
+                            }}
                           >
                             <MoreVertical size={16} />
                           </button>
@@ -430,32 +442,122 @@ export function DataTable<T>({
             </select>
           </div>
 
-          <div className="pagination-nav">
+          <div className="pagination-buttons" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button 
               type="button"
-              className="pagination-btn"
+              className="btn-page-step"
               disabled={validCurrentPage <= 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                height: 32,
+                padding: '0 12px',
+                borderRadius: 6,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: validCurrentPage <= 1 ? '#94a3b8' : '#334155',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                cursor: validCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              }}
+              onMouseEnter={(e) => {
+                if (validCurrentPage > 1) {
+                  e.currentTarget.style.background = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#94a3b8';
+                  e.currentTarget.style.color = '#0f172a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (validCurrentPage > 1) {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                  e.currentTarget.style.color = '#334155';
+                }
+              }}
             >
               <ChevronLeft size={14} />
               <span>Previous</span>
             </button>
 
-            <span className="pagination-page-number active">
-              {validCurrentPage}
-            </span>
-
-            {totalPages > 1 && (
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 4px' }}>
-                of {totalPages}
-              </span>
-            )}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                className={`btn-page-num ${pageNum === validCurrentPage ? 'active' : ''}`}
+                onClick={() => setCurrentPage(pageNum)}
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  padding: '0 8px',
+                  borderRadius: 6,
+                  fontSize: 12.5,
+                  fontWeight: pageNum === validCurrentPage ? 700 : 600,
+                  color: pageNum === validCurrentPage ? '#ffffff' : '#334155',
+                  background: pageNum === validCurrentPage ? '#0f172a' : '#ffffff',
+                  border: pageNum === validCurrentPage ? '1px solid #0f172a' : '1px solid #cbd5e1',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                  boxShadow: pageNum === validCurrentPage ? '0 1px 3px rgba(0,0,0,0.15)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (pageNum !== validCurrentPage) {
+                    e.currentTarget.style.background = '#f1f5f9';
+                    e.currentTarget.style.color = '#0f172a';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (pageNum !== validCurrentPage) {
+                    e.currentTarget.style.background = '#ffffff';
+                    e.currentTarget.style.color = '#334155';
+                  }
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
 
             <button 
               type="button"
-              className="pagination-btn"
+              className="btn-page-step"
               disabled={validCurrentPage >= totalPages}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                height: 32,
+                padding: '0 12px',
+                borderRadius: 6,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: validCurrentPage >= totalPages ? '#94a3b8' : '#334155',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                cursor: validCurrentPage >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              }}
+              onMouseEnter={(e) => {
+                if (validCurrentPage < totalPages) {
+                  e.currentTarget.style.background = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#94a3b8';
+                  e.currentTarget.style.color = '#0f172a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (validCurrentPage < totalPages) {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                  e.currentTarget.style.color = '#334155';
+                }
+              }}
             >
               <span>Next</span>
               <ChevronRight size={14} />

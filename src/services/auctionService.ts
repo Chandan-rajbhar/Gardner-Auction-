@@ -217,21 +217,21 @@ class AuctionService {
             currency: row.currency || 'USD',
             taxExemptAll: row.tax_exempt_all !== undefined ? Boolean(row.tax_exempt_all) : (isMockAuction ? base.taxExemptAll : false),
             liveStartingBidCard: row.live_starting_bid_card !== undefined ? Number(row.live_starting_bid_card) : (isMockAuction ? base.liveStartingBidCard : 1),
-            paymentInfo: row.payment_info !== undefined ? row.payment_info : (isMockAuction ? base.paymentInfo : ''),
-            terms: row.terms !== undefined ? row.terms : (isMockAuction ? base.terms : ''),
-            shortBpExplanation: row.short_bp_explanation !== undefined ? row.short_bp_explanation : (isMockAuction ? base.shortBpExplanation : ''),
-            address1: row.address1 !== undefined ? (row.address1 === '119 Jewel Basin Ct' && !isMockAuction ? '' : row.address1) : (isMockAuction ? base.address1 : (base.address1 === '119 Jewel Basin Ct' ? '' : base.address1 || '')),
-            address2: row.address2 !== undefined ? (row.address2 === 'Suite 100' && !isMockAuction ? '' : row.address2) : (isMockAuction ? base.address2 : (base.address2 === 'Suite 100' ? '' : base.address2 || '')),
-            city: row.city !== undefined ? (row.city === 'Bigfork' && !isMockAuction ? '' : row.city) : (isMockAuction ? base.city : (base.city === 'Bigfork' ? '' : base.city || '')),
-            state: row.state !== undefined ? (row.state === 'MT' && !isMockAuction ? '' : row.state) : (isMockAuction ? base.state : (base.state === 'MT' ? '' : base.state || '')),
-            zip: row.zip !== undefined ? (row.zip === '59911' && !isMockAuction ? '' : row.zip) : (isMockAuction ? base.zip : (base.zip === '59911' ? '' : base.zip || '')),
-            country: row.country !== undefined ? row.country : (isMockAuction ? base.country : (base.country || '')),
-            useConsolidatedInvoicing: row.use_consolidated_invoicing !== undefined ? Boolean(row.use_consolidated_invoicing) : (isMockAuction ? base.useConsolidatedInvoicing : false),
-            shippingAvailability: row.shipping_availability !== undefined ? row.shipping_availability : (isMockAuction ? base.shippingAvailability : ''),
-            shippingAccount: row.shipping_account !== undefined ? (row.shipping_account === 'shipping & handling' && !isMockAuction ? '' : row.shipping_account) : (isMockAuction ? base.shippingAccount : ''),
-            addHandlingCharge: row.add_handling_charge !== undefined ? Boolean(row.add_handling_charge) : (isMockAuction ? base.addHandlingCharge : false),
+            paymentInfo: row.payment_info ?? (isMockAuction ? base.paymentInfo : ''),
+            terms: row.terms ?? (isMockAuction ? base.terms : ''),
+            shortBpExplanation: row.short_bp_explanation ?? (isMockAuction ? base.shortBpExplanation : ''),
+            address1: row.address1 ?? (isMockAuction ? base.address1 : ''),
+            address2: row.address2 ?? (isMockAuction ? base.address2 : ''),
+            city: row.city ?? (isMockAuction ? base.city : ''),
+            state: row.state ?? (isMockAuction ? base.state : ''),
+            zip: row.zip ?? (isMockAuction ? base.zip : ''),
+            country: row.country ?? (isMockAuction ? base.country : ''),
+            useConsolidatedInvoicing: row.use_consolidated_invoicing !== undefined ? Boolean(row.use_consolidated_invoicing) : false,
+            shippingAvailability: row.shipping_availability ?? (isMockAuction ? base.shippingAvailability : ''),
+            shippingAccount: row.shipping_account ?? (isMockAuction ? base.shippingAccount : ''),
+            addHandlingCharge: row.add_handling_charge !== undefined ? Boolean(row.add_handling_charge) : false,
             handlingChargeType: row.handling_charge_type || (isMockAuction ? base.handlingChargeType : 'Fixed'),
-            handlingAmount: row.handling_amount !== undefined ? (row.handling_amount === 4.5 && !isMockAuction ? 0 : Number(row.handling_amount)) : (isMockAuction ? base.handlingAmount : 0),
+            handlingAmount: row.handling_amount !== undefined ? Number(row.handling_amount) : (isMockAuction ? base.handlingAmount : 0),
             featuredImages: Array.isArray(row.featured_images) ? row.featured_images : (isMockAuction ? base.featuredImages : []),
             auctionLinks: Array.isArray(row.auction_links) ? row.auction_links : (isMockAuction ? base.auctionLinks : []),
             uploadSettings: {
@@ -260,35 +260,8 @@ class AuctionService {
 
   public async getAuctionById(id: string): Promise<AuctionDetail | null> {
     const isMockAuction = id === 'auc-001';
-    const found = this.auctions.find(a => a.id === id);
-    if (found) {
-      if (!isMockAuction) {
-        if (found.address1 === '119 Jewel Basin Ct') found.address1 = '';
-        if (found.address2 === 'Suite 100') found.address2 = '';
-        if (found.city === 'Bigfork') found.city = '';
-        if (found.state === 'MT') found.state = '';
-        if (found.zip === '59911') found.zip = '';
-        if (found.shippingAccount === 'shipping & handling') found.shippingAccount = '';
-        if (found.handlingAmount === 4.5 || found.handlingAmount === 4.50) {
-          found.handlingAmount = 0;
-          found.addHandlingCharge = false;
-        }
-        if (found.shortBpExplanation === "15% Buyer's Premium") found.shortBpExplanation = '';
-        if (found.terms && found.terms.includes('HGS Terms & Conditions')) found.terms = '';
-        if (found.paymentInfo && found.paymentInfo.includes('3% processing fee applied')) found.paymentInfo = '';
-        if (found.uploadSettings && found.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
-          found.uploadSettings = createEmptyAuctionDetail().uploadSettings;
-        }
-        if (found.lotDefaults) {
-          if (found.lotDefaults.commission?.includes('CSS_52F3ABA3')) found.lotDefaults.commission = '';
-          if (found.lotDefaults.buyerTax?.includes('BTAX_0%')) found.lotDefaults.buyerTax = '';
-          if (found.lotDefaults.buyerPremium?.includes('BP_15')) found.lotDefaults.buyerPremium = '';
-        }
-      }
-      return JSON.parse(JSON.stringify(found));
-    }
 
-    // Fallback: Check Supabase directly if auction was created elsewhere
+    // 1. Fetch fresh record directly from Supabase
     try {
       const { data, error } = await supabaseAdmin
         .from('auctions')
@@ -314,18 +287,18 @@ class AuctionService {
           paymentInfo: data.payment_info || '',
           terms: data.terms || '',
           shortBpExplanation: data.short_bp_explanation || '',
-          address1: data.address1 !== undefined ? (data.address1 === '119 Jewel Basin Ct' && !isMockAuction ? '' : data.address1) : (isMockAuction ? base.address1 : ''),
-          address2: data.address2 !== undefined ? (data.address2 === 'Suite 100' && !isMockAuction ? '' : data.address2) : (isMockAuction ? base.address2 : ''),
-          city: data.city !== undefined ? (data.city === 'Bigfork' && !isMockAuction ? '' : data.city) : (isMockAuction ? base.city : ''),
-          state: data.state !== undefined ? (data.state === 'MT' && !isMockAuction ? '' : data.state) : (isMockAuction ? base.state : ''),
-          zip: data.zip !== undefined ? (data.zip === '59911' && !isMockAuction ? '' : data.zip) : (isMockAuction ? base.zip : ''),
-          country: data.country !== undefined ? data.country : (isMockAuction ? base.country : ''),
-          useConsolidatedInvoicing: data.use_consolidated_invoicing !== undefined ? Boolean(data.use_consolidated_invoicing) : (isMockAuction ? base.useConsolidatedInvoicing : false),
-          shippingAvailability: data.shipping_availability !== undefined ? data.shipping_availability : (isMockAuction ? base.shippingAvailability : ''),
-          shippingAccount: data.shipping_account !== undefined ? (data.shipping_account === 'shipping & handling' && !isMockAuction ? '' : data.shipping_account) : (isMockAuction ? base.shippingAccount : ''),
-          addHandlingCharge: data.add_handling_charge !== undefined ? Boolean(data.add_handling_charge) : (isMockAuction ? base.addHandlingCharge : false),
+          address1: data.address1 ?? '',
+          address2: data.address2 ?? '',
+          city: data.city ?? '',
+          state: data.state ?? '',
+          zip: data.zip ?? '',
+          country: data.country ?? '',
+          useConsolidatedInvoicing: data.use_consolidated_invoicing !== undefined ? Boolean(data.use_consolidated_invoicing) : false,
+          shippingAvailability: data.shipping_availability ?? '',
+          shippingAccount: data.shipping_account ?? '',
+          addHandlingCharge: data.add_handling_charge !== undefined ? Boolean(data.add_handling_charge) : false,
           handlingChargeType: data.handling_charge_type || 'Fixed',
-          handlingAmount: data.handling_amount !== undefined ? (data.handling_amount === 4.5 && !isMockAuction ? 0 : Number(data.handling_amount)) : (isMockAuction ? base.handlingAmount : 0),
+          handlingAmount: data.handling_amount !== undefined ? Number(data.handling_amount) : 0,
           featuredImages: Array.isArray(data.featured_images) ? data.featured_images : (isMockAuction ? base.featuredImages : []),
           auctionLinks: Array.isArray(data.auction_links) ? data.auction_links : (isMockAuction ? base.auctionLinks : []),
           uploadSettings: {
@@ -338,12 +311,24 @@ class AuctionService {
           },
           expenses: isMockAuction ? base.expenses : []
         };
-        this.auctions.unshift(loaded);
+
+        const idx = this.auctions.findIndex(a => a.id === id);
+        if (idx >= 0) {
+          this.auctions[idx] = loaded;
+        } else {
+          this.auctions.unshift(loaded);
+        }
         this.persist();
-        return loaded;
+        return JSON.parse(JSON.stringify(loaded));
       }
     } catch (err) {
       console.warn('[AuctionService] getAuctionById Supabase error:', err);
+    }
+
+    // 2. Fallback to local cache if offline or not in Supabase
+    const found = this.auctions.find(a => a.id === id);
+    if (found) {
+      return JSON.parse(JSON.stringify(found));
     }
 
     return null;

@@ -127,11 +127,21 @@ export const lotsService = {
   async createLot(lot: LotItem): Promise<{ success: boolean; lot?: LotItem; error?: string }> {
     try {
       const row = lotItemToDB(lot);
-      const { data, error } = await supabaseAdmin
+      let { data, error } = await supabaseAdmin
         .from('lots')
         .insert([row])
         .select()
         .single();
+
+      if (error) {
+        const fallback = await supabase
+          .from('lots')
+          .insert([row])
+          .select()
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) {
         console.error('[lotsService] Create lot error:', error.message);
@@ -158,6 +168,7 @@ export const lotsService = {
       if (updates.title !== undefined) dbUpdates.title = updates.title;
       if (updates.category !== undefined) dbUpdates.category = updates.category;
       if (updates.image !== undefined) dbUpdates.image = updates.image;
+      if (updates.images !== undefined && updates.images.length > 0) dbUpdates.image = updates.images[0];
       if (updates.startingBid !== undefined) dbUpdates.starting_bid = updates.startingBid;
       if (updates.reservePrice !== undefined) dbUpdates.reserve_price = updates.reservePrice;
       if (updates.estimateLow !== undefined) dbUpdates.estimate_low = updates.estimateLow;
@@ -170,15 +181,25 @@ export const lotsService = {
       if (updates.grade !== undefined) dbUpdates.grade = updates.grade;
       if (updates.certNumber !== undefined) dbUpdates.cert_number = updates.certNumber;
       if (updates.consignorName !== undefined) dbUpdates.consignor_name = updates.consignorName;
+      if (updates.sellerName !== undefined && !updates.consignorName) dbUpdates.consignor_name = updates.sellerName;
       if (updates.conditionReport !== undefined) dbUpdates.condition_report = updates.conditionReport;
+      if (updates.description !== undefined && !updates.conditionReport) dbUpdates.condition_report = updates.description;
       if (updates.provenance !== undefined) dbUpdates.provenance = updates.provenance;
       if (updates.bidsCount !== undefined) dbUpdates.bids_count = updates.bidsCount;
       if (updates.hammerPrice !== undefined) dbUpdates.hammer_price = updates.hammerPrice;
 
-      const { error } = await supabaseAdmin
+      let { error } = await supabaseAdmin
         .from('lots')
         .update(dbUpdates)
         .eq('id', id);
+
+      if (error) {
+        const fallback = await supabase
+          .from('lots')
+          .update(dbUpdates)
+          .eq('id', id);
+        error = fallback.error;
+      }
 
       if (error) {
         console.error('[lotsService] Update lot error:', error.message);

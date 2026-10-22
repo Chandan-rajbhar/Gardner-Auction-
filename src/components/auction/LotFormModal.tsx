@@ -274,7 +274,7 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
       certNumber: editingLot?.certNumber || undefined,
       consignorId: sellerId || editingLot?.consignorId || 'c-default',
       consignorName: sellerName || editingLot?.consignorName || 'Gardner House Consignor',
-      conditionReport: editingLot?.conditionReport || description.trim(),
+      conditionReport: description.trim() || editingLot?.conditionReport || '',
       provenance: editingLot?.provenance || 'Private Numismatic Collection; Gardner Verified.',
       bidsCount: editingLot?.bidsCount ?? 0,
       quantity: quantity || 1,
@@ -536,9 +536,9 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                         height: 38,
                         padding: '0 16px',
                         borderRadius: 6,
-                        background: '#00685e',
+                        background: '#0f172a',
                         color: '#ffffff',
-                        border: 'none',
+                        border: '1px solid #1e293b',
                         fontWeight: 700,
                         fontSize: 12.5,
                         cursor: 'pointer',
@@ -546,10 +546,17 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                         alignItems: 'center',
                         gap: 6,
                         whiteSpace: 'nowrap',
-                        transition: 'background 0.15s ease'
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                        transition: 'all 0.15s ease'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#00524a'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = '#00685e'}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#1e293b';
+                        e.currentTarget.style.borderColor = '#334155';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#0f172a';
+                        e.currentTarget.style.borderColor = '#1e293b';
+                      }}
                     >
                       <Plus size={14} strokeWidth={3} />
                       <span>NEW SELLER</span>
@@ -827,8 +834,8 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                     transition: 'all 0.15s ease'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#00685e';
-                    e.currentTarget.style.background = '#f0fdf4';
+                    e.currentTarget.style.borderColor = '#0f172a';
+                    e.currentTarget.style.background = '#f1f5f9';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = '#e2e8f0';
@@ -847,11 +854,14 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#00685e',
+                      color: '#475569',
                       fontSize: 12.5,
                       cursor: 'pointer',
-                      textDecoration: 'underline'
+                      textDecoration: 'underline',
+                      transition: 'color 0.15s ease'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#0f172a'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
                   >
                     Tips & Tricks
                   </button>
@@ -883,77 +893,51 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                 height: 17,
                 cursor: 'pointer',
                 borderRadius: 4,
-                accentColor: '#00685e'
+                accentColor: '#0f172a'
               }}
             />
           </label>
 
           {/* Right: Actions matching Image 3 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* 1. SAVE / NEXT */}
-            <button
-              type="button"
-              disabled={!isFormValid || isSaving}
-              onClick={handleSaveAndNext}
-              style={{
-                height: 40,
-                padding: '0 18px',
-                borderRadius: 6,
-                background: '#00685e',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                fontSize: 12.5,
-                letterSpacing: '0.03em',
-                cursor: isFormValid ? 'pointer' : 'not-allowed',
-                opacity: isFormValid ? 1 : 0.6,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 7,
-                transition: 'background 0.15s ease'
-              }}
-              onMouseEnter={(e) => {
-                if (isFormValid) e.currentTarget.style.background = '#00524a';
-              }}
-              onMouseLeave={(e) => {
-                if (isFormValid) e.currentTarget.style.background = '#00685e';
-              }}
-            >
-              <Save size={14} />
-              <span>SAVE / ➔ NEXT</span>
-            </button>
-
-            {/* 2. SAVE / EDIT */}
+            {/* SAVE BUTTON */}
             <button
               type="button"
               disabled={!isFormValid || isSaving}
               onClick={handleSaveAndClose}
               style={{
                 height: 40,
-                padding: '0 18px',
+                padding: '0 24px',
                 borderRadius: 6,
-                background: '#00685e',
+                background: '#0f172a',
                 color: '#ffffff',
-                border: 'none',
+                border: '1px solid #1e293b',
                 fontWeight: 700,
-                fontSize: 12.5,
-                letterSpacing: '0.03em',
-                cursor: isFormValid ? 'pointer' : 'not-allowed',
-                opacity: isFormValid ? 1 : 0.6,
+                fontSize: 13,
+                letterSpacing: '0.04em',
+                cursor: isFormValid && !isSaving ? 'pointer' : 'not-allowed',
+                opacity: isFormValid && !isSaving ? 1 : 0.6,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 7,
-                transition: 'background 0.15s ease'
+                gap: 8,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                transition: 'all 0.15s ease'
               }}
               onMouseEnter={(e) => {
-                if (isFormValid) e.currentTarget.style.background = '#00524a';
+                if (isFormValid && !isSaving) {
+                  e.currentTarget.style.background = '#1e293b';
+                  e.currentTarget.style.borderColor = '#334155';
+                }
               }}
               onMouseLeave={(e) => {
-                if (isFormValid) e.currentTarget.style.background = '#00685e';
+                if (isFormValid && !isSaving) {
+                  e.currentTarget.style.background = '#0f172a';
+                  e.currentTarget.style.borderColor = '#1e293b';
+                }
               }}
             >
-              <Save size={14} />
-              <span>SAVE / ✏️ EDIT</span>
+              <Save size={15} />
+              <span>{isSaving ? 'SAVING...' : 'SAVE'}</span>
             </button>
 
             {/* 3. CLOSE */}

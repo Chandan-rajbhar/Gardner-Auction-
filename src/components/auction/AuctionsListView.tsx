@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AuctionDetail } from '../../types/auctionDetail';
+import { AuctionDetail, AuctionStatusType } from '../../types/auctionDetail';
 import { auctionService } from '../../services/auctionService';
 import { DataTable, ColumnDef, ActionMenuItem } from '../Common/DataTable';
 import { StatusPill } from '../Common/StatusPill';
@@ -19,7 +19,9 @@ import {
   MapPin, 
   Radio, 
   Layers,
-  ArrowRight
+  ArrowRight,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -42,6 +44,16 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [auctionToDelete, setAuctionToDelete] = useState<AuctionDetail | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [auctionToChangeStatus, setAuctionToChangeStatus] = useState<AuctionDetail | null>(null);
+  const [statusToSet, setStatusToSet] = useState<AuctionStatusType>('Open');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Bulk Selection States
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
+  const [bulkStatusToSet, setBulkStatusToSet] = useState<AuctionStatusType>('Open');
+  const [isBulkUpdatingStatus, setIsBulkUpdatingStatus] = useState(false);
 
   // New Auction Form
   const [newName, setNewName] = useState('');
@@ -122,6 +134,66 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
     }
   };
 
+  const handleUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auctionToChangeStatus) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      await auctionService.saveAuction({
+        ...auctionToChangeStatus,
+        status: statusToSet
+      });
+      setAuctionToChangeStatus(null);
+      await loadAuctions();
+    } catch (err) {
+      console.error('Failed to update auction status:', err);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedAuctionIds.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      for (const id of selectedAuctionIds) {
+        await auctionService.deleteAuction(id);
+      }
+      setSelectedAuctionIds([]);
+      setIsBulkDeleteModalOpen(false);
+      await loadAuctions();
+    } catch (err) {
+      console.error('Failed to bulk delete auctions:', err);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedAuctionIds.length === 0) return;
+    setIsBulkUpdatingStatus(true);
+    try {
+      for (const id of selectedAuctionIds) {
+        const target = auctions.find(a => a.id === id);
+        if (target) {
+          await auctionService.saveAuction({
+            ...target,
+            status: bulkStatusToSet
+          });
+        }
+      }
+      setIsBulkStatusModalOpen(false);
+      setSelectedAuctionIds([]);
+      await loadAuctions();
+    } catch (err) {
+      console.error('Failed to update status for selected auctions:', err);
+    } finally {
+      setIsBulkUpdatingStatus(false);
+    }
+  };
+
   const filteredAuctions = auctions.filter(a => {
     if (statusFilter === 'All') return true;
     return a.status.toLowerCase() === statusFilter.toLowerCase();
@@ -195,9 +267,13 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       key: 'status',
       header: 'STATUS',
       sortable: true,
-      width: 130,
+      width: 135,
       align: 'center',
-      render: (a) => <StatusPill status={a.status} />
+      render: (a) => (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <StatusPill status={a.status} />
+        </div>
+      )
     },
     {
       key: 'dashboardAction',
@@ -231,6 +307,16 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       label: 'Open Auction',
       icon: Edit,
       onClick: (a) => onOpenAuction(a.id)
+    },
+    {
+      label: 'Change Status',
+      icon: RefreshCw,
+      onClick: (a) => {
+        setAuctionToChangeStatus(a);
+        const validStatuses: AuctionStatusType[] = ['Open', 'In Progress', 'Closed'];
+        const current = validStatuses.includes(a.status as any) ? (a.status as AuctionStatusType) : 'Open';
+        setStatusToSet(current);
+      }
     },
     {
       label: 'Duplicate',
@@ -275,8 +361,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
             className="btn btn-gold"
             onClick={() => setIsNewModalOpen(true)}
           >
-            <Plus size={16} strokeWidth={2.5} />
-            <span>+ New Auction</span>
+            <span>New Auction</span>
           </button>
         </div>
       </div>
@@ -293,6 +378,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
                 type="button"
                 onClick={() => setStatusFilter(st)}
                 style={{
+                  minWidth: 92,
+                  textAlign: 'center',
                   padding: '5px 12px',
                   borderRadius: 20,
                   fontSize: 12,
@@ -333,6 +420,126 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         </div>
       </div>
 
+      {/* Bulk Selection Actions Bar */}
+      {selectedAuctionIds.length > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          padding: '10px 18px',
+          background: '#0f172a',
+          color: '#ffffff',
+          borderRadius: 8,
+          border: '1px solid #1e293b',
+          boxShadow: '0 4px 16px rgba(15, 23, 42, 0.25)',
+          animation: 'fadeIn 0.15s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{
+              background: 'var(--gold-primary)',
+              color: '#0f172a',
+              padding: '3px 10px',
+              borderRadius: 14,
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)'
+            }}>
+              {selectedAuctionIds.length} Selected
+            </span>
+            <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>
+              {selectedAuctionIds.length === 1 ? '1 auction selected' : `${selectedAuctionIds.length} auctions selected`}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Bulk Change Status Button */}
+            <button
+              type="button"
+              onClick={() => setIsBulkStatusModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                background: '#1e293b',
+                color: '#ffffff',
+                border: '1px solid #334155',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#334155';
+                e.currentTarget.style.borderColor = 'var(--gold-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#1e293b';
+                e.currentTarget.style.borderColor = '#334155';
+              }}
+              title="Change status for selected auctions"
+            >
+              <RefreshCw size={13} color="var(--gold-primary)" />
+              <span>Change Status</span>
+            </button>
+
+            {/* Bulk Delete Button */}
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                background: '#dc2626',
+                color: '#ffffff',
+                border: '1px solid #ef4444',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#b91c1c')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#dc2626')}
+              title="Delete selected auctions"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedAuctionIds.length})</span>
+            </button>
+
+            {/* Clear Selection */}
+            <button
+              type="button"
+              onClick={() => setSelectedAuctionIds([])}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '6px 10px',
+                borderRadius: 6,
+                background: 'transparent',
+                color: '#94a3b8',
+                border: 'none',
+                fontSize: 12,
+                cursor: 'pointer',
+                transition: 'color 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+              title="Deselect all"
+            >
+              <X size={14} />
+              <span>Deselect</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table View */}
       {viewMode === 'table' ? (
         <DataTable
@@ -347,6 +554,57 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           rowActions={rowActions}
           itemNoun="auctions"
           isLoading={isLoading}
+          topRightControls={
+            selectedAuctionIds.length > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkStatusModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 38,
+                    padding: '0 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-medium)',
+                    background: '#ffffff',
+                    color: 'var(--text-main)',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  title="Change status for selected auctions"
+                >
+                  <RefreshCw size={13} color="var(--gold-primary)" />
+                  <span>Change Status ({selectedAuctionIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 38,
+                    padding: '0 12px',
+                    borderRadius: 8,
+                    border: '1px solid #fecaca',
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  title="Delete selected auctions"
+                >
+                  <Trash2 size={13} />
+                  <span>Delete Selected ({selectedAuctionIds.length})</span>
+                </button>
+              </div>
+            ) : undefined
+          }
         />
       ) : (
         /* Grid View */
@@ -493,6 +751,185 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         onConfirm={handleDeleteConfirm}
         onCancel={() => setAuctionToDelete(null)}
       />
+
+      {/* Change Status Modal */}
+      <FormModal
+        isOpen={Boolean(auctionToChangeStatus)}
+        title="Change Auction Status"
+        onClose={() => setAuctionToChangeStatus(null)}
+        onSubmit={handleUpdateStatus}
+        submitLabel="Update Status"
+        isLoading={isUpdatingStatus}
+        maxWidth={480}
+      >
+        {auctionToChangeStatus && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ 
+              padding: '12px 14px', 
+              background: '#f8fafc', 
+              borderRadius: 8, 
+              border: '1px solid var(--border-subtle)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Auction Details
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)' }}>
+                {auctionToChangeStatus.name}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>
+                  Code: {auctionToChangeStatus.code}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Current:</span>
+                  <StatusPill status={auctionToChangeStatus.status} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                Select New Status
+              </label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(['Open', 'In Progress', 'Closed'] as const).map((st) => {
+                  const isSelected = statusToSet === st;
+                  return (
+                    <label
+                      key={st}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '11px 14px',
+                        borderRadius: 8,
+                        border: isSelected ? '1.5px solid var(--gold-primary)' : '1px solid var(--border-subtle)',
+                        background: isSelected ? '#fbf8f2' : '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <input
+                          type="radio"
+                          name="auctionStatusRadio"
+                          value={st}
+                          checked={isSelected}
+                          onChange={() => setStatusToSet(st)}
+                          style={{ accentColor: 'var(--gold-primary)', cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, color: isSelected ? 'var(--gold-dark)' : 'var(--text-main)' }}>
+                            {st}
+                          </span>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
+                            {st === 'Open' && 'Cataloging / Upcoming auction'}
+                            {st === 'In Progress' && 'Active live bidding / Rostrum open'}
+                            {st === 'Closed' && 'Concluded / Past auction'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <StatusPill status={st} />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </FormModal>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isBulkDeleteModalOpen}
+        title="Delete Selected Auctions"
+        message={`Are you sure you want to permanently delete ${selectedAuctionIds.length} selected auction(s)? All associated catalog lots, clerking records, and settlement data will be permanently removed from Supabase.`}
+        confirmLabel={`Delete ${selectedAuctionIds.length} Auction(s)`}
+        isDestructive={true}
+        isLoading={isBulkDeleting}
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setIsBulkDeleteModalOpen(false)}
+      />
+
+      {/* Bulk Change Status Modal */}
+      <FormModal
+        isOpen={isBulkStatusModalOpen}
+        title={`Change Status (${selectedAuctionIds.length} Auctions)`}
+        onClose={() => setIsBulkStatusModalOpen(false)}
+        onSubmit={handleBulkUpdateStatus}
+        submitLabel={`Update ${selectedAuctionIds.length} Auction(s)`}
+        isLoading={isBulkUpdatingStatus}
+        maxWidth={460}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{
+            padding: '12px 14px',
+            background: '#f8fafc',
+            borderRadius: 8,
+            border: '1px solid var(--border-subtle)',
+            fontSize: 13,
+            color: 'var(--text-secondary)'
+          }}>
+            Setting new status for <strong style={{ color: 'var(--text-main)' }}>{selectedAuctionIds.length} selected auction(s)</strong>.
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Select Status to Apply
+            </label>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(['Open', 'In Progress', 'Closed'] as const).map((st) => {
+                const isSelected = bulkStatusToSet === st;
+                return (
+                  <label
+                    key={st}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '11px 14px',
+                      borderRadius: 8,
+                      border: isSelected ? '1.5px solid var(--gold-primary)' : '1px solid var(--border-subtle)',
+                      background: isSelected ? '#fbf8f2' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="radio"
+                        name="bulkAuctionStatusRadio"
+                        value={st}
+                        checked={isSelected}
+                        onChange={() => setBulkStatusToSet(st)}
+                        style={{ accentColor: 'var(--gold-primary)', cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: isSelected ? 'var(--gold-dark)' : 'var(--text-main)' }}>
+                          {st}
+                        </span>
+                        <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
+                          {st === 'Open' && 'Cataloging / Upcoming auction'}
+                          {st === 'In Progress' && 'Active live bidding / Rostrum open'}
+                          {st === 'Closed' && 'Concluded / Past auction'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <StatusPill status={st} />
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </FormModal>
     </div>
   );
 };

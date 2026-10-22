@@ -45,8 +45,18 @@ export const StatusPill: React.FC<StatusPillProps> = ({
     badgeClass = 'badge badge-pending';
   }
 
+  const defaultStatusStyle: React.CSSProperties = type === 'status' ? {
+    width: '108px',
+    minWidth: '108px',
+    display: 'inline-flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+    boxSizing: 'border-box'
+  } : {};
+
   return (
-    <span className={badgeClass} style={style}>
+    <span className={badgeClass} style={{ ...defaultStatusStyle, ...style }}>
       {status}
     </span>
   );
