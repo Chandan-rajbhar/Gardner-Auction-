@@ -3,7 +3,7 @@ import './CurrentAuctionPage.css';
 import {
   Search, Heart, X, ChevronDown, ChevronLeft, ChevronRight, Gavel, Diamond, Lock, Percent, FileCheck,
   Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, User, Users, Phone, Truck, Crown,
-  Sun, Moon, ArrowUp, ArrowLeft, Calendar, MapPin, Clock, Sparkles, Layers
+  Sun, Moon, ArrowUp, ArrowLeft, Clock, Sparkles, Layers
 } from 'lucide-react';
 import type { EnrichedLotItem } from './types';
 import { supabase } from '../../lib/supabase';
@@ -138,7 +138,6 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   // Interactive View Lot Terminal States
   const [isLightTheme, setIsLightTheme] = useState<boolean>(true);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
-  const [activeThumb, setActiveThumb] = useState<string>('primary view');
   const [stageZoom, setStageZoom] = useState<boolean>(false);
   const [stageRotated, setStageRotated] = useState<boolean>(false);
 
