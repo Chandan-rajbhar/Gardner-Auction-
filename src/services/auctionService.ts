@@ -1,5 +1,6 @@
 import { AuctionDetail, SettlementCustomer, SettlementCharge, AuctionExpense } from '../types/auctionDetail';
 import { MOCK_AUCTIONS_DETAIL } from '../data/mockAuctionDetailData';
+import { supabaseAdmin } from '../lib/supabase';
 
 const STORAGE_KEY = 'gardner_auctions_detail_v1';
 
@@ -34,6 +35,38 @@ class AuctionService {
   }
 
   public async getAuctions(): Promise<AuctionDetail[]> {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('auctions')
+        .select('*')
+        .order('start_date', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const fromDb: AuctionDetail[] = data.map((row: any) => {
+          const existing = this.auctions.find(a => a.id === row.id);
+          const base = existing || this.auctions[0] || MOCK_AUCTIONS_DETAIL[0];
+          return {
+            ...JSON.parse(JSON.stringify(base)),
+            id: row.id,
+            code: row.code || `AUC-${row.id.toString().slice(-4)}`,
+            name: row.name,
+            description: row.description || '',
+            status: row.status || 'Open',
+            startDate: row.start_date || new Date().toISOString().split('T')[0],
+            endDate: row.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            auctionType: row.auction_type || 'HiBid',
+          };
+        });
+
+        const dbIds = new Set(fromDb.map(a => a.id));
+        const merged = [...fromDb, ...this.auctions.filter(a => !dbIds.has(a.id))];
+        this.auctions = merged;
+        this.persist();
+        return merged;
+      }
+    } catch (err) {
+      console.warn('[AuctionService] Failed to fetch auctions from Supabase, using local fallback:', err);
+    }
     return [...this.auctions];
   }
 
@@ -46,20 +79,35 @@ class AuctionService {
     const index = this.auctions.findIndex(a => a.id === updated.id);
     if (index >= 0) {
       this.auctions[index] = { ...updated };
-      this.persist();
-      return { success: true, data: this.auctions[index] };
     } else {
       this.auctions.unshift(updated);
-      this.persist();
-      return { success: true, data: updated };
     }
+    this.persist();
+
+    // Sync updates to Supabase
+    try {
+      await supabaseAdmin.from('auctions').update({
+        code: updated.code,
+        name: updated.name,
+        description: updated.description,
+        status: updated.status,
+        start_date: updated.startDate,
+        end_date: updated.endDate,
+        updated_at: new Date().toISOString()
+      }).eq('id', updated.id);
+    } catch (e) {
+      console.warn('[AuctionService] Supabase update notice:', e);
+    }
+
+    return { success: true, data: updated };
   }
 
   public async createAuction(data: Partial<AuctionDetail>): Promise<AuctionDetail> {
     const base = this.auctions[0] || MOCK_AUCTIONS_DETAIL[0];
+    const generatedId = `auc-${Date.now()}`;
     const newAuction: AuctionDetail = {
       ...JSON.parse(JSON.stringify(base)),
-      id: `auc-${Date.now()}`,
+      id: data.id || generatedId,
       code: (data.code || `AUC-${Date.now().toString().slice(-4)}`).toUpperCase(),
       name: data.name || 'New Catalog Auction',
       status: 'Open',
@@ -72,6 +120,36 @@ class AuctionService {
 
     this.auctions.unshift(newAuction);
     this.persist();
+
+    // Insert directly into Supabase auctions table
+    try {
+      const { error } = await supabaseAdmin.from('auctions').insert([
+        {
+          id: newAuction.id,
+          code: newAuction.code,
+          name: newAuction.name,
+          description: newAuction.description,
+          auction_type: data.auctionType || 'HiBid',
+          status: newAuction.status || 'Open',
+          start_date: newAuction.startDate,
+          end_date: newAuction.endDate,
+          currency: 'USD',
+          country: 'United States',
+          featured_images: [],
+          day_stats: { lotCount: 0 },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      ]);
+      if (error) {
+        console.error('[AuctionService] Supabase insert error:', error.message);
+      } else {
+        console.log('[AuctionService] Auction successfully created in Supabase:', newAuction.id);
+      }
+    } catch (sbErr) {
+      console.error('[AuctionService] Unexpected error inserting to Supabase:', sbErr);
+    }
+
     return newAuction;
   }
 
@@ -89,6 +167,30 @@ class AuctionService {
 
     this.auctions.unshift(copy);
     this.persist();
+
+    try {
+      await supabaseAdmin.from('auctions').insert([
+        {
+          id: copy.id,
+          code: copy.code,
+          name: copy.name,
+          description: copy.description,
+          auction_type: copy.auctionType || 'HiBid',
+          status: 'Open',
+          start_date: copy.startDate,
+          end_date: copy.endDate,
+          currency: 'USD',
+          country: 'United States',
+          featured_images: [],
+          day_stats: { lotCount: 0 },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      ]);
+    } catch (e) {
+      console.warn('[AuctionService] Supabase duplicate notice:', e);
+    }
+
     return copy;
   }
 
@@ -97,6 +199,13 @@ class AuctionService {
     this.auctions = this.auctions.filter(a => a.id !== id);
     if (this.auctions.length !== prevLen) {
       this.persist();
+
+      try {
+        await supabaseAdmin.from('auctions').delete().eq('id', id);
+      } catch (e) {
+        console.warn('[AuctionService] Supabase delete notice:', e);
+      }
+
       return true;
     }
     return false;
