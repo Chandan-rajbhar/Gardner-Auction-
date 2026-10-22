@@ -24,6 +24,7 @@ import {
 } from './components/AuctionSearchControls';
 import { PastCatalogsPage } from './components/PastCatalogsPage';
 import { AuctionDetailsPage } from './components/AuctionDetailsPage';
+import './components/AuctionDetailsPage.css';
 import { CatalogLotsPage } from './components/CatalogLotsPage';
 import { LotDetailPage } from './components/LotDetailPage';
 
@@ -32,7 +33,6 @@ import {
 } from './data/auctionData';
 import type { LotItem, CuratedEvent } from './data/auctionData';
 import {
-  CURRENT_AUCTIONS,
   CURRENT_AUCTION_LOT_ITEMS
 } from './data/currentAuctionData';
 import type { CurrentAuction } from './data/currentAuctionData';
@@ -64,7 +64,7 @@ const CATEGORIES = [
 
 export type AppRoute =
   | { view: 'home' }
-  | { view: 'current-auction' }
+  | { view: 'current-auction'; initialAuctionId?: string; initialTab?: 'auctions' | 'lots' }
   | { view: 'email-list' }
   | { view: 'catalogs' }
   | { view: 'profile' }
@@ -74,7 +74,7 @@ export type AppRoute =
 
 export const App: React.FC = () => {
   // State: Dynamic Auctions & Lots from Supabase
-  const [allAuctions, setAllAuctions] = useState<CurrentAuction[]>(CURRENT_AUCTIONS);
+  const [allAuctions, setAllAuctions] = useState<CurrentAuction[]>([]);
   const [spotlightLot, setSpotlightLot] = useState<LotItem>(SPOTLIGHT_LOT);
   const [liveLots, setLiveLots] = useState<LotItem[]>(CURRENT_AUCTION_LOT_ITEMS);
   const [watchlist, setWatchlist] = useState<string[]>(['spotlight-104']);
@@ -145,10 +145,20 @@ export const App: React.FC = () => {
       clean === 'auctions' ||
       clean === 'current-auction' ||
       clean.startsWith('current-auction') ||
+      clean.startsWith('auctions') ||
       pathname === '/current-auction' ||
       pathname === '/auctions'
     ) {
-      return { view: 'current-auction' };
+      let initialAuctionId: string | undefined;
+      let initialTab: 'auctions' | 'lots' = 'auctions';
+      const q = clean.includes('?') ? clean.split('?')[1] : (typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '');
+      if (q) {
+        const p = new URLSearchParams(q);
+        const aId = p.get('auction') || p.get('catalog') || p.get('id');
+        if (aId) initialAuctionId = aId;
+        if (p.get('tab') === 'lots' || aId) initialTab = 'lots';
+      }
+      return { view: 'current-auction', initialAuctionId, initialTab };
     }
 
     // 1. Lot details routing: e.g. #lot/:id or #catalog/:auctionId/lot/:lotId or #auction/:auctionId/lot/:lotId
@@ -193,6 +203,10 @@ export const App: React.FC = () => {
     }
     if (pathname.startsWith('/past-auction-')) {
       const id = pathname.substring(1).split(/[?#]/)[0];
+      return { view: 'auction-details', auctionId: id };
+    }
+    if (pathname.startsWith('/auction/')) {
+      const id = pathname.substring('/auction/'.length).split(/[?#]/)[0];
       return { view: 'auction-details', auctionId: id };
     }
 
@@ -287,57 +301,131 @@ export const App: React.FC = () => {
     let isMounted = true;
     async function fetchDynamicAuctions() {
       try {
-        const [{ data: dbAuctions, error }, { data: allLots }] = await Promise.all([
-          supabase.from('auctions').select('*').order('start_date', { ascending: false }),
-          supabase.from('lots').select('id, auction_id, image')
+        const [{ data: dbAuctions, error: errA }, { data: allLots, error: errL }] = await Promise.all([
+          supabase.from('auctions').select('*').order('created_at', { ascending: false }),
+          supabase.from('lots').select('*').order('lot_number', { ascending: true })
         ]);
 
-        if (!error && dbAuctions && dbAuctions.length > 0 && isMounted) {
+        if (!isMounted) return;
+
+        const rawLots = (!errL && Array.isArray(allLots)) ? allLots : [];
+
+        if (!errA && dbAuctions && Array.isArray(dbAuctions)) {
           const mappedFromDb: CurrentAuction[] = dbAuctions.map((row: any) => {
-            const matchingLots = allLots?.filter((l: any) => l.auction_id === row.id) || [];
-            const lotsCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0) || 12;
-            const isLive = row.status === 'In Progress';
-            const isOpen = row.status === 'Open';
-            const badge = isLive ? 'LIVE WEBCAST' : isOpen ? 'CATALOG OPEN' : 'CLOSING TODAY';
-            const badgeType: 'red' | 'green' | 'gold' = isLive ? 'red' : isOpen ? 'green' : 'gold';
-            const statusText = isLive ? 'Live Webcast Auction' : isOpen ? 'Catalog Open' : 'Closing Today';
+            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id);
+            const lotsCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0);
+            const st = (row.status || '').toLowerCase();
+            let isLive = false;
+            let statusText = row.status || 'Active Session';
+            let badge = (row.status || 'ACTIVE').toUpperCase();
+            let badgeType: 'red' | 'green' | 'gold' = 'green';
+            let dateLabel = 'ONLINE CATALOG';
+
+            if (st.includes('progress') || st.includes('live')) {
+              isLive = true;
+              statusText = 'Live Webcast Auction';
+              badge = 'LIVE WEBCAST';
+              badgeType = 'red';
+              dateLabel = 'LIVE NOW';
+            } else if (st.includes('closing') || st.includes('today')) {
+              statusText = 'Closing Today';
+              badge = 'CLOSING TODAY';
+              badgeType = 'gold';
+              dateLabel = 'CLOSING TODAY';
+            } else if (st.includes('concluded') || st.includes('closed') || st.includes('ended')) {
+              statusText = 'Closed';
+              badge = 'CLOSED';
+              badgeType = 'gold';
+              dateLabel = 'CONCLUDED';
+            } else {
+              statusText = 'Catalog Open';
+              badge = 'CATALOG OPEN';
+              badgeType = 'green';
+              dateLabel = 'ONLINE CATALOG';
+            }
+
             const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url)
               ? row.featured_images[0].url
               : (matchingLots[0]?.image || '/assets/gold-coin.jpg');
 
+            let totalEstLow = 0;
+            let totalEstHigh = 0;
+            matchingLots.forEach((l: any) => {
+              totalEstLow += Number(l.estimate_low) || 0;
+              totalEstHigh += Number(l.estimate_high) || 0;
+            });
+            const dynamicEstimate = (totalEstLow > 0 || totalEstHigh > 0)
+              ? `$${totalEstLow.toLocaleString()} – $${totalEstHigh.toLocaleString()}`
+              : (row.estimate || (row.start_date && row.end_date ? `${row.start_date} – ${row.end_date}` : 'Catalog Lots Open'));
+
+            const dateRangeStr = (row.start_date && row.end_date)
+              ? `${row.start_date} – ${row.end_date}`
+              : (row.start_date ? `Opens ${row.start_date}` : 'Active Session');
+
             return {
               id: row.id,
-              title: row.name,
-              sessionTitle: `SESSION I: ${row.name.toUpperCase()}`,
-              auctionType: isLive ? 'Live Webcast Auction' : 'Online Only Auction',
+              title: row.name || 'Catalog Auction',
+              sessionTitle: `SESSION: ${(row.name || '').toUpperCase()}`,
+              auctionType: isLive ? 'Live Webcast Auction' : (row.auction_type || 'Catalog Auction'),
               status: statusText as any,
               badge,
               badgeType,
-              companyName: 'Gardner Auction Service',
+              companyName: row.company_name || 'Gardner Auction Service',
               galleryName: 'Heritage Saleroom & Online Simulcast',
-              address: row.address1 || '1960 Heritage Way, Suite 400',
-              cityStateZip: `${row.city || 'Missoula'}, ${row.state || 'MT'} ${row.zip || '59801'}`,
-              location: `${row.city || 'Missoula'}, ${row.state || 'MT'} Saleroom & HiBid Simulcast`,
-              dateRange: `${row.start_date || 'Oct 22'} – ${row.end_date || 'Oct 29'}`,
-              dateLabel: isLive ? 'LIVE NOW' : 'ONLINE CATALOG',
+              address: row.address1 || '',
+              cityStateZip: `${row.city || ''}, ${row.state || ''} ${row.zip || ''}`.trim(),
+              location: `${row.city || 'Missoula'}, ${row.state || 'MT'}`,
+              dateRange: dateRangeStr,
+              dateLabel,
               scheduleText: 'Simulcast bidding open daily; live clerk begins at 10:00 AM MDT',
-              typeTag: (row.auction_type || 'Coins & Currency').toUpperCase(),
+              typeTag: (row.auction_type || row.category || 'Coins & Currency').toUpperCase(),
               lotsCount,
-              estimate: '$50,000 – $750,000',
-              description: row.description || 'Verified authentic curated collectibles from private family estates.',
+              estimate: dynamicEstimate,
+              description: row.description || 'Verified authentic curated collectibles.',
               category: row.category || 'Coins & Currency',
-              lots: [],
+              lots: matchingLots,
               image: img,
               buttonText: isLive ? 'ENTER LIVE AUCTION' : 'BROWSE CATALOG',
               buttonVariant: isLive ? 'dark' : 'gold',
-              detailUrl: '#current-auction'
+              detailUrl: `#current-auction?auction=${row.id}&tab=lots`
             };
           });
 
-          // Merge: DB auctions first, then mock auctions not in DB
-          const dbIds = new Set(mappedFromDb.map(a => a.id));
-          const merged = [...mappedFromDb, ...CURRENT_AUCTIONS.filter(a => !dbIds.has(a.id))];
-          setAllAuctions(merged);
+          // Strictly set dynamic auctions fetched from Supabase (ZERO hardcoded mock cards)
+          setAllAuctions(mappedFromDb);
+        } else if (!errA && Array.isArray(dbAuctions)) {
+          setAllAuctions([]);
+        }
+
+        // Also dynamically map live lots for the Lots view
+        if (rawLots.length > 0) {
+          const mappedLiveLots: LotItem[] = rawLots.map((l: any) => {
+            const curBid = Number(l.current_bid) || Number(l.starting_bid) || 100;
+            const startBid = Number(l.starting_bid) || 100;
+            return {
+              id: l.id,
+              lotNumber: l.lot_number ? `LOT ${l.lot_number}` : 'LOT',
+              categoryTag: (l.category || 'RARE COLLECTIBLE').toUpperCase(),
+              department: l.category || 'Coins & Currency',
+              title: l.title || `Lot ${l.lot_number || ''}`,
+              description: l.description || l.title || '',
+              details: l.description || '',
+              image: l.image || '/assets/gold-coin.jpg',
+              currentBid: curBid,
+              startingBid: startBid,
+              nextBid: curBid + 100,
+              bidIncrement: 100,
+              estimateLow: Number(l.estimate_low) || startBid,
+              estimateHigh: Number(l.estimate_high) || (startBid * 2),
+              bidsCount: Number(l.bids_count) || 0,
+              reserveMet: true,
+              timeRemainingSeconds: 7200,
+              provenance: l.provenance || '',
+              conditionReport: l.condition_report || '',
+              specialistNote: ''
+            };
+          });
+          setLiveLots(mappedLiveLots);
         }
       } catch (err) {
         console.warn('[App] Supabase dynamic auctions fetch error:', err);
@@ -630,6 +718,8 @@ export const App: React.FC = () => {
           <CurrentAuctionPage
             watchlist={watchlist}
             searchQuery={searchTerm}
+            initialAuctionId={currentRoute.initialAuctionId}
+            initialTab={currentRoute.initialTab}
             onToggleWatchlist={handleToggleWatchlist}
             onOpenAuth={() => {
               setAuthMode('signin');
@@ -652,6 +742,7 @@ export const App: React.FC = () => {
               });
             }}
             onAddToast={addToast}
+            onNavigate={handleNavigate}
           />
         </main>
       ) : currentRoute.view === 'email-list' ? (
@@ -662,6 +753,10 @@ export const App: React.FC = () => {
               'Subscribed Successfully',
               `Advance catalog previews and auction notices will be forwarded to ${email}.`
             );
+          }}
+          onOpenAuth={() => {
+            setAuthMode('signin');
+            setIsAuthOpen(true);
           }}
         />
       ) : currentRoute.view === 'lot-detail' ? (
@@ -678,6 +773,7 @@ export const App: React.FC = () => {
         <AuctionDetailsPage
           auctionId={currentRoute.auctionId}
           onShowToast={addToast}
+          onNavigate={handleNavigate}
         />
       ) : currentRoute.view === 'catalog-lots' ? (
         <CatalogLotsPage
@@ -813,9 +909,12 @@ export const App: React.FC = () => {
                               <div className="event-type-tag">{event.typeTag}</div>
                               <h3
                                 className="event-title"
-                                onClick={handleEventNavigate}
+                                onClick={() => {
+                                  window.location.hash = `#auction/${event.id}`;
+                                }}
                                 role="button"
                                 tabIndex={0}
+                                style={{ cursor: 'pointer' }}
                               >
                                 {event.title}
                               </h3>

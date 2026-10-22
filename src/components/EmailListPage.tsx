@@ -1,37 +1,97 @@
 import React, { useState } from 'react';
-import { Mail, CheckCircle2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, CheckCircle2, ArrowRight, ShieldCheck, AlertCircle, LogIn, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface EmailListPageProps {
   onSubscribe?: (email: string) => void;
+  onOpenAuth?: () => void;
 }
 
-export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe }) => {
+export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpenAuth }) => {
+  const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = email.trim();
+    const normalized = email.trim().toLowerCase();
 
-    if (!trimmed) {
+    // 1. Email format validation
+    if (!normalized) {
       setError('Please enter your email address.');
       return;
     }
 
-    // Standard RFC-compliant email pattern check
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(trimmed)) {
+    if (!emailPattern.test(normalized)) {
       setError('Please provide a valid email address (e.g. collector@domain.com).');
       return;
     }
 
+    // 2. Strict Authentication Requirement: guest subscriptions prevented
+    if (!user || !user.id) {
+      setError('Authentication required: You must be logged in to subscribe to the auction email list. Please log in first.');
+      return;
+    }
+
+    setIsSubmitting(true);
     setError('');
-    setSubmittedEmail(trimmed);
-    setIsSuccess(true);
-    if (onSubscribe) {
-      onSubscribe(trimmed);
+
+    try {
+      // 3. Dynamic Supabase Storage in "email-list" table
+      const { data, error: insertError } = await supabase
+        .from('email-list')
+        .insert([
+          {
+            email: normalized,
+            user_id: user.id
+          }
+        ])
+        .select();
+
+      if (insertError) {
+        // 4. Duplicate Email Validation (platform-wide uniqueness enforcement)
+        if (
+          insertError.code === '23505' ||
+          insertError.message.toLowerCase().includes('duplicate') ||
+          insertError.message.toLowerCase().includes('unique')
+        ) {
+          setError(`The email address "${normalized}" is already subscribed to the auction catalog email list.`);
+          return;
+        }
+
+        // RLS or permission error
+        if (
+          insertError.code === '42501' ||
+          insertError.message.toLowerCase().includes('policy') ||
+          insertError.message.toLowerCase().includes('permission')
+        ) {
+          setError('Session expired or unauthorized. Please log in again to subscribe.');
+          return;
+        }
+
+        setError(insertError.message || 'Failed to complete subscription. Please try again.');
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setSubmittedEmail(normalized);
+        setIsSuccess(true);
+        if (onSubscribe) {
+          onSubscribe(normalized);
+        }
+      } else {
+        setError('Subscription was not recorded. Please try again.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred while subscribing.';
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -64,6 +124,27 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe }) => 
           <p className="email-page-description">
             Receive advance catalog releases, private preview invitations, and consignment dates for upcoming gold, silver, and rare coin sales.
           </p>
+
+          {/* Authentication Status Pill */}
+          <div className="email-page-auth-status">
+            {user ? (
+              <div className="auth-status-pill">
+                <span className="auth-status-dot" />
+                <span>Signed in as <strong>{user.name}</strong> ({user.email})</span>
+              </div>
+            ) : (
+              <div className="auth-status-pill">
+                <span className="auth-status-dot guest" />
+                <span>
+                  Guest Mode · {onOpenAuth && (
+                    <button type="button" onClick={onOpenAuth} className="guest-login-link">
+                      Log in to subscribe
+                    </button>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
 
           {isSuccess ? (
             <div className="email-page-success-card" role="status" aria-live="polite">
@@ -101,9 +182,10 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe }) => 
                       setEmail(e.target.value);
                       if (error) setError('');
                     }}
-                    placeholder="Enter your email address..."
+                    placeholder={user ? "Enter email address to subscribe..." : "Log in to subscribe your email..."}
                     aria-label="Email address for auction catalog notifications"
                     required
+                    disabled={isSubmitting}
                     autoComplete="email"
                   />
                 </div>
@@ -113,15 +195,38 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe }) => 
                   className="email-page-submit-btn"
                   id="btn-join-email-list"
                   aria-label="Join Email List"
+                  disabled={isSubmitting}
                 >
-                  <span>Join Email List</span>
-                  <ArrowRight size={17} className="btn-arrow-icon" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={17} className="btn-arrow-icon animate-spin" />
+                      <span>Subscribing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Join Email List</span>
+                      <ArrowRight size={17} className="btn-arrow-icon" />
+                    </>
+                  )}
                 </button>
               </div>
 
               {error && (
                 <div className="email-page-error-msg" role="alert" aria-live="polite">
-                  <span>{error}</span>
+                  <div className="error-text-line">
+                    <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                    <span>{error}</span>
+                  </div>
+                  {!user && onOpenAuth && (
+                    <button
+                      type="button"
+                      className="btn-error-signin"
+                      onClick={onOpenAuth}
+                    >
+                      <LogIn size={14} />
+                      <span>Log In to Subscribe</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -155,3 +260,5 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe }) => 
     </main>
   );
 };
+
+export default EmailListPage;

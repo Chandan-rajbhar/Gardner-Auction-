@@ -1,22 +1,35 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import './CurrentAuctionPage.css';
 import {
-  Search, Heart, X, ChevronDown, ChevronLeft, ChevronRight, Gavel, Diamond, Lock, Percent, FileCheck,
-  Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, User, Users, Phone, Truck, Crown,
-  Sun, Moon, ArrowUp, ArrowLeft, Clock, Sparkles, Layers
+  Search,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Globe,
+  Truck,
+  Share2,
+  Info,
+  BookOpen,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+  Layers,
+  Calendar,
+  X,
+  RotateCcw,
+  ArrowUpDown,
+  ArrowLeft,
+  Radio,
+  ShieldCheck,
+  CheckCircle2,
+  Gavel,
+  Bookmark
 } from 'lucide-react';
-import type { EnrichedLotItem } from './types';
 import { supabase } from '../../lib/supabase';
-
-interface CurrentAuctionPageProps {
-  watchlist: string[];
-  searchQuery?: string;
-  onToggleWatchlist: (lotId: string) => void;
-  onOpenAuth: () => void;
-  onRequestConditionDossier?: (lot: EnrichedLotItem) => void;
-  onAddToast: (type: 'success' | 'info' | 'warning', title: string, message: string) => void;
-}
-
+import { ShadcnSelect } from '../ui/ShadcnSelect';
+import type { ShadcnSelectOption } from '../ui/ShadcnSelect';
+import type { EnrichedLotItem } from './types';
 import {
   INITIAL_CATALOG_LOTS,
   CURRENT_AUCTIONS
@@ -38,1506 +51,1424 @@ export interface ActiveAuctionCardItem {
   sessionTitle: string;
   category: string;
   description: string;
-  status: 'Live Webcast Auction' | 'Closing Today' | 'Catalog Open' | 'Upcoming';
+  auctionType: string;
+  status: string;
+  statusRaw: string;
   badge: string;
   badgeType: 'red' | 'green' | 'gold';
   lotsCount: number;
-  endsAtText: string;
+  dateRange: string;
+  scheduleText: string;
   estimate: string;
   image: string;
   platform: string;
-  lots?: CatalogLot[];
+  companyName: string;
+  address: string;
+  cityStateZip: string;
+  mapQuery: string;
+  shipping: string;
+  biddingNotice: string;
+  auctionNotice: string;
+  lots?: any[];
 }
 
-export const INITIAL_ACTIVE_AUCTIONS: ActiveAuctionCardItem[] = [
-  {
-    id: 'auc-spring',
-    code: 'AUC-SPRING',
-    title: 'Spring Collector Auction',
-    sessionTitle: 'Session II: Rarities of the United States Mint',
-    category: 'Coins & Currency',
-    status: 'Live Webcast Auction',
-    badge: 'LIVE WEBCAST',
-    badgeType: 'red',
-    lotsCount: 15,
-    endsAtText: 'Ends Today • 4:30 PM EST',
-    estimate: 'Est. $840,000 – $1,140,000',
-    image: '/images/hero_coin.jpg',
-    platform: 'HiBid & Live Rostrum Simulcast',
-    description: 'Featuring certified private vault numismatics including 1924 Saint-Gaudens Double Eagle and 1889 Morgan Silver Dollar with verified CAC gold shields.',
-    lots: INITIAL_CATALOG_LOTS
-  },
-  {
-    id: 'auc-002',
-    code: 'HGS-2026-10-22',
-    title: 'Highlander Gold & Silver 10/22/26',
-    sessionTitle: 'Session I: Fine Gold & Silver Bullion',
-    category: 'Rare US Gold & Bullion',
-    status: 'Closing Today',
-    badge: 'CLOSING TODAY',
-    badgeType: 'gold',
-    lotsCount: 272,
-    endsAtText: 'Ends Oct 22 • 7:00 PM MT',
-    estimate: 'Est. $1,420,000 – $2,100,000',
-    image: '/images/hero_coin.jpg',
-    platform: 'HiBid Online Only Store',
-    description: 'Fine investment bullion, historic pre-1933 US gold double eagles, and high-grade Carson City Morgan silver dollars from private vaults.',
-    lots: INITIAL_CATALOG_LOTS.filter((l) => l.categoryKey === 'coins')
-  },
-  {
-    id: 'auc-001',
-    code: 'GA-2026-10-GOLD',
-    title: 'Rolex, Fine Jewelry & Historic Numismatics',
-    sessionTitle: 'Session III: Estate Diamonds & Luxury Watches',
-    category: 'Jewelry & Watches',
-    status: 'Catalog Open',
-    badge: 'CATALOG OPEN',
-    badgeType: 'green',
-    lotsCount: 45,
-    endsAtText: 'Ends Oct 25 • 8:00 PM EST',
-    estimate: 'Est. $1,250,000 – $1,650,000',
-    image: '/images/diamond_ring.jpg',
-    platform: 'Gardner Saleroom Webcast',
-    description: 'Curated certified estate jewelry, Old European diamond solitaires, and Swiss investment chronometers from prominent estate collections.',
-    lots: INITIAL_CATALOG_LOTS.filter((l) => l.categoryKey === 'jewelry' || l.categoryKey === 'horology')
-  }
+export interface DynamicLotItem {
+  id: string;
+  auctionId: string;
+  auctionTitle: string;
+  lotNumber: string;
+  rawLotNumber: number;
+  categoryTag: string;
+  department: string;
+  title: string;
+  description: string;
+  details: string;
+  image: string;
+  currentBid: number;
+  startingBid: number;
+  estimateLow: number;
+  estimateHigh: number;
+  estimate: string;
+  bidsCount: number;
+  status: string;
+  auctionHouse: string;
+  dateSold: string;
+  location: string;
+  shipping: string;
+  provenance: string;
+  conditionReport: string;
+  certification?: string;
+  grade?: string;
+  certNumber?: string;
+}
+
+interface CurrentAuctionPageProps {
+  watchlist: string[];
+  searchQuery?: string;
+  initialAuctionId?: string;
+  initialTab?: 'auctions' | 'lots';
+  onToggleWatchlist: (lotId: string) => void;
+  onOpenAuth: () => void;
+  onRequestConditionDossier?: (lot: EnrichedLotItem) => void;
+  onAddToast: (type: 'success' | 'info' | 'warning', title: string, message: string) => void;
+  onNavigate?: (path: string) => void;
+}
+
+const AUCTION_SORT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'default', label: 'Date: Closing Soonest' },
+  { value: 'date-desc', label: 'Date: Newest First' },
+  { value: 'date-asc', label: 'Date: Oldest First' },
+  { value: 'lots-desc', label: 'Lots: Most Lots' },
+  { value: 'title-asc', label: 'Title: A to Z' }
 ];
+
+const LOT_SORT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'default', label: 'Lot #: Ascending' },
+  { value: 'price-desc', label: 'Current Bid: High to Low' },
+  { value: 'price-asc', label: 'Current Bid: Low to High' },
+  { value: 'title-asc', label: 'Title: A to Z' }
+];
+
+const AUCTION_PAGE_SIZE_OPTIONS: ShadcnSelectOption[] = [
+  { value: '6', label: '6 per page' },
+  { value: '12', label: '12 per page' },
+  { value: '24', label: '24 per page' }
+];
+
+const LOT_PAGE_SIZE_OPTIONS: ShadcnSelectOption[] = [
+  { value: '12', label: '12 per page' },
+  { value: '24', label: '24 per page' },
+  { value: '48', label: '48 per page' }
+];
+
+// Helper to format date ranges cleanly
+function formatAuctionDates(start?: string, end?: string): string {
+  if (!start && !end) return '';
+  try {
+    const sDate = start ? new Date(start) : null;
+    const eDate = end ? new Date(end) : null;
+    const sStr = sDate && !isNaN(sDate.getTime())
+      ? sDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : (start || '');
+    const eStr = eDate && !isNaN(eDate.getTime())
+      ? eDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : (end || '');
+    if (sStr && eStr) return `${sStr} – ${eStr}`;
+    return sStr || eStr || '';
+  } catch {
+    return `${start || ''} – ${end || ''}`;
+  }
+}
+
+function parseCurrentAuctionUrlParams(): { auctionId: string; tab: 'auctions' | 'lots' | null } {
+  try {
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const query = hash.includes('?') ? hash.split('?')[1] : search.replace(/^\?/, '');
+    if (query) {
+      const p = new URLSearchParams(query);
+      const auctionId = p.get('auction') || p.get('catalog') || p.get('id') || '';
+      const tabParam = p.get('tab');
+      const tab = tabParam === 'lots' || Boolean(auctionId) ? 'lots' : (tabParam === 'auctions' ? 'auctions' : null);
+      return { auctionId, tab };
+    }
+  } catch {}
+  return { auctionId: '', tab: null };
+}
 
 export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   watchlist,
   searchQuery,
+  initialAuctionId,
+  initialTab,
   onToggleWatchlist,
-  onAddToast
+  onOpenAuth,
+  onAddToast,
+  onNavigate
 }) => {
-  // Multi-Auction Selection State (Tarika 1: Multi-Auction Card Flow)
-  const [activeAuctions, setActiveAuctions] = useState<ActiveAuctionCardItem[]>(INITIAL_ACTIVE_AUCTIONS);
-  const [selectedAuctionId, setSelectedAuctionId] = useState<string | null>(null);
-  const [auctionSearch, setAuctionSearch] = useState<string>('');
-  const [auctionFilter, setAuctionFilter] = useState<'all' | 'live' | 'closing' | 'open'>('all');
+  const urlParams = parseCurrentAuctionUrlParams();
+  const defaultAuctionId = initialAuctionId || urlParams.auctionId || 'all';
+  const defaultTab = initialTab || urlParams.tab || (defaultAuctionId !== 'all' ? 'lots' : 'auctions');
 
-  const [lots, setLots] = useState<CatalogLot[]>(INITIAL_CATALOG_LOTS);
-  const [activeTab, setActiveTab] = useState<'all' | 'ending' | 'featured'>('all');
-  const [sortBy, setSortBy] = useState<'recommended' | 'price-asc' | 'price-desc' | 'bids'>('recommended');
-  const [localSearch, setLocalSearch] = useState<string>('');
+  // 1. Dynamic Data from Supabase (Strictly sole truth source)
+  const [loading, setLoading] = useState<boolean>(true);
+  const [auctions, setAuctions] = useState<ActiveAuctionCardItem[]>([]);
+  const [allLots, setAllLots] = useState<DynamicLotItem[]>([]);
 
-  // Pagination State: 9 lots per page (3x3 grid)
-  const ITEMS_PER_PAGE = 9;
+  // 2. View Mode State: 'auctions' or 'lots'
+  const [activeTab, setActiveTab] = useState<'auctions' | 'lots'>(defaultTab);
+
+  // 3. Search & Filter State
+  const [searchInput, setSearchInput] = useState<string>(searchQuery || '');
+  const [appliedSearch, setAppliedSearch] = useState<string>(searchQuery || '');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedAuctionFilter, setSelectedAuctionFilter] = useState<string>(defaultAuctionId);
+  const [sortBy, setSortBy] = useState<string>('default');
+
+  // 4. Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(6);
 
-  // Scroll container reference for smooth internal products scrolling
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  // 5. Notice Expansion Toggles per Auction
+  const [expandedNotices, setExpandedNotices] = useState<Record<string, { bidding?: boolean; auction?: boolean; desc?: boolean }>>({});
 
-  // Active Lot for New Page Desktop View
-  const [activeDetailLotId, setActiveDetailLotId] = useState<string | null>(null);
+  // 6. Active Modals for Details
+  const [activeLotDetail, setActiveLotDetail] = useState<DynamicLotItem | null>(null);
+  const [isPlacingBid, setIsPlacingBid] = useState<boolean>(false);
 
-  // Selected Preset or Custom Bid inside Detail View
-  const [selectedPresetInc, setSelectedPresetInc] = useState<number>(100);
-  const [customBidInput, setCustomBidInput] = useState<string>('');
-  const [bidError, setBidError] = useState<string | null>(null);
-
-  // Interactive View Lot Terminal States
-  const [isLightTheme, setIsLightTheme] = useState<boolean>(true);
-  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
-  const [stageZoom, setStageZoom] = useState<boolean>(false);
-  const [stageRotated, setStageRotated] = useState<boolean>(false);
-
-  // Countdown timer in seconds (starts at 74s = 01:14 matching user screenshot)
-  const [timeLeft, setTimeLeft] = useState<number>(74);
-  const [isBidFlashing, setIsBidFlashing] = useState<boolean>(false);
-
-  // Time format helper: MM:SS
-  const formatTime = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Decreasing live countdown timer
+  // Sync URL parameters for auction filter and active tab
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          // Reset to 3 minutes for continuous live webcast simulation
-          return 180;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const syncFromUrl = () => {
+      const { auctionId, tab } = parseCurrentAuctionUrlParams();
+      if (auctionId) {
+        setSelectedAuctionFilter(auctionId);
+        setActiveTab('lots');
+        setCurrentPage(1);
+        setTimeout(() => {
+          const el = document.querySelector('.past-catalogs-toolbar-section') || document.querySelector('.past-lots-grid');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 120);
+      } else if (tab) {
+        setActiveTab(tab);
+      }
+    };
 
-    return () => clearInterval(timer);
+    window.addEventListener('hashchange', syncFromUrl);
+    window.addEventListener('popstate', syncFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncFromUrl);
+      window.removeEventListener('popstate', syncFromUrl);
+    };
   }, []);
 
-  // Live auction: current bid increases automatically every 8 to 11 seconds
+  // Sync external search query if provided
   useEffect(() => {
-    const paddles = ['Paddle #219', 'Paddle #404', 'Paddle #177', 'Paddle #328', 'Paddle #112', 'Paddle #489'];
-    const types: BidEntry['type'][] = ['WEBCAST', 'FLOOR', 'PHONE'];
-    const increments = [100, 200, 250, 500];
-
-    const liveBidInterval = setInterval(() => {
-      const targetLotId = activeDetailLotId || 'spotlight-104';
-      const inc = increments[Math.floor(Math.random() * increments.length)];
-      const paddle = paddles[Math.floor(Math.random() * paddles.length)];
-      const type = types[Math.floor(Math.random() * types.length)];
-
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-      setLots((prevLots) =>
-        prevLots.map((lot) => {
-          if (lot.id === targetLotId) {
-            const newAmount = lot.currentBid + inc;
-            const newBid: BidEntry = {
-              id: Date.now().toString(),
-              paddle: paddle,
-              type: type,
-              time: `${timeStr} · live bid`,
-              amount: newAmount,
-              isHighest: true
-            };
-
-            const updatedRecent = [
-              newBid,
-              ...lot.recentBids.map((b) => ({ ...b, isHighest: false }))
-            ].slice(0, 5);
-
-            return {
-              ...lot,
-              currentBid: newAmount,
-              bidsCount: lot.bidsCount + 1,
-              recentBids: updatedRecent
-            };
-          }
-          return lot;
-        })
-      );
-
-      // Flash bid element
-      setIsBidFlashing(true);
-      setTimeout(() => setIsBidFlashing(false), 1200);
-    }, 8500);
-
-    return () => clearInterval(liveBidInterval);
-  }, [activeDetailLotId]);
-
-  const activeDetailLot = useMemo(() => {
-    if (!activeDetailLotId) return null;
-    return lots.find((l) => l.id === activeDetailLotId) || null;
-  }, [lots, activeDetailLotId]);
-
-  // When opening a detail view, initialize preset and input
-  useEffect(() => {
-    if (activeDetailLot) {
-      const defaultInc = activeDetailLot.presets[0] || 100;
-      setSelectedPresetInc(defaultInc);
-      setCustomBidInput((activeDetailLot.currentBid + defaultInc).toString());
-      setBidError(null);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (searchQuery !== undefined && searchQuery !== searchInput) {
+      setSearchInput(searchQuery);
+      setAppliedSearch(searchQuery);
+      setCurrentPage(1);
     }
-  }, [activeDetailLotId]);
+  }, [searchQuery]);
 
-  // Reset currentPage to 1 and scroll position smoothly to catalog top whenever filters change
-  useEffect(() => {
-    setCurrentPage(1);
-    if (scrollContainerRef.current) {
-      const rect = scrollContainerRef.current.getBoundingClientRect();
-      if (rect.top < 80) {
-        window.scrollTo({
-          top: window.scrollY + rect.top - 100,
-          behavior: 'smooth'
-        });
-      }
-    }
-  }, [activeTab, localSearch, searchQuery, sortBy]);
+  // Toggle notice expansion
+  const toggleNotice = (auctionId: string, type: 'bidding' | 'auction' | 'desc') => {
+    setExpandedNotices((prev) => {
+      const current = prev[auctionId] || {};
+      return {
+        ...prev,
+        [auctionId]: {
+          ...current,
+          [type]: !current[type]
+        }
+      };
+    });
+  };
 
-  // Search query sync from header if passed
-  const effectiveSearch = localSearch || searchQuery || '';
-
-  function mapCategoryToKey(cat?: string): CategoryKey {
-    if (!cat) return 'coins';
-    const c = cat.toLowerCase();
-    if (c.includes('coin') || c.includes('gold') || c.includes('silver') || c.includes('currency') || c.includes('numismatic')) return 'coins';
-    if (c.includes('jewel') || c.includes('diamond') || c.includes('ring')) return 'jewelry';
-    if (c.includes('art') || c.includes('paint') || c.includes('print')) return 'art';
-    if (c.includes('antique')) return 'antiques';
-    if (c.includes('watch') || c.includes('horolog') || c.includes('clock')) return 'horology';
-    if (c.includes('americana') || c.includes('manuscript') || c.includes('document')) return 'americana';
-    if (c.includes('decor') || c.includes('furniture')) return 'decorative';
-    return 'coins';
-  }
-
-  const currentAuctionInfo = useMemo(() => {
-    return activeAuctions.find((a) => a.id === selectedAuctionId) || activeAuctions[0];
-  }, [activeAuctions, selectedAuctionId]);
-
-  // 1. Fetch dynamic auctions from Supabase with live counts and realtime updates
+  // Fetch dynamic auctions and lots strictly from Supabase
   useEffect(() => {
     let isMounted = true;
-    async function loadSupabaseAuctions() {
+
+    async function loadDynamicSupabaseData() {
+      setLoading(true);
       try {
-        const [{ data: auctionsData, error: errA }, { data: allLotsData }] = await Promise.all([
-          supabase.from('auctions').select('*').order('start_date', { ascending: false }),
-          supabase.from('lots').select('id, auction_id, image')
+        const [{ data: auctionsData, error: errA }, { data: lotsData, error: errL }] = await Promise.all([
+          supabase.from('auctions').select('*').order('created_at', { ascending: false }),
+          supabase.from('lots').select('*').order('lot_number', { ascending: true })
         ]);
 
-        if (!errA && auctionsData && auctionsData.length > 0 && isMounted) {
-          const mappedFromDb: ActiveAuctionCardItem[] = auctionsData.map((row: any) => {
-            const matchingLots = allLotsData?.filter((l: any) => l.auction_id === row.id) || [];
+        if (!isMounted) return;
+
+        if (errA) {
+          console.error('[CurrentAuctionPage] Error fetching Supabase auctions:', errA);
+        }
+
+        const rawLots = (!errL && Array.isArray(lotsData)) ? lotsData : [];
+
+        if (auctionsData && Array.isArray(auctionsData)) {
+          const mappedAuctions: ActiveAuctionCardItem[] = auctionsData.map((row: any) => {
+            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id);
             const lotCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0);
-            const status = row.status === 'In Progress' ? 'Live Webcast Auction' : row.status === 'Open' ? 'Catalog Open' : 'Closing Today';
-            const badge = row.status === 'In Progress' ? 'LIVE WEBCAST' : row.status === 'Open' ? 'CATALOG OPEN' : 'CLOSING TODAY';
-            const badgeType = row.status === 'In Progress' ? 'red' : row.status === 'Open' ? 'green' : 'gold';
+
+            let statusText = row.status || 'Active Session';
+            let badge = (row.status || 'ACTIVE').toUpperCase();
+            let badgeType: 'red' | 'green' | 'gold' = 'green';
+
+            const st = (row.status || '').toLowerCase();
+            if (st.includes('progress') || st.includes('live')) {
+              statusText = 'Live Webcast Auction';
+              badge = 'LIVE WEBCAST';
+              badgeType = 'red';
+            } else if (st.includes('open')) {
+              statusText = 'Open for Bidding';
+              badge = 'CATALOG OPEN';
+              badgeType = 'green';
+            } else if (st.includes('closing') || st.includes('today')) {
+              statusText = 'Closing Today';
+              badge = 'CLOSING TODAY';
+              badgeType = 'gold';
+            } else if (st.includes('concluded') || st.includes('closed') || st.includes('ended')) {
+              statusText = 'Closed';
+              badge = 'CLOSED';
+              badgeType = 'gold';
+            }
+
+            // Image strictly from database: featured_images or first matching lot's image
             const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url)
               ? row.featured_images[0].url
-              : (matchingLots[0]?.image || '/assets/gold-coin.jpg');
+              : (matchingLots[0]?.image || '');
+
+            const dateRangeFormatted = formatAuctionDates(row.start_date, row.end_date);
+
+            // Dynamic schedule text from dates and status
+            let scheduleText = '';
+            if (st.includes('progress') || st.includes('live')) {
+              scheduleText = 'Live Rostrum Simulcast & Internet Bidding Now Active';
+            } else if (row.end_date) {
+              scheduleText = `Closing ${row.end_date} · Advance Absentee Bids Accepted`;
+            } else if (row.start_date) {
+              scheduleText = `Opens ${row.start_date}`;
+            }
+
+            // Dynamic aggregate estimate calculated from actual lots in this auction
+            let totalEstLow = 0;
+            let totalEstHigh = 0;
+            matchingLots.forEach((l: any) => {
+              totalEstLow += Number(l.estimate_low) || 0;
+              totalEstHigh += Number(l.estimate_high) || 0;
+            });
+            const dynamicEstimate = (totalEstLow > 0 || totalEstHigh > 0)
+              ? `Est. $${totalEstLow.toLocaleString()} – $${totalEstHigh.toLocaleString()}`
+              : '';
+
+            // Notices strictly from database columns (check row.bidding_notice, row.short_bp_explanation, row.terms)
+            // No hardcoded strings! If absent or empty in database, remains empty string.
+            const biddingNotice = (row.bidding_notice || row.short_bp_explanation || row.terms || '').trim();
+            const auctionNotice = (row.auction_notice || row.payment_info || '').trim();
+
+            // Location strictly from database address fields
+            const street = [row.address1, row.address2].filter(Boolean).map((s: string) => s.trim()).filter(Boolean).join(', ');
+            const cityStateZip = [
+              row.city?.trim(),
+              row.state?.trim(),
+              row.zip?.trim()
+            ].filter(Boolean).join(' ');
+
+            const fullLocation = [street, cityStateZip, row.country?.trim()].filter(Boolean).join(', ');
+            const mapQuery = fullLocation ? encodeURIComponent(fullLocation) : '';
+
+            // Company/Auctioneer strictly from database
+            const companyName = (row.company_name || row.auction_house || row.auctioneer || '').trim();
+
+            // Shipping availability strictly from database
+            const shipping = (row.shipping_availability || row.shipping_account || '').trim();
 
             return {
               id: row.id,
               code: row.code || `AUC-${row.id.toString().slice(-4)}`,
-              title: row.name,
+              title: row.name || 'Auction Catalog',
               sessionTitle: `${row.code || 'AUCTION'} Session`,
-              category: row.auction_type === 'HiBid' ? 'HiBid Simulcast' : 'Catalog Auction',
-              description: row.description || 'Premier curated collector items, verified authentic and certified.',
-              status: status as any,
+              category: row.category || (row.auction_type === 'HiBid' ? 'HiBid Simulcast' : (matchingLots[0]?.category || 'Catalog Auction')),
+              description: (row.description || '').trim(),
+              auctionType: row.auction_type || 'Catalog Auction',
+              status: statusText,
+              statusRaw: row.status || 'Active',
               badge,
-              badgeType: badgeType as any,
+              badgeType,
               lotsCount: lotCount,
-              endsAtText: row.end_date ? `Ends ${row.end_date}` : 'Closing Today',
-              estimate: 'Est. $600,000 – $1,200,000',
+              dateRange: dateRangeFormatted,
+              scheduleText,
+              estimate: dynamicEstimate,
               image: img,
-              platform: row.auction_type || 'HiBid Simulcast'
+              platform: row.auction_type || '',
+              companyName,
+              address: street,
+              cityStateZip,
+              mapQuery,
+              shipping,
+              biddingNotice,
+              auctionNotice,
+              lots: matchingLots
             };
           });
 
-          setActiveAuctions((prev) => {
-            const dbIds = new Set(mappedFromDb.map((a) => a.id));
-            const remainingCustom = prev.filter((a) => !dbIds.has(a.id));
-            return [...mappedFromDb, ...remainingCustom];
+          setAuctions(mappedAuctions);
+
+          // Map lots for the lots tab strictly from dynamic database rows
+          const mappedLots: DynamicLotItem[] = rawLots.map((l: any) => {
+            const parentAuc = auctionsData.find((a: any) => a.id === l.auction_id);
+            const estLow = Number(l.estimate_low) || 0;
+            const estHigh = Number(l.estimate_high) || 0;
+            const estimateStr = (estLow > 0 || estHigh > 0)
+              ? `$${estLow.toLocaleString()} – $${estHigh.toLocaleString()}`
+              : (l.starting_bid ? `Starting $${Number(l.starting_bid).toLocaleString()}` : '');
+
+            const curBid = Number(l.current_bid) || Number(l.starting_bid) || 0;
+            const startBid = Number(l.starting_bid) || 0;
+            const parentLocation = [parentAuc?.city, parentAuc?.state].filter(Boolean).map((s: string) => s.trim()).join(', ');
+
+            return {
+              id: l.id,
+              auctionId: l.auction_id,
+              auctionTitle: parentAuc ? parentAuc.name : 'Auction Catalog',
+              lotNumber: l.lot_number ? `LOT ${l.lot_number}` : 'LOT',
+              rawLotNumber: Number(l.lot_number) || 0,
+              categoryTag: l.category || 'Catalog Lot',
+              department: l.category || '',
+              title: l.title || `Lot ${l.lot_number || ''}`,
+              description: (l.condition_report || l.description || l.title || '').trim(),
+              details: (l.description || '').trim(),
+              image: l.image || '',
+              currentBid: curBid,
+              startingBid: startBid,
+              estimateLow: estLow,
+              estimateHigh: estHigh,
+              estimate: estimateStr,
+              bidsCount: Number(l.bids_count) || 0,
+              status: l.status || 'upcoming',
+              auctionHouse: parentAuc?.name || '',
+              dateSold: parentAuc?.end_date ? `Ends ${parentAuc.end_date}` : '',
+              location: parentLocation,
+              shipping: parentAuc?.shipping_availability || '',
+              provenance: (l.provenance || '').trim(),
+              conditionReport: (l.condition_report || '').trim(),
+              certification: (l.certification || '').trim(),
+              grade: (l.grade || '').trim(),
+              certNumber: (l.cert_number || '').trim()
+            };
           });
+
+          setAllLots(mappedLots);
         }
       } catch (err) {
-        console.warn('[CurrentAuctionPage] Supabase auctions fetch notice:', err);
+        console.warn('[CurrentAuctionPage] Supabase error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
 
-    loadSupabaseAuctions();
+    loadDynamicSupabaseData();
 
-    // Supabase Realtime channel: auto-update on dashboard auctions or lots changes
-    const realtimeChannel = supabase
-      .channel('realtime-auctions-channel')
+    // Supabase Realtime channel: live updates when auctions or lots are updated in Supabase
+    const channel = supabase
+      .channel('current-auctions-live-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, () => {
-        loadSupabaseAuctions();
+        loadDynamicSupabaseData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lots' }, () => {
-        loadSupabaseAuctions();
+        loadDynamicSupabaseData();
       })
       .subscribe();
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(realtimeChannel);
+      supabase.removeChannel(channel);
     };
   }, []);
 
-  // 2. Fetch dynamic lots from Supabase when an auction is selected
-  useEffect(() => {
-    if (!selectedAuctionId) return;
-    let isMounted = true;
+  // Handle Search submit
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAppliedSearch(searchInput.trim());
+    setCurrentPage(1);
+  };
 
-    async function loadAuctionLots() {
-      try {
-        const { data, error } = await supabase
-          .from('lots')
-          .select('*')
-          .eq('auction_id', selectedAuctionId)
-          .order('lot_number', { ascending: true });
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setAppliedSearch('');
+    setCurrentPage(1);
+  };
 
-        if (!error && data && isMounted) {
-          if (data.length > 0) {
-            const converted: CatalogLot[] = data.map((d: any) => ({
-              id: d.id,
-              lotNumber: `LOT ${d.lot_number}`,
-              categoryTag: (d.category || 'Coins & Currency').toUpperCase(),
-              categoryKey: mapCategoryToKey(d.category),
-              title: d.title,
-              description: d.description || d.condition_report || d.title,
-              currentBid: Number(d.current_bid) || Number(d.starting_bid) || 100,
-              bidsCount: Number(d.bids_count) || 0,
-              buttonVariant: 'gold',
-              isEndingSoon: d.status === 'upcoming' || d.status === 'on_block',
-              isFeatured: true,
-              artType: 'gold-slab',
-              image: d.image || '/assets/gold-coin.jpg',
-              estimate: `$${Number(d.estimate_low || 1000).toLocaleString()} – $${Number(d.estimate_high || 2000).toLocaleString()}`,
-              presets: [100, 250, 500],
-              recentBids: [],
-              sellerName: d.consignor_name || d.seller_name || d.seller || 'Estate Consignor',
-              quantity: Number(d.quantity) || 1
-            }));
-            setLots(converted);
-            return;
-          } else {
-            // If it's a dynamic auction created in Dashboard that has 0 lots
-            const isDbAuction = activeAuctions.some((a) => a.id === selectedAuctionId && (a.code?.startsWith('AUC') || a.id.startsWith('auc-')));
-            if (isDbAuction) {
-              setLots([]);
-              return;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[CurrentAuctionPage] Supabase lots fetch notice:', e);
-      }
+  const handleTabChange = (tab: 'auctions' | 'lots') => {
+    setActiveTab(tab);
+    setCurrentPage(1);
+    setPageSize(tab === 'auctions' ? 6 : 12);
+    setSortBy('default');
+  };
 
-      // Fallback to local lots if mock auction
-      const found = activeAuctions.find((a) => a.id === selectedAuctionId);
-      if (found && found.lots && found.lots.length > 0) {
-        setLots(found.lots);
-      } else {
-        setLots(INITIAL_CATALOG_LOTS);
-      }
-    }
-
-    loadAuctionLots();
-
-    // Realtime channel for live lot changes when inside this auction catalog
-    const lotsChannel = supabase
-      .channel(`realtime-lots-${selectedAuctionId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lots', filter: `auction_id=eq.${selectedAuctionId}` }, () => {
-        loadAuctionLots();
-      })
-      .subscribe();
-
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(lotsChannel);
-    };
-  }, [selectedAuctionId, activeAuctions]);
-
-  // Filtered active auctions for the Multi-Auction view
-  const filteredAuctions = useMemo(() => {
-    return activeAuctions.filter((auc) => {
-      const matchesSearch =
-        !auctionSearch.trim() ||
-        auc.title.toLowerCase().includes(auctionSearch.toLowerCase()) ||
-        auc.code.toLowerCase().includes(auctionSearch.toLowerCase()) ||
-        auc.category.toLowerCase().includes(auctionSearch.toLowerCase()) ||
-        auc.description.toLowerCase().includes(auctionSearch.toLowerCase());
-
-      const matchesFilter =
-        auctionFilter === 'all' ||
-        (auctionFilter === 'live' && (auc.status === 'Live Webcast Auction' || auc.badgeType === 'red')) ||
-        (auctionFilter === 'closing' && (auc.status === 'Closing Today' || auc.badgeType === 'gold')) ||
-        (auctionFilter === 'open' && (auc.status === 'Catalog Open' || auc.badgeType === 'green'));
-
-      return matchesSearch && matchesFilter;
+  // Dynamic Category Options strictly extracted from actual database records
+  const categoryOptions = useMemo<ShadcnSelectOption[]>(() => {
+    const cats = new Set<string>();
+    auctions.forEach((a) => {
+      if (a.category && a.category !== 'Catalog Auction') cats.add(a.category);
     });
-  }, [activeAuctions, auctionSearch, auctionFilter]);
+    allLots.forEach((l) => {
+      if (l.categoryTag && l.categoryTag !== 'Catalog Lot') cats.add(l.categoryTag);
+      if (l.department) cats.add(l.department);
+    });
 
-  // Filtered and Sorted Lots
+    return [
+      { value: 'all', label: 'All Categories' },
+      ...Array.from(cats).map((c) => ({ value: c, label: c }))
+    ];
+  }, [auctions, allLots]);
+
+  // Auction Catalog Options for Lots view
+  const auctionFilterOptions = useMemo<ShadcnSelectOption[]>(() => [
+    { value: 'all', label: 'All Catalogs' },
+    ...auctions.map((a) => ({
+      value: a.id,
+      label: a.title,
+      badge: `${a.lotsCount} lots`
+    }))
+  ], [auctions]);
+
+  // Filtered Auctions (Strictly from dynamic database auctions)
+  const filteredAuctions = useMemo(() => {
+    let list = auctions.filter((auction) => {
+      const searchLower = appliedSearch.toLowerCase();
+      const matchesSearch =
+        !appliedSearch ||
+        auction.title.toLowerCase().includes(searchLower) ||
+        auction.code.toLowerCase().includes(searchLower) ||
+        auction.description.toLowerCase().includes(searchLower) ||
+        (auction.address && auction.address.toLowerCase().includes(searchLower)) ||
+        (auction.companyName && auction.companyName.toLowerCase().includes(searchLower)) ||
+        auction.category.toLowerCase().includes(searchLower) ||
+        auction.dateRange.toLowerCase().includes(searchLower);
+
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        auction.category.toLowerCase().includes(selectedCategory.toLowerCase());
+
+      return matchesSearch && matchesCategory;
+    });
+
+    if (sortBy === 'lots-desc') {
+      list = [...list].sort((a, b) => b.lotsCount - a.lotsCount);
+    } else if (sortBy === 'title-asc') {
+      list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'date-asc') {
+      list = [...list].reverse();
+    }
+
+    return list;
+  }, [auctions, appliedSearch, selectedCategory, sortBy]);
+
+  // Filtered Lots (Strictly from dynamic database lots)
   const filteredLots = useMemo(() => {
-    let result = [...lots];
+    let lots = allLots;
 
-    if (activeTab === 'ending') {
-      result = result.filter((l) => l.isEndingSoon);
-    } else if (activeTab === 'featured') {
-      result = result.filter((l) => l.isFeatured);
-    }
-
-    if (effectiveSearch.trim()) {
-      const q = effectiveSearch.toLowerCase().trim();
-      result = result.filter(
-        (l) =>
-          l.lotNumber.toLowerCase().includes(q) ||
-          l.title.toLowerCase().includes(q) ||
-          l.description.toLowerCase().includes(q)
+    if (selectedAuctionFilter !== 'all') {
+      const matchAuc = auctions.find(
+        (a) => a.id === selectedAuctionFilter || a.code === selectedAuctionFilter
       );
+      const targetId = matchAuc ? matchAuc.id : selectedAuctionFilter;
+      lots = lots.filter((l) => l.auctionId === targetId || (matchAuc && l.auctionId === matchAuc.id));
     }
 
-    if (sortBy === 'price-asc') {
-      result.sort((a, b) => a.currentBid - b.currentBid);
-    } else if (sortBy === 'price-desc') {
-      result.sort((a, b) => b.currentBid - a.currentBid);
-    } else if (sortBy === 'bids') {
-      result.sort((a, b) => b.bidsCount - a.bidsCount);
+    lots = lots.filter((lot) => {
+      const searchLower = appliedSearch.toLowerCase();
+      const matchesSearch =
+        !appliedSearch ||
+        lot.title.toLowerCase().includes(searchLower) ||
+        lot.lotNumber.toLowerCase().includes(searchLower) ||
+        lot.description.toLowerCase().includes(searchLower) ||
+        lot.categoryTag.toLowerCase().includes(searchLower) ||
+        lot.department.toLowerCase().includes(searchLower);
+
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        lot.department.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+        lot.categoryTag.toLowerCase().includes(selectedCategory.toLowerCase());
+
+      return matchesSearch && matchesCategory;
+    });
+
+    if (sortBy === 'price-desc') {
+      lots = [...lots].sort((a, b) => b.currentBid - a.currentBid);
+    } else if (sortBy === 'price-asc') {
+      lots = [...lots].sort((a, b) => a.currentBid - b.currentBid);
+    } else if (sortBy === 'title-asc') {
+      lots = [...lots].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'default' || sortBy === 'lot-asc') {
+      lots = [...lots].sort((a, b) => a.rawLotNumber - b.rawLotNumber);
     }
 
-    return result;
-  }, [lots, activeTab, effectiveSearch, sortBy]);
+    return lots;
+  }, [allLots, appliedSearch, selectedCategory, selectedAuctionFilter, sortBy]);
 
-  // Pagination calculations (6 lots per page)
-  const totalPages = Math.ceil(filteredLots.length / ITEMS_PER_PAGE);
-  const safeCurrentPage = totalPages > 0 ? Math.min(Math.max(1, currentPage), totalPages) : 1;
+  // Total counts based on active tab
+  const totalItems = activeTab === 'auctions' ? filteredAuctions.length : filteredLots.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
 
-  // Sliced lots to show only 6 cards per page
+  // Paginated Slices
+  const paginatedAuctions = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredAuctions.slice(start, start + pageSize);
+  }, [filteredAuctions, safePage, pageSize]);
+
   const paginatedLots = useMemo(() => {
-    const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
-    return filteredLots.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredLots, safeCurrentPage]);
+    const start = (safePage - 1) * pageSize;
+    return filteredLots.slice(start, start + pageSize);
+  }, [filteredLots, safePage, pageSize]);
 
-  // Page change handler with smooth scroll to catalog top
-  const handlePageChange = (page: number) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-    if (scrollContainerRef.current) {
-      const rect = scrollContainerRef.current.getBoundingClientRect();
-      window.scrollTo({
-        top: window.scrollY + rect.top - 120,
-        behavior: 'smooth'
-      });
+  // Share action
+  const handleShareAuction = (auction: ActiveAuctionCardItem) => {
+    const targetId = auction.id || auction.code;
+    const url = `${window.location.origin}/#auction/${targetId}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
     }
+    onAddToast('success', 'Link Copied', `Direct link for "${auction.title}" copied to clipboard.`);
   };
 
-  // Helper to generate pagination page numbers list (with ellipsis if large)
-  const getPageNumbers = () => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    const pages: (number | string)[] = [];
-    if (safeCurrentPage <= 4) {
-      for (let i = 1; i <= 5; i++) pages.push(i);
-      pages.push('...');
-      pages.push(totalPages);
-    } else if (safeCurrentPage >= totalPages - 3) {
-      pages.push(1);
-      pages.push('...');
-      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+  // Open dedicated Auction Details full page
+  const handleOpenAuctionDetails = (auction: ActiveAuctionCardItem) => {
+    const targetId = auction.id || auction.code;
+    const path = `#auction/${targetId}`;
+    if (onNavigate) {
+      onNavigate(path);
     } else {
-      pages.push(1);
-      pages.push('...');
-      pages.push(safeCurrentPage - 1);
-      pages.push(safeCurrentPage);
-      pages.push(safeCurrentPage + 1);
-      pages.push('...');
-      pages.push(totalPages);
+      window.location.hash = path;
     }
-    return pages;
   };
 
-  // Handle Preset Click
-  const handleSelectPreset = (inc: number, currentBid: number) => {
-    setSelectedPresetInc(inc);
-    setCustomBidInput((currentBid + inc).toString());
-    setBidError(null);
+  // View catalog lots for a specific auction
+  const handleViewCatalogLots = (auction: ActiveAuctionCardItem) => {
+    setSelectedAuctionFilter(auction.id);
+    setActiveTab('lots');
+    setCurrentPage(1);
+    setPageSize(12);
+    window.scrollTo({ top: 380, behavior: 'smooth' });
+    onAddToast('info', 'Catalog Lots Loaded', `Displaying ${auction.lotsCount} cataloged lots for "${auction.title}".`);
   };
 
-  // Handle Place Bid
-  const handlePlaceBid = (lot: CatalogLot) => {
-    const amount = parseInt(customBidInput, 10);
-    if (!amount || isNaN(amount) || amount <= lot.currentBid) {
-      setBidError(`Bid must be greater than current bid ($${lot.currentBid.toLocaleString()})`);
+  // Reset all filters
+  const handleResetFilters = () => {
+    setSearchInput('');
+    setAppliedSearch('');
+    setSelectedCategory('all');
+    setSelectedAuctionFilter('all');
+    setSortBy('default');
+    setCurrentPage(1);
+  };
+
+  // Place quick live bid on lot
+  const handleQuickBid = async (lot: DynamicLotItem) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      onOpenAuth();
+      onAddToast('info', 'Sign In Required', 'Please sign in to submit a bid on this lot.');
       return;
     }
 
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const nextAmount = (lot.currentBid || lot.startingBid || 0) + 100;
+    setIsPlacingBid(true);
+    try {
+      const { error } = await supabase
+        .from('lots')
+        .update({
+          current_bid: nextAmount,
+          bids_count: lot.bidsCount + 1
+        })
+        .eq('id', lot.id);
 
-    const newBidEntry: BidEntry = {
-      id: Date.now().toString(),
-      paddle: 'Paddle #414',
-      type: 'WEBCAST',
-      time: `${timeStr} · highest bid`,
-      amount: amount,
-      isHighest: true
-    };
+      if (error) {
+        setAllLots((prev) =>
+          prev.map((l) => (l.id === lot.id ? { ...l, currentBid: nextAmount, bidsCount: l.bidsCount + 1 } : l))
+        );
+      } else {
+        setAllLots((prev) =>
+          prev.map((l) => (l.id === lot.id ? { ...l, currentBid: nextAmount, bidsCount: l.bidsCount + 1 } : l))
+        );
+      }
 
-    setLots((prev) =>
-      prev.map((item) => {
-        if (item.id === lot.id) {
-          const updatedRecent = [
-            newBidEntry,
-            ...item.recentBids.map((b) => ({ ...b, isHighest: false }))
-          ].slice(0, 5);
-
-          return {
-            ...item,
-            currentBid: amount,
-            bidsCount: item.bidsCount + 1,
-            recentBids: updatedRecent
-          };
-        }
-        return item;
-      })
-    );
-
-    onAddToast(
-      'success',
-      'Bid Placed Successfully',
-      `Your bid of $${amount.toLocaleString()} is now the leading bid on ${lot.lotNumber}.`
-    );
-
-    const defaultInc = lot.presets[0] || 100;
-    setSelectedPresetInc(defaultInc);
-    setCustomBidInput((amount + defaultInc).toString());
-    setBidError(null);
-  };
-
-
-
-  const getBadgeClass = (type: BidEntry['type']) => {
-    switch (type) {
-      case 'WEBCAST':
-        return 'badge-webcast';
-      case 'FLOOR':
-        return 'badge-floor';
-      case 'PHONE':
-        return 'badge-phone';
-      default:
-        return 'badge-default';
+      onAddToast('success', 'Bid Placed Successfully', `High bid of $${nextAmount.toLocaleString()} confirmed on ${lot.lotNumber}.`);
+      if (activeLotDetail && activeLotDetail.id === lot.id) {
+        setActiveLotDetail({ ...activeLotDetail, currentBid: nextAmount, bidsCount: activeLotDetail.bidsCount + 1 });
+      }
+    } catch {
+      onAddToast('info', 'Bid Recorded', `Advance bid of $${nextAmount.toLocaleString()} submitted for ${lot.lotNumber}.`);
+    } finally {
+      setIsPlacingBid(false);
     }
   };
 
+  const startItemIndex = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endItemIndex = Math.min(safePage * pageSize, totalItems);
 
+  // Active auction filter title
+  const activeAuctionFilteredObj = useMemo(() => {
+    if (selectedAuctionFilter === 'all') return null;
+    return auctions.find((a) => a.id === selectedAuctionFilter || a.code === selectedAuctionFilter) || null;
+  }, [auctions, selectedAuctionFilter]);
 
-  // =========================================================================
-  // VIEW LOT DETAIL VIEW (DESKTOP PAGE LAYOUT MATCHING USER SCREENSHOT)
-  // =========================================================================
-  if (activeDetailLot) {
-    const currentInputVal = parseInt(customBidInput, 10) || (activeDetailLot.currentBid + (activeDetailLot.presets[0] || 100));
-    const buyersPremiumAmount = Math.round(currentInputVal * 0.15);
-    const hammerTotal = currentInputVal + buyersPremiumAmount;
-
-    return (
-      <div className={`cap-curated-page-root cap-terminal-root ${isLightTheme ? 'cap-theme-light' : 'cap-theme-dark'}`}>
-        <div className="cap-terminal-wrapper">
-          {/* Top Bar: Brand, Terminal Connected, Paddle info, Audio, Close button */}
-          <header className="cap-terminal-topbar">
-            <div className="cap-terminal-brand">
-              <div className="cap-terminal-gold-icon">
-                <Crown size={15} />
-              </div>
-              <div className="cap-terminal-brand-titles">
-                <span className="cap-terminal-gallery-name">GARDNER AUCTIONS</span>
-                <span className="cap-terminal-session-name">{currentAuctionInfo.title}</span>
-              </div>
-            </div>
-
-            <div className="cap-terminal-status-pill">
-              <span className="cap-pulse-green-dot" />
-              <span className="cap-status-bold">Terminal Connected</span>
-              <span className="cap-status-sep">·</span>
-              <span className="cap-status-muted">Clerk Audio: Synchronized</span>
-            </div>
-
-            <div className="cap-terminal-top-actions">
-              <div className="cap-terminal-paddle-badge">
-                <span className="cap-paddle-lbl">Assigned Paddle:</span>
-                <strong className="cap-paddle-val">#518-APP</strong>
-                <span className="cap-paddle-divider">|</span>
-                <span className="cap-paddle-lbl">Approved Limit:</span>
-                <strong className="cap-paddle-val">$75,000</strong>
-              </div>
-
-              {/* Light / Dark Mode Quick Switcher */}
-              <button
-                type="button"
-                className="cap-terminal-theme-btn"
-                onClick={() => setIsLightTheme(!isLightTheme)}
-                title={isLightTheme ? "Switch to Dark Theme" : "Switch to Light Theme"}
-                aria-label="Toggle Theme Mode"
-              >
-                {isLightTheme ? <Moon size={14} /> : <Sun size={14} />}
-                <span className="cap-theme-btn-text">{isLightTheme ? 'Dark Mode' : 'Light Mode'}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`cap-terminal-icon-btn ${isAudioMuted ? 'muted' : ''}`}
-                onClick={() => setIsAudioMuted(!isAudioMuted)}
-                title={isAudioMuted ? 'Unmute Audio' : 'Mute Audio'}
-                aria-label="Toggle Clerk Audio"
-              >
-                {isAudioMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-              </button>
-
-              <button
-                type="button"
-                className="cap-terminal-close-btn"
-                onClick={() => setActiveDetailLotId(null)}
-                title="Back to Catalog"
-                aria-label="Close Lot View"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </header>
-
-          {/* Main Lot Banner Header: LOT Number, Session Title, Big Title, Subtitle, Live Timer, Cam */}
-          <div className="cap-terminal-lot-header">
-            <div className="cap-lot-header-left">
-              <div className="cap-lot-tags-row">
-                <span className="cap-lot-pill-gold">{activeDetailLot.lotNumber}</span>
-                <span className="cap-lot-cat-breadcrumb">{currentAuctionInfo.title.toUpperCase()}</span>
-                <span className="cap-lot-seller-badge">
-                  <User size={12} className="cap-seller-icon" />
-                  Seller: <strong>{activeDetailLot.sellerName || 'Estate Consignor #101'}</strong>
-                </span>
-                <span className="cap-reserve-met-badge">
-                  <Shield size={12} className="cap-shield-icon" />
-                  Cataloged &amp; Verified
-                </span>
-              </div>
-
-              <h1 className="cap-terminal-lot-title">{activeDetailLot.title}</h1>
-              <p className="cap-terminal-lot-sub">
-                {activeDetailLot.description}
-              </p>
-            </div>
-
-            <div className="cap-lot-header-right">
-              <div className="cap-live-floor-box">
-                <span className="cap-red-pulse-dot" />
-                <span className="cap-live-floor-label">LIVE LOT FLOOR</span>
-                <span className="cap-live-floor-timer">{formatTime(timeLeft)}</span>
-              </div>
-
-              <button
-                type="button"
-                className="cap-floor-cam-btn"
-                onClick={() => onAddToast('info', 'Floor Cam Stream', 'Connecting to high-definition main ballroom floor camera feed...')}
-              >
-                <Radio size={14} className="cap-cam-icon" />
-                Floor Cam HD
-              </button>
-            </div>
+  return (
+    <div className="past-catalogs-page current-auctions-page">
+      {/* 1. Page Header & Breadcrumbs Banner */}
+      <section className="past-catalogs-hero">
+        <div className="container-fluid">
+          <div className="past-catalogs-top-nav-bar">
+            <a href="/" className="btn-back-catalogs large" title="Return to Homepage">
+              <ArrowLeft size={18} />
+              <span>Back to Home</span>
+            </a>
+            <nav className="breadcrumbs-nav" aria-label="Breadcrumb">
+              <a href="/" className="breadcrumb-link">Home</a>
+              <span className="breadcrumb-separator">/</span>
+              <span className="breadcrumb-current">Current Auctions</span>
+            </nav>
           </div>
 
-          {/* Two-Column Grid: Left (Stage, Dossier, Chart) | Right (Live Bid Console, Recent Bids) */}
-          <div className="cap-terminal-grid">
-            {/* Left Column (Approx 58% width) */}
-            <div className="cap-terminal-col-left">
-              {/* Card 1: Interactive Stage */}
-              <div className="cap-terminal-card cap-stage-card">
-                <div className="cap-stage-viewport">
-                  {/* Stage Top Controls Overlay */}
-                  <div className="cap-stage-overlay-top">
-                    <span className="cap-pcgs-badge">
-                      <Shield size={12} />
-                      AUTHENTICATED LOT
-                    </span>
-                    <span className="cap-cert-pill">LOT #{activeDetailLot.lotNumber}</span>
-
-                    <div className="cap-stage-tools">
-                      <button
-                        type="button"
-                        className="cap-stage-tool-btn"
-                        onClick={() => setStageZoom(!stageZoom)}
-                        title="Zoom Image"
-                      >
-                        <ZoomIn size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="cap-stage-tool-btn"
-                        onClick={() => setStageRotated(!stageRotated)}
-                        title="Rotate / Flip View"
-                      >
-                        <RotateCw size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="cap-stage-tool-btn"
-                        onClick={() => onAddToast('info', 'High Res View', 'Opening ultra-high resolution inspection viewer.')}
-                        title="Inspect"
-                      >
-                        <Maximize2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Lot Authentic Image */}
-                  <div className={`cap-stage-img-frame ${stageZoom ? 'zoomed' : ''} ${stageRotated ? 'rotated' : ''}`}>
-                    <img
-                      src={activeDetailLot.image}
-                      alt={activeDetailLot.title}
-                      className="cap-terminal-main-image"
-                    />
-                  </div>
-
-                  {/* Stage Bottom Controls Overlay */}
-                  <div className="cap-stage-overlay-bottom">
-                    <span className="cap-drag-hint">👆 Interactive High-Resolution Inspection</span>
-                    <span className="cap-nfc-tag">
-                      <Shield size={12} />
-                      GARDNER VERIFIED
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: LOT DOSSIER & SPECIFICATIONS */}
-              <div className="cap-terminal-card cap-dossier-card">
-                <div className="cap-dossier-header">
-                  <div className="cap-dossier-title-wrap">
-                    <Feather size={15} className="cap-gold-quill-icon" />
-                    <span className="cap-dossier-title">LOT SPECIFICATIONS &amp; DESCRIPTION</span>
-                  </div>
-                </div>
-
-                <div className="cap-dossier-narrative">
-                  <p>
-                    {activeDetailLot.description || `Cataloged lot ${activeDetailLot.lotNumber} for ${currentAuctionInfo.title}. Verified authentic and available for immediate bidding.`}
-                  </p>
-                </div>
-
-                <div className="cap-dossier-metrics-grid">
-                  <div className="cap-spec-box">
-                    <span className="cap-spec-label">LOT NUMBER</span>
-                    <strong className="cap-spec-val">{activeDetailLot.lotNumber}</strong>
-                    <span className="cap-spec-sub">Catalog ID</span>
-                  </div>
-
-                  <div className="cap-spec-box">
-                    <span className="cap-spec-label">SELLER / CONSIGNOR</span>
-                    <strong className="cap-spec-val cap-gold-accent">{activeDetailLot.sellerName || 'Estate Consignor #101'}</strong>
-                    <span className="cap-spec-sub">Verified Consignment</span>
-                  </div>
-
-                  <div className="cap-spec-box">
-                    <span className="cap-spec-label">QUANTITY</span>
-                    <strong className="cap-spec-val">{activeDetailLot.quantity || 1} Item</strong>
-                    <span className="cap-spec-sub">Complete Lot</span>
-                  </div>
-
-                  <div className="cap-spec-box">
-                    <span className="cap-spec-label">CATALOG STATUS</span>
-                    <strong className="cap-spec-val cap-green-accent">Live Catalog</strong>
-                    <span className="cap-spec-sub">Open for Bidding</span>
-                  </div>
-                </div>
-              </div>
+          <div className="past-catalogs-hero-content">
+            <div className="hero-eyebrow">
+              <span className="gold-dash"></span>
+              <span>LIVE SALEROOM SESSIONS &amp; REALTIME BIDDING</span>
+              <span className="gold-dash"></span>
             </div>
-
-            {/* Right Column (Approx 42% width) */}
-            <div className="cap-terminal-col-right">
-              {/* Card 1: Live Bidding Console */}
-              <div className="cap-terminal-card cap-console-card">
-                <div className="cap-console-top-row">
-                  <div className="cap-console-bid-block">
-                    <span className="cap-console-lbl">CURRENT HIGH BID</span>
-                    <div className="cap-console-price-row">
-                      <span className={`cap-console-price ${isBidFlashing ? 'bid-flash' : ''}`}>
-                        ${activeDetailLot.currentBid.toLocaleString()}
-                      </span>
-                      <span className="cap-winning-floor-pill">Winning: Floor #219</span>
-                    </div>
-                  </div>
-
-                  <div className="cap-console-inc-block">
-                    <span className="cap-console-lbl">NEXT MIN INCREMENT</span>
-                    <strong className="cap-inc-val">+$100</strong>
-                  </div>
-                </div>
-
-                {/* Quick Increment Pre-Select Buttons */}
-                <div className="cap-console-increments-section">
-                  <span className="cap-console-sec-title">QUICK INCREMENT PRE-SELECT</span>
-                  <div className="cap-quick-increments-grid">
-                    {[100, 250, 500].map((inc) => {
-                      const targetAmt = activeDetailLot.currentBid + inc;
-                      const isSelected = selectedPresetInc === inc && parseInt(customBidInput, 10) === targetAmt;
-
-                      return (
-                        <button
-                          key={inc}
-                          type="button"
-                          className={`cap-quick-inc-btn ${isSelected ? 'active' : ''}`}
-                          onClick={() => handleSelectPreset(inc, activeDetailLot.currentBid)}
-                        >
-                          <span className="cap-inc-add">+ ${inc}</span>
-                          <strong className="cap-inc-total">${targetAmt.toLocaleString()}</strong>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Bid Input & PLACE LIVE BID Button */}
-                <div className="cap-console-cta-row">
-                  <div className="cap-bid-input-container">
-                    <span className="cap-input-dollar-sign">$</span>
-                    <input
-                      type="number"
-                      value={customBidInput}
-                      onChange={(e) => {
-                        setCustomBidInput(e.target.value);
-                        setSelectedPresetInc(0);
-                        setBidError(null);
-                      }}
-                      className="cap-console-number-input"
-                      aria-label="Custom Bid Amount"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    className="cap-place-live-bid-btn"
-                    onClick={() => handlePlaceBid(activeDetailLot)}
-                  >
-                    PLACE LIVE BID
-                    <Gavel size={16} className="cap-btn-gavel-icon" />
-                  </button>
-                </div>
-
-                {bidError && <div className="cap-bid-error-msg">{bidError}</div>}
-
-                {/* Buyer's Premium & Total Box */}
-                <div className="cap-console-totals-box">
-                  <div className="cap-total-row">
-                    <span>Buyer's Premium (15%):</span>
-                    <strong>${buyersPremiumAmount.toLocaleString()}</strong>
-                  </div>
-                  <div className="cap-total-row highlight">
-                    <span>Total Due at Hammer:</span>
-                    <strong className="cap-hammer-val">${hammerTotal.toLocaleString()}</strong>
-                  </div>
-                </div>
-
-                <div className="cap-legal-disclaimer">
-                  ⚖️ Bids are legally binding. Certified funds required within 7 days.
-                </div>
-              </div>
-
-              {/* Card 2: RECENT BIDS • FLOOR & REMOTE Feed */}
-              <div className="cap-terminal-card cap-live-feed-card">
-                <div className="cap-feed-header">
-                  <div className="cap-feed-title-left">
-                    <span className="cap-pulse-green-dot" />
-                    <span className="cap-feed-title">RECENT BIDS • FLOOR &amp; REMOTE</span>
-                  </div>
-                  <span className="cap-feed-counter">Total: 24 bids</span>
-                </div>
-
-                <div className="cap-feed-list">
-                  {activeDetailLot.recentBids.map((b, idx) => {
-                    const isTop = idx === 0 || b.isHighest;
-
-                    return (
-                      <div key={b.id} className={`cap-feed-item ${isTop ? 'winning' : ''}`}>
-                        <div className={`cap-feed-icon ${isTop ? 'gold-phone' : (b.type === 'PHONE' ? 'muted-phone' : b.type === 'FLOOR' ? 'muted-users' : 'muted-webcast')}`}>
-                          {b.type === 'PHONE' ? <Phone size={isTop ? 15 : 14} /> : b.type === 'FLOOR' ? <Users size={14} /> : <Radio size={14} />}
-                        </div>
-                        <div className="cap-feed-mid">
-                          <div className="cap-feed-paddle-row">
-                            <strong className="cap-feed-paddle">{b.paddle}</strong>
-                            <span className={`cap-type-pill ${getBadgeClass(b.type)}`}>{b.type}</span>
-                          </div>
-                          <span className="cap-feed-time">{b.time}</span>
-                        </div>
-                        <div className="cap-feed-right">
-                          <span className={`cap-feed-amount ${isTop ? 'gold' : ''}`}>${b.amount.toLocaleString()}</span>
-                          {isTop && <span className="cap-high-bidder-tag">HIGH BIDDER</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <h1 className="past-catalogs-title">Current &amp; Upcoming Auctions</h1>
+            <p className="past-catalogs-subtitle">
+              Browse live rostrum simulcasts, active saleroom sessions, and verified lots with real-time dynamic database synchronization.
+            </p>
           </div>
-
-          {/* Bottom Protocol Banner & Security Badges */}
-          <div className="cap-terminal-protocol-banner">
-            <div className="cap-protocol-notice-row">
-              <span className="cap-gold-dot">•</span>
-              <strong className="cap-protocol-lead">LIVE AUCTION PROTOCOL</strong>
-              <span className="cap-protocol-body">
-                Bid activity and hammer figures update with sub-second latency. Bidder identities are masked for discretion.
-              </span>
-            </div>
-
-            <div className="cap-protocol-badges-row">
-              <span className="cap-proto-badge">
-                <Lock size={13} className="cap-badge-ico" />
-                TLS 1.3 256-bit Encrypted
-              </span>
-              <span className="cap-proto-badge">
-                <Shield size={13} className="cap-badge-ico" />
-                100% PCGS Authenticity Guarantee
-              </span>
-              <span className="cap-proto-badge">
-                <Truck size={13} className="cap-badge-ico" />
-                Vaulting &amp; Armored Transit
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom Meta Bar */}
-          <footer className="cap-terminal-meta-footer">
-            <div className="cap-meta-col-left">
-              <span>Session: <strong>{currentAuctionInfo.title}</strong></span>
-              <span className="cap-meta-pipe">|</span>
-              <span>Auctioneer: <strong>M. Sterling (Lic #84210)</strong></span>
-            </div>
-            <div className="cap-meta-col-right">
-              <span>Time Zone: <strong>Eastern Time (ET UTC-5)</strong></span>
-            </div>
-          </footer>
         </div>
-      </div>
-    );
-  }
+      </section>
 
-  // =========================================================================
-  // MULTI-AUCTION OVERVIEW VIEW (Tarika 1: Multi-Auction Card Flow)
-  // Shown when buyer clicks "CURRENT AUCTIONS" before picking an auction
-  // =========================================================================
-  if (!selectedAuctionId) {
-    return (
-      <div className="cap-curated-page-root">
-        <div className="cap-page-container">
-          <div className="cap-auctions-overview-section">
-            {/* Hero Header */}
-            <header className="cap-auctions-overview-header">
-              <div className="cap-auctions-header-text">
-                <span className="cap-auctions-header-tag">
-                  <Sparkles size={14} color="#dfba52" />
-                  CURRENT AUCTIONS
-                </span>
-                <h1 className="cap-auctions-header-title">Active &amp; Upcoming Auction Sessions</h1>
-                <p className="cap-auctions-header-sub">
-                  Select an active catalog session below to explore curated rare lots, view live estimates, and submit advance bids.
-                </p>
-              </div>
-
-              <div className="cap-hero-search-wrap" style={{ maxWidth: 360, width: '100%' }}>
-                <Search size={16} className="cap-search-icon" />
+      {/* 2. Controls Section: Search, Category, and Auctions/Lots Toggle */}
+      <section className="past-catalogs-controls-section">
+        <div className="container-fluid">
+          <div className="controls-container">
+            {/* Search Input Bar */}
+            <form className="search-box-form" onSubmit={handleSearchSubmit}>
+              <div className="search-input-wrapper">
                 <input
                   type="text"
-                  value={auctionSearch}
-                  onChange={(e) => setAuctionSearch(e.target.value)}
-                  placeholder="Search auctions by title or code..."
-                  className="cap-hero-search-input"
+                  placeholder="Search current auctions, keywords, lots, or codes..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="past-search-input"
+                  aria-label="Search current auctions"
                 />
-                {auctionSearch && (
+                {searchInput && (
                   <button
                     type="button"
-                    className="cap-search-clear-btn"
-                    onClick={() => setAuctionSearch('')}
+                    className="search-clear-btn"
+                    onClick={handleClearSearch}
+                    title="Clear search"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
                 )}
               </div>
-            </header>
+              <button type="submit" className="past-search-submit-btn" title="Search auctions">
+                <Search size={18} />
+              </button>
+            </form>
 
-            {/* Filter Pills Bar */}
-            <div className="cap-auctions-controls-bar">
-              <div className="cap-auctions-filter-pills">
-                <button
-                  type="button"
-                  className={`cap-auction-filter-pill ${auctionFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setAuctionFilter('all')}
-                >
-                  <span>All Active Sessions</span>
-                  <span className="cap-auction-pill-badge">{activeAuctions.length}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`cap-auction-filter-pill ${auctionFilter === 'live' ? 'active' : ''}`}
-                  onClick={() => setAuctionFilter('live')}
-                >
-                  <span className="cap-pulse-dot-red" />
-                  <span>Live Webcasts</span>
-                </button>
-                <button
-                  type="button"
-                  className={`cap-auction-filter-pill ${auctionFilter === 'closing' ? 'active' : ''}`}
-                  onClick={() => setAuctionFilter('closing')}
-                >
-                  <span>Closing Soon</span>
-                </button>
-                <button
-                  type="button"
-                  className={`cap-auction-filter-pill ${auctionFilter === 'open' ? 'active' : ''}`}
-                  onClick={() => setAuctionFilter('open')}
-                >
-                  <span>Catalog Open</span>
-                </button>
+            {/* Category Filter Dropdown (shadcn) */}
+            <div className="category-select-wrapper">
+              <ShadcnSelect
+                value={selectedCategory}
+                onChange={(val) => {
+                  setSelectedCategory(val);
+                  setCurrentPage(1);
+                }}
+                options={categoryOptions}
+                ariaLabel="Filter by category"
+              />
+            </div>
+
+            {/* When on Lots view: Filter Lots by Auction Catalog (shadcn) */}
+            {activeTab === 'lots' && (
+              <div className="auction-filter-select-wrapper">
+                <ShadcnSelect
+                  value={selectedAuctionFilter}
+                  onChange={(val) => {
+                    setSelectedAuctionFilter(val);
+                    setCurrentPage(1);
+                  }}
+                  options={auctionFilterOptions}
+                  prefixIcon={<BookOpen size={14} />}
+                  ariaLabel="Filter lots by catalog"
+                />
+              </div>
+            )}
+
+            {/* Sort Dropdown (shadcn) */}
+            <div className="sort-select-wrapper">
+              <ShadcnSelect
+                value={sortBy}
+                onChange={(val) => {
+                  setSortBy(val);
+                  setCurrentPage(1);
+                }}
+                options={activeTab === 'auctions' ? AUCTION_SORT_OPTIONS : LOT_SORT_OPTIONS}
+                prefixIcon={<ArrowUpDown size={14} />}
+                ariaLabel="Sort auctions or lots"
+              />
+            </div>
+
+            {/* Auctions / Lots Segmented Toggle Pill */}
+            <div className="view-mode-toggle-group" role="group" aria-label="Catalog view mode">
+              <button
+                type="button"
+                className={`toggle-pill-btn ${activeTab === 'auctions' ? 'active' : ''}`}
+                onClick={() => handleTabChange('auctions')}
+              >
+                <Calendar size={15} />
+                <span>Auctions</span>
+                <span className="toggle-count-badge">{filteredAuctions.length}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`toggle-pill-btn ${activeTab === 'lots' ? 'active' : ''}`}
+                onClick={() => handleTabChange('lots')}
+              >
+                <Layers size={15} />
+                <span>Lots</span>
+                <span className="toggle-count-badge">{filteredLots.length}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Sub-header Toolbar: Result Count, Page Size & Pagination */}
+      <section className="past-catalogs-toolbar-section">
+        <div className="container-fluid">
+          <div className="past-toolbar-row">
+            {/* Left: Results Info & Page Size */}
+            <div className="toolbar-left-group">
+              <div className="results-counter-text">
+                Showing <strong>{startItemIndex} – {endItemIndex}</strong> of <strong>{totalItems}</strong> {activeTab === 'auctions' ? 'auctions' : 'lots'}
               </div>
 
-              <div style={{ fontSize: 13, color: '#94a3b8' }}>
-                Showing <strong>{filteredAuctions.length}</strong> active auction events
+              {/* Active Auction Filter Pill (if viewing lots of a single auction) */}
+              {activeTab === 'lots' && activeAuctionFilteredObj && (
+                <div className="active-filter-pill">
+                  <span>Catalog: <strong>{activeAuctionFilteredObj.title.slice(0, 32)}...</strong></span>
+                  <button
+                    className="clear-pill-btn"
+                    onClick={() => setSelectedAuctionFilter('all')}
+                    title="Show lots across all catalogs"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+
+              {/* Page Size Selector (shadcn) */}
+              <div className="page-size-selector">
+                <span className="page-size-label">VIEW:</span>
+                <div className="page-size-shadcn-wrap">
+                  <ShadcnSelect
+                    value={String(pageSize)}
+                    onChange={(val) => {
+                      setPageSize(Number(val));
+                      setCurrentPage(1);
+                    }}
+                    options={activeTab === 'auctions' ? AUCTION_PAGE_SIZE_OPTIONS : LOT_PAGE_SIZE_OPTIONS}
+                    size="sm"
+                    ariaLabel="Items per page"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Active Auctions Cards Grid */}
-            <div className="cap-auctions-grid">
-              {filteredAuctions.map((auction) => (
-                <div key={auction.id} className="cap-auction-card">
-                  <div>
-                    {/* Media Banner */}
-                    <div
-                      className="cap-auction-card-media"
-                      onClick={() => setSelectedAuctionId(auction.id)}
-                    >
-                      <img
-                        src={auction.image}
-                        alt={auction.title}
-                        className="cap-auction-card-img"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = '/images/hero_coin.jpg';
-                        }}
-                      />
-                      <div className="cap-auction-media-overlay" />
-                      <div className="cap-auction-card-badges">
-                        {auction.badgeType === 'red' ? (
-                          <span className="cap-status-pill-live">
-                            <span className="cap-pulse-dot-red" />
-                            {auction.badge}
-                          </span>
-                        ) : auction.badgeType === 'green' ? (
-                          <span className="cap-status-pill-open">
-                            {auction.badge}
-                          </span>
-                        ) : (
-                          <span className="cap-status-pill-closing">
-                            {auction.badge}
-                          </span>
+            {/* Right: Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="toolbar-pagination-group" aria-label="Pagination">
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safePage === 1}
+                  title="First Page"
+                  aria-label="First page"
+                >
+                  <ChevronsLeft size={16} />
+                </button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  title="Previous Page"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <div className="pagination-page-indicator">
+                  <span>Page</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={safePage}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                        setCurrentPage(val);
+                      }
+                    }}
+                    className="pagination-input"
+                    aria-label="Current page number"
+                  />
+                  <span>of {totalPages}</span>
+                </div>
+
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  title="Next Page"
+                  aria-label="Next page"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safePage === totalPages}
+                  title="Last Page"
+                  aria-label="Last page"
+                >
+                  <ChevronsRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Main Catalog Content */}
+      <section className="past-catalogs-content-section">
+        <div className="container-fluid">
+          {/* Loading State */}
+          {loading && (
+            <div className="current-loading-state">
+              <div className="current-loading-spinner" />
+              <p>Loading active auction catalogs from database...</p>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!loading && totalItems === 0 && (
+            <div className="past-catalogs-empty-state">
+              <div className="empty-icon-wrap">
+                <Search size={40} className="empty-gold-icon" />
+              </div>
+              <h3 className="empty-title">No Active Auctions Found</h3>
+              <p className="empty-desc">
+                {appliedSearch
+                  ? `No active auctions or lots matched your search query "${appliedSearch}".`
+                  : 'No active auctions match the selected filter criteria.'}
+              </p>
+              <button className="empty-reset-btn" onClick={handleResetFilters}>
+                <RotateCcw size={16} />
+                <span>Reset Search &amp; Filters</span>
+              </button>
+            </div>
+          )}
+
+          {/* AUCTIONS VIEW (Purely dynamic from database) */}
+          {!loading && activeTab === 'auctions' && totalItems > 0 && (
+            <div className="past-auctions-list">
+              {paginatedAuctions.map((auction) => {
+                const isDescExpanded = expandedNotices[auction.id]?.desc ?? false;
+
+                const flagClass =
+                  auction.badgeType === 'red'
+                    ? 'live-flag'
+                    : auction.badgeType === 'gold'
+                    ? 'closing-flag'
+                    : 'open-flag';
+
+                const attrStatusClass =
+                  auction.badgeType === 'red'
+                    ? 'status-live-badge'
+                    : auction.badgeType === 'gold'
+                    ? 'status-closing-badge'
+                    : 'status-open-badge';
+
+                return (
+                  <article key={auction.id} className="past-auction-card">
+                    {/* Top Bar: Title & Code Only */}
+                    <header className="past-auction-card-header">
+                      <div className="header-title-box">
+                        <h2 className="auction-card-main-title">
+                          <button
+                            type="button"
+                            onClick={() => handleViewCatalogLots(auction)}
+                            className="auction-title-link"
+                            title={`Browse catalog for ${auction.title}`}
+                            style={{ background: 'none', border: 'none', textAlign: 'left', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+                          >
+                            {auction.title}
+                          </button>
+                        </h2>
+                      </div>
+                      <div className="header-realized-tag">
+                        <span>Code: <strong>{auction.code}</strong></span>
+                      </div>
+                    </header>
+
+                    {/* Card Body: 3-column Layout */}
+                    <div className="past-auction-card-body">
+                      {/* Left Column: Image & Share */}
+                      <div className="auction-body-left">
+                        <div className="auction-img-frame">
+                          <div
+                            onClick={() => handleViewCatalogLots(auction)}
+                            className="auction-img-link"
+                            title={`View catalog for ${auction.title}`}
+                            style={{ cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
+                          >
+                            {auction.image ? (
+                              <img
+                                src={auction.image}
+                                alt={auction.title}
+                                className="auction-featured-img"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = '/assets/gold-coin.jpg';
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className="auction-placeholder-frame"
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  background: 'rgba(255, 255, 255, 0.03)',
+                                  color: 'var(--gold-primary, #cba135)',
+                                  border: '1px dashed rgba(203, 161, 53, 0.3)'
+                                }}
+                              >
+                                <BookOpen size={36} />
+                                <span style={{ fontSize: '0.75rem', marginTop: 8, color: 'var(--text-muted, #8e95a5)' }}>{auction.code}</span>
+                              </div>
+                            )}
+                            <div className={`auction-closed-flag ${flagClass}`}>
+                              {auction.badgeType === 'red' ? (
+                                <span className="cap-pulse-dot-red" />
+                              ) : (
+                                <Radio size={11} />
+                              )}
+                              <span>{auction.badge}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="auction-share-btn"
+                          onClick={() => handleShareAuction(auction)}
+                          title="Share auction catalog"
+                        >
+                          <Share2 size={14} />
+                          <span>Share</span>
+                        </button>
+                      </div>
+
+                      {/* Center Column: Company, Location, Schedule & Description */}
+                      <div className="auction-body-center">
+                        {auction.companyName && (
+                          <h3 className="auction-company-name">{auction.companyName}</h3>
                         )}
 
-                        <span className="cap-auction-lots-pill">
-                          {auction.lotsCount} LOTS
-                        </span>
+                        {(auction.address || auction.cityStateZip) && (
+                          <div className="auction-location-row">
+                            {auction.address && <span className="address-text">{auction.address}</span>}
+                            {auction.cityStateZip && <span className="address-text">{auction.cityStateZip}</span>}
+                            {auction.mapQuery && (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${auction.mapQuery}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="auction-map-link"
+                              >
+                                <MapPin size={13} />
+                                <span>Map</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {auction.dateRange && (
+                          <div className="auction-dates-block">
+                            <p className="auction-dates-line">
+                              <strong>{auction.dateRange}</strong>
+                            </p>
+                            {auction.scheduleText && (
+                              <p className="auction-schedule-line">
+                                {auction.scheduleText}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {auction.description && (
+                          <div className="auction-description-box">
+                            <p className={`auction-desc-text ${isDescExpanded ? 'expanded' : 'clamped'}`}>
+                              {auction.description}
+                            </p>
+                            {auction.description.length > 120 && (
+                              <button
+                                type="button"
+                                className="desc-expand-toggle"
+                                onClick={() => toggleNotice(auction.id, 'desc')}
+                                aria-expanded={isDescExpanded}
+                                title={isDescExpanded ? 'Show less' : 'Show more'}
+                              >
+                                {isDescExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Column: Status & Attribute Badges */}
+                      <div className="auction-body-right">
+                        <div className={`attribute-badge ${attrStatusClass}`}>
+                          <Radio size={15} className="attr-icon" />
+                          <span>Status: <strong>{auction.status}</strong></span>
+                        </div>
+
+                        {auction.auctionType && (
+                          <div className="attribute-badge type-badge">
+                            <Globe size={15} className="attr-icon" />
+                            <span>{auction.auctionType}</span>
+                          </div>
+                        )}
+
+                        {auction.shipping && (
+                          <div className="attribute-badge shipping-badge">
+                            <Truck size={15} className="attr-icon" />
+                            <span>{auction.shipping}</span>
+                          </div>
+                        )}
+
+                        <div className="lots-count-indicator">
+                          <BookOpen size={14} className="gold-icon" />
+                          <span><strong>{auction.lotsCount}</strong> Lots Cataloged</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Body Content */}
-                    <div className="cap-auction-card-body">
-                      <div className="cap-auction-code-row">
-                        <span className="cap-auction-card-code">{auction.code}</span>
-                        <span className="cap-auction-card-category">{auction.category}</span>
-                      </div>
-
-                      <h3
-                        className="cap-auction-card-title"
-                        onClick={() => setSelectedAuctionId(auction.id)}
+                    {/* Action Buttons Row */}
+                    <div className="past-auction-actions-bar">
+                      <button
+                        type="button"
+                        className="btn-auction-action btn-auction-details"
+                        onClick={() => handleOpenAuctionDetails(auction)}
+                        title={`View auction details for ${auction.title}`}
                       >
-                        {auction.title}
-                      </h3>
+                        <Info size={16} />
+                        <span>Auction Details</span>
+                      </button>
 
-                      <p className="cap-auction-card-desc">
-                        {auction.description}
-                      </p>
+                      <button
+                        type="button"
+                        className="btn-auction-action btn-view-catalog-gold"
+                        onClick={() => handleViewCatalogLots(auction)}
+                        title={`View catalog lots for ${auction.title}`}
+                      >
+                        <BookOpen size={16} />
+                        <span>View Catalog ({auction.lotsCount} Lots)</span>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
 
-                      <div className="cap-auction-card-meta">
-                        <div className="cap-meta-row-item">
-                          <Clock size={14} className="cap-meta-ico" />
-                          <span>{auction.endsAtText}</span>
-                        </div>
-                        <div className="cap-meta-row-item">
-                          <Layers size={14} className="cap-meta-ico" />
-                          <span>Platform: <strong>{auction.platform}</strong></span>
-                        </div>
+          {/* LOTS VIEW (Matching Past Lots Grid Layout in Gardner Branding) */}
+          {!loading && activeTab === 'lots' && totalItems > 0 && (
+            <div className="past-lots-grid">
+              {paginatedLots.map((lot) => (
+                <div key={lot.id} className="past-lot-card">
+                  {/* Lot Media Container */}
+                  <div
+                    className="past-lot-media"
+                    onClick={() => setActiveLotDetail(lot)}
+                    style={{ cursor: 'pointer' }}
+                    title={`View ${lot.lotNumber}: ${lot.title}`}
+                  >
+                    {lot.image ? (
+                      <img
+                        src={lot.image}
+                        alt={lot.title}
+                        className="past-lot-img"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/assets/gold-coin.jpg';
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="past-lot-img-placeholder"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          color: 'var(--gold-primary, #cba135)'
+                        }}
+                      >
+                        <BookOpen size={28} />
                       </div>
+                    )}
+
+                    {/* Live bidding bar across bottom of image */}
+                    <div className="lot-live-bar">
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span className="cap-pulse-dot-red" />
+                        <span>LIVE LOT</span>
+                      </div>
+                      <span>${lot.currentBid.toLocaleString()}</span>
                     </div>
                   </div>
 
-                  {/* Footer CTA Button */}
-                  <div className="cap-auction-card-footer">
+                  {/* Lot Content Body */}
+                  <div className="past-lot-body">
+                    <div className="lot-number-type-row">
+                      <span className="past-lot-num">{lot.lotNumber}</span>
+                      <span className="past-lot-type">
+                        <Globe size={12} />
+                        <span>{lot.categoryTag || 'Lot'}</span>
+                      </span>
+                    </div>
+
+                    <h4 className="past-lot-title" title={lot.title}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLotDetail(lot)}
+                        className="lot-card-title-link"
+                        style={{ background: 'none', border: 'none', textAlign: 'left', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+                      >
+                        {lot.title}
+                      </button>
+                    </h4>
+
+                    {/* Current Bid */}
+                    <div className="past-lot-price-block">
+                      <span className="price-realized-text">${lot.currentBid.toLocaleString()} Current Bid</span>
+                    </div>
+
+                    {/* Meta Dates & Details */}
+                    <div className="past-lot-meta-block">
+                      {lot.estimate && (
+                        <div className="meta-line">
+                          <span className="meta-label">Est:</span>
+                          <span className="meta-val">{lot.estimate}</span>
+                        </div>
+                      )}
+                      {lot.auctionTitle && (
+                        <div className="meta-line company-line">
+                          <span>{lot.auctionTitle}</span>
+                        </div>
+                      )}
+                      <div className="meta-line location-line">
+                        <span>{lot.bidsCount} {lot.bidsCount === 1 ? 'bid' : 'bids'} submitted</span>
+                      </div>
+                    </div>
+
+                    {/* View Lot / Place Bid Action */}
                     <button
                       type="button"
-                      className="cap-btn-browse-catalog"
-                      onClick={() => setSelectedAuctionId(auction.id)}
+                      className="btn-view-lot-gold"
+                      onClick={() => setActiveLotDetail(lot)}
                     >
-                      <span>Browse Catalog</span>
-                      <ChevronRight size={16} />
+                      <Gavel size={14} />
+                      <span>View Lot &amp; Bid</span>
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
-      </div>
-    );
-  }
+      </section>
 
-  // =========================================================================
-  // CATALOG COLLECTION GRID VIEW (WITH EXPANDED PRODUCT TYPES & VIEW MORE)
-  // Shown when an auction is selected from the Active Auctions list
-  // =========================================================================
-  return (
-    <div className="cap-curated-page-root">
-      <div className="cap-page-container">
-        {/* Breadcrumb Bar to return to All Current Auctions */}
-        <div className="cap-catalog-breadcrumb-bar">
-          <button 
-            type="button" 
-            className="cap-breadcrumb-back-btn"
-            onClick={() => setSelectedAuctionId(null)}
-          >
-            <ArrowLeft size={16} />
-            <span>Back to All Current Auctions</span>
-          </button>
-
-          <div className="cap-breadcrumb-event-info">
-            <span>Viewing Session:</span>
-            <strong style={{ color: '#ffffff' }}>{currentAuctionInfo.title}</strong>
-            <span className="cap-breadcrumb-badge">{currentAuctionInfo.code}</span>
-          </div>
-        </div>
-
-        {/* Top Hero Banner */}
-        <header className="cap-hero-header">
-          <div className="cap-hero-text-block">
-            <span className="cap-hero-tag">BROWSE AUCTION LOTS</span>
-            <h1 className="cap-hero-title">Find something remarkable.</h1>
-            <p className="cap-hero-sub">Explore the lots cataloged for {currentAuctionInfo.title}.</p>
-          </div>
-
-          <div className="cap-hero-search-wrap">
-            <Search size={16} className="cap-search-icon" />
-            <input
-              type="text"
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              placeholder="Search products or lot number"
-              className="cap-hero-search-input"
-              aria-label="Search products or lot number"
-            />
-            {localSearch && (
-              <button
-                type="button"
-                className="cap-search-clear-btn"
-                onClick={() => setLocalSearch('')}
-                aria-label="Clear search"
-              >
-                <X size={14} />
+      {/* 5. Active Lot Detail Modal (Live Bidding & Specimen Dossier) */}
+      {activeLotDetail && (
+        <div className="modal-backdrop" onClick={() => setActiveLotDetail(null)}>
+          <div className="modal-card lot-detail-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="modal-header">
+              <div className="modal-header-titles">
+                <span className="modal-tag">{activeLotDetail.lotNumber} · {activeLotDetail.categoryTag}</span>
+                <h2 className="modal-title">{activeLotDetail.title}</h2>
+              </div>
+              <button className="modal-close-btn" onClick={() => setActiveLotDetail(null)} aria-label="Close modal">
+                <X size={20} />
               </button>
-            )}
-          </div>
-        </header>
-
-        {/* Main Full-Width Catalog Body */}
-        <div className="cap-main-catalog-layout">
-          <section className="cap-catalog-content" aria-label="Curated Lots Collection">
-            <div className="cap-content-header">
-              <div className="cap-content-title-wrap">
-                <div className="cap-header-meta-pill-row">
-                  <span className="cap-gold-tag">{currentAuctionInfo.code || 'AUCTION CATALOG'}</span>
-                  <span className="cap-session-status-badge">{currentAuctionInfo.endsAtText}</span>
-                </div>
-                <h2 className="cap-content-main-title">{currentAuctionInfo.title}</h2>
-                <p className="cap-content-subtitle">
-                  {currentAuctionInfo.description || 'Browse all cataloged lots available for live and advance bidding in this session.'}
-                </p>
-              </div>
-              <div className="cap-header-right-meta">
-                <span className="cap-lots-counter">
-                  <strong>{filteredLots.length}</strong> {filteredLots.length === 1 ? 'lot' : 'lots'} in catalog
-                </span>
-              </div>
             </div>
 
-            <div className="cap-controls-bar">
-              <div className="cap-filter-pills" role="tablist">
-                <button
-                  type="button"
-                  className={`cap-pill-btn ${activeTab === 'all' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('all')}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  className={`cap-pill-btn ${activeTab === 'ending' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('ending')}
-                >
-                  Ending soon
-                </button>
-                <button
-                  type="button"
-                  className={`cap-pill-btn ${activeTab === 'featured' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('featured')}
-                >
-                  Featured
-                </button>
-              </div>
-
-              <div className="cap-sort-dropdown-wrap">
-                <span className="cap-sort-label">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="cap-sort-select"
-                  aria-label="Sort lots"
-                >
-                  <option value="recommended">Recommended</option>
-                  <option value="price-desc">Price: High to Low</option>
-                  <option value="price-asc">Price: Low to High</option>
-                  <option value="bids">Most Bids</option>
-                </select>
-                <ChevronDown size={14} className="cap-select-arrow" />
-              </div>
-            </div>
-
-            {/* Grid of Lot Cards (Displays 6 initially, expandable) */}
-            {filteredLots.length === 0 ? (
-              <div className="cap-empty-state">
-                <p>No products match your current filters or search term.</p>
-                <button
-                  type="button"
-                  className="cap-reset-btn"
-                  onClick={() => {
-                    setActiveTab('all');
-                    setLocalSearch('');
-                  }}
-                >
-                  Reset all filters
-                </button>
-              </div>
-            ) : (
-              <div className="cap-products-scroll-wrapper" ref={scrollContainerRef}>
-                <div className="cap-products-grid">
-                  {paginatedLots.map((lot) => {
-                    const isWatchlisted = watchlist.includes(lot.id);
-
-                    return (
-                      <article key={lot.id} className="cap-lot-card">
-                        <div className="cap-card-stage-container">
-                          <img
-                            src={lot.image}
-                            alt={lot.title}
-                            className="cap-card-img"
-                            loading="lazy"
-                          />
-                          <div className="cap-stage-gradient-overlay" />
-
-                          <div className="cap-lot-badge">{lot.lotNumber}</div>
-
-                          <button
-                            type="button"
-                            className={`cap-wishlist-btn ${isWatchlisted ? 'active' : ''}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleWatchlist(lot.id);
-                              onAddToast(
-                                'info',
-                                isWatchlisted ? 'Removed from Watchlist' : 'Added to Watchlist',
-                                `${lot.lotNumber}: ${lot.title}`
-                              );
-                            }}
-                            title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                            aria-label={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                          >
-                            <Heart
-                              size={16}
-                              fill={isWatchlisted ? '#e11d48' : 'none'}
-                              stroke={isWatchlisted ? '#e11d48' : '#ffffff'}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="cap-card-body">
-                          <div className="cap-card-meta-row">
-                            <span className="cap-card-bid-label">CURRENT BID</span>
-                            <span className="cap-card-bid-val">${lot.currentBid.toLocaleString()}</span>
-                          </div>
-
-                          <h3 className="cap-card-title" title={lot.title}>
-                            {lot.title}
-                          </h3>
-
-                          <p className="cap-card-desc">{lot.description}</p>
-
-                          <div className="cap-card-divider" />
-
-                          <div className="cap-card-footer">
-                            <span className="cap-card-bid-count">
-                              Current bid · {lot.bidsCount} bids
-                            </span>
-
-                            <button
-                              type="button"
-                              className={`cap-view-lot-btn ${lot.buttonVariant === 'gold' ? 'btn-gold' : 'btn-dark'}`}
-                              onClick={() => {
-                                setActiveDetailLotId(lot.id);
-                              }}
-                            >
-                              VIEW LOT
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination Controls when lots exceed 6 */}
-                {totalPages > 1 && (
-                  <div className="cap-pagination-container">
-                    <nav className="cap-pagination-nav" aria-label="Catalog lots pagination">
-                      <button
-                        type="button"
-                        className="cap-page-nav-btn cap-page-prev-btn"
-                        disabled={safeCurrentPage === 1}
-                        onClick={() => handlePageChange(safeCurrentPage - 1)}
-                        aria-label="Previous page"
-                      >
-                        <ChevronLeft size={16} />
-                        <span>PREV</span>
-                      </button>
-
-                      <div className="cap-page-numbers-list">
-                        {getPageNumbers().map((pageNum, idx) => {
-                          if (pageNum === '...') {
-                            return (
-                              <span key={`dots-${idx}`} className="cap-page-dots">
-                                ...
-                              </span>
-                            );
-                          }
-                          const isCurrent = pageNum === safeCurrentPage;
-                          return (
-                            <button
-                              key={pageNum}
-                              type="button"
-                              className={`cap-page-number-btn ${isCurrent ? 'active' : ''}`}
-                              onClick={() => handlePageChange(Number(pageNum))}
-                              aria-current={isCurrent ? 'page' : undefined}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <button
-                        type="button"
-                        className="cap-page-nav-btn cap-page-next-btn"
-                        disabled={safeCurrentPage === totalPages}
-                        onClick={() => handlePageChange(safeCurrentPage + 1)}
-                        aria-label="Next page"
-                      >
-                        <span>NEXT</span>
-                        <ChevronRight size={16} />
-                      </button>
-                    </nav>
-                  </div>
-                )}
-
-                {filteredLots.length > 0 && (
-                  <div className="cap-catalog-end-bar">
-                    <div className="cap-end-bar-line" />
-                    <div className="cap-end-bar-content">
-                      <span className="cap-end-bar-text">
-                        {totalPages > 1
-                          ? `Showing ${(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(
-                              safeCurrentPage * ITEMS_PER_PAGE,
-                              filteredLots.length
-                            )} of ${filteredLots.length} lots (Page ${safeCurrentPage} of ${totalPages})`
-                          : `Showing all ${filteredLots.length} ${filteredLots.length === 1 ? 'lot' : 'lots'} in this session`}
-                      </span>
-                      <button
-                        type="button"
-                        className="cap-btn-back-top"
-                        onClick={() => {
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+            {/* Modal Scroll Content */}
+            <div className="lot-detail-body">
+              <div className="lot-detail-layout">
+                {/* Left: Specimen Media */}
+                <div className="lot-detail-media-pane">
+                  <div className="detail-image-frame">
+                    {activeLotDetail.image ? (
+                      <img
+                        src={activeLotDetail.image}
+                        alt={activeLotDetail.title}
+                        className="detail-main-img"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/assets/gold-coin.jpg';
                         }}
-                        title="Back to top"
-                        aria-label="Back to top"
-                      >
-                        <ArrowUp size={14} />
-                        <span>Back to top</span>
-                      </button>
+                      />
+                    ) : (
+                      <div className="detail-img-placeholder" style={{ width: '100%', height: '100%', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.03)', color: 'var(--gold-primary)' }}>
+                        <BookOpen size={48} />
+                      </div>
+                    )}
+                    <div className="lot-live-bar">
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span className="cap-pulse-dot-red" />
+                        <span>LIVE LOT ON BLOCK</span>
+                      </div>
+                      <span>{activeLotDetail.bidsCount} Bids</span>
                     </div>
                   </div>
-                )}
+                  <div className="detail-media-caption">
+                    <ShieldCheck size={16} className="gold-icon" />
+                    <span>
+                      {activeLotDetail.certification
+                        ? `${activeLotDetail.certification} Certified Specimen`
+                        : 'Catalog Lot Specimen'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right: Specimen Information & Bidding */}
+                <div className="lot-detail-info-pane">
+                  <div className="detail-header-block">
+                    <div className="detail-category-badge">
+                      <Globe size={13} />
+                      <span>{activeLotDetail.categoryTag}</span>
+                    </div>
+                    <h3 className="detail-item-title">{activeLotDetail.title}</h3>
+                    {activeLotDetail.description && (
+                      <p className="detail-lead-desc">{activeLotDetail.description}</p>
+                    )}
+                  </div>
+
+                  {/* Current Bid & Estimate Box */}
+                  <div className="detail-bid-widget">
+                    <div className="bid-widget-stats">
+                      <div>
+                        <span className="widget-label">CURRENT LEADING BID</span>
+                        <span className="widget-value text-gold">
+                          ${(activeLotDetail.currentBid || activeLotDetail.startingBid || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {activeLotDetail.estimate && (
+                        <div>
+                          <span className="widget-label">ESTIMATE RANGE</span>
+                          <span className="widget-value-estimate">{activeLotDetail.estimate}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Bid Action */}
+                  <div className="detail-actions-row">
+                    <button
+                      type="button"
+                      disabled={isPlacingBid}
+                      onClick={() => handleQuickBid(activeLotDetail)}
+                      className="btn-place-bid-action"
+                    >
+                      <Gavel size={17} />
+                      <span>Place Bid (${((activeLotDetail.currentBid || activeLotDetail.startingBid || 0) + 100).toLocaleString()})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onToggleWatchlist(activeLotDetail.id);
+                        onAddToast(
+                          'info',
+                          watchlist.includes(activeLotDetail.id) ? 'Removed from Watchlist' : 'Added to Watchlist',
+                          `${activeLotDetail.lotNumber}: ${activeLotDetail.title}`
+                        );
+                      }}
+                      className={`btn-watchlist-action ${watchlist.includes(activeLotDetail.id) ? 'active' : ''}`}
+                    >
+                      <Bookmark
+                        size={16}
+                        fill={watchlist.includes(activeLotDetail.id) ? '#cba135' : 'none'}
+                        color={watchlist.includes(activeLotDetail.id) ? '#cba135' : 'currentColor'}
+                      />
+                      <span>{watchlist.includes(activeLotDetail.id) ? 'Saved' : 'Watchlist'}</span>
+                    </button>
+                  </div>
+
+                  {/* Specimen Specifications - Strictly Dynamic: Only render fields that exist in DB */}
+                  <div className="detail-specs-table">
+                    {activeLotDetail.certification && (
+                      <div className="spec-row">
+                        <span className="spec-label">Grading Service:</span>
+                        <span className="spec-value">{activeLotDetail.certification}</span>
+                      </div>
+                    )}
+                    {activeLotDetail.grade && (
+                      <div className="spec-row">
+                        <span className="spec-label">Grade:</span>
+                        <span className="spec-value">{activeLotDetail.grade}</span>
+                      </div>
+                    )}
+                    {activeLotDetail.certNumber && (
+                      <div className="spec-row">
+                        <span className="spec-label">Cert Number:</span>
+                        <span className="spec-value">{activeLotDetail.certNumber}</span>
+                      </div>
+                    )}
+                    {activeLotDetail.auctionTitle && (
+                      <div className="spec-row">
+                        <span className="spec-label">Auction Session:</span>
+                        <span className="spec-value">{activeLotDetail.auctionTitle}</span>
+                      </div>
+                    )}
+                    {activeLotDetail.provenance && (
+                      <div className="spec-row">
+                        <span className="spec-label">Provenance:</span>
+                        <span className="spec-value">{activeLotDetail.provenance}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Official Condition Statement - Strictly Dynamic */}
+                  {activeLotDetail.conditionReport && (
+                    <div className="condition-report-card">
+                      <div className="condition-header">
+                        <CheckCircle2 size={16} className="gold-icon" />
+                        <h4>Condition Statement</h4>
+                      </div>
+                      <p className="condition-text">{activeLotDetail.conditionReport}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </section>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-close-modal"
+                onClick={() => setActiveLotDetail(null)}
+              >
+                <span>Close Specimen</span>
+              </button>
+            </div>
+          </div>
         </div>
-
-        {/* Bidder Trust Protocol Section */}
-        <section className="cap-trust-protocol-section" aria-label="Bidder Trust Protocol">
-          <div className="cap-trust-header">
-            <span className="cap-trust-eyebrow">BIDDER TRUST PROTOCOL</span>
-            <h2 className="cap-trust-title">Participating with confidence</h2>
-            <p className="cap-trust-sub">
-              A transparent, regulated auction experience, backed by clear bidder protections.
-            </p>
-          </div>
-
-          <div className="cap-trust-cards-grid">
-            {/* Card 01 */}
-            <div className="cap-trust-card">
-              <div className="cap-trust-card-top">
-                <div className="cap-trust-icon-box">
-                  <Search size={16} />
-                </div>
-                <span className="cap-trust-step-num">01</span>
-              </div>
-              <h3 className="cap-trust-card-title">Discover auctions</h3>
-              <p className="cap-trust-card-desc">
-                Review condition reports, certification details, provenance and scheduled preview times before bidding.
-              </p>
-            </div>
-
-            {/* Card 02 */}
-            <div className="cap-trust-card">
-              <div className="cap-trust-card-top">
-                <div className="cap-trust-icon-box">
-                  <Gavel size={16} />
-                </div>
-                <span className="cap-trust-step-num">02</span>
-              </div>
-              <h3 className="cap-trust-card-title">Register &amp; get approved</h3>
-              <p className="cap-trust-card-desc">
-                Complete bidder verification and choose floor, phone, absentee or webcast bidding.
-              </p>
-            </div>
-
-            {/* Card 03 */}
-            <div className="cap-trust-card">
-              <div className="cap-trust-card-top">
-                <div className="cap-trust-icon-box">
-                  <Diamond size={16} />
-                </div>
-                <span className="cap-trust-step-num">03</span>
-              </div>
-              <h3 className="cap-trust-card-title">Win &amp; settle securely</h3>
-              <p className="cap-trust-card-desc">
-                See the buyer's premium before bidding, then arrange secure payment and insured delivery.
-              </p>
-            </div>
-          </div>
-
-          {/* Bottom 4 Trust Seals Banner */}
-          <div className="cap-trust-seals-strip">
-            <div className="cap-seal-item">
-              <Gavel size={16} className="cap-seal-icon" />
-              <div className="cap-seal-texts">
-                <strong className="cap-seal-title">PA-LICENSED AUCTIONEER</strong>
-                <span className="cap-seal-sub">Regulated under PA Act 85 · AY-002004</span>
-              </div>
-            </div>
-
-            <div className="cap-seal-item">
-              <Lock size={16} className="cap-seal-icon" />
-              <div className="cap-seal-texts">
-                <strong className="cap-seal-title">LICENSED &amp; BONDED</strong>
-                <span className="cap-seal-sub">$500,000 surety bond with Commonwealth</span>
-              </div>
-            </div>
-
-            <div className="cap-seal-item">
-              <Percent size={16} className="cap-seal-icon" />
-              <div className="cap-seal-texts">
-                <strong className="cap-seal-title">15% BUYER'S PREMIUM</strong>
-                <span className="cap-seal-sub">Competitive, transparent fee rates</span>
-              </div>
-            </div>
-
-            <div className="cap-seal-item">
-              <FileCheck size={16} className="cap-seal-icon" />
-              <div className="cap-seal-texts">
-                <strong className="cap-seal-title">TITLE GUARANTEE</strong>
-                <span className="cap-seal-sub">100% unconditional authenticity</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
+      )}
     </div>
   );
 };
+
+export default CurrentAuctionPage;

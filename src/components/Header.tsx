@@ -63,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
     effectiveRoute.startsWith('#auctions') ||
     effectiveRoute === '#current-auction' ||
     effectiveRoute.startsWith('#current-auction') ||
+    effectiveRoute.startsWith('#auction/') ||
     activeSection === 'auctions'
   ) {
     activeTab = 'current-auctions';
@@ -70,7 +71,6 @@ export const Header: React.FC<HeaderProps> = ({
     effectiveRoute === '#catalogs' ||
     effectiveRoute.startsWith('#catalogs') ||
     effectiveRoute.startsWith('#catalog/') ||
-    effectiveRoute.startsWith('#auction/') ||
     effectiveRoute.startsWith('#lot/') ||
     activeSection === 'catalogs'
   ) {

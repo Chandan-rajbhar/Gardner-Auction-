@@ -516,10 +516,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     );
   }
 
-  // Format creation date
-  const memberSinceShort = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
-    : 'Oct 2026';
 
   const memberSinceFull = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
@@ -662,16 +658,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                     <Mail size={15} className="ga-hero-btn-icon-gold" />
                     <span className="meta-bold">{user.email || 'testuser2@example.com'}</span>
                   </span>
-                  <span className="ga-meta-divider">•</span>
-                  <span className="ga-hero-meta-item">
-                    <Calendar size={15} style={{ opacity: 0.7 }} />
-                    <span>Member Since: <strong className="meta-bold">{memberSinceShort}</strong></span>
-                  </span>
-                  <span className="ga-meta-divider">•</span>
-                  <span className="ga-license-active-pill">
-                    <span className="ga-pulse-dot" />
-                    <span>PA License Active</span>
-                  </span>
+
                 </div>
               </div>
             </div>
