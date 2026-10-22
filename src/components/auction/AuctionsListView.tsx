@@ -361,7 +361,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
             className="btn btn-gold"
             onClick={() => setIsNewModalOpen(true)}
           >
-            <span>New Auction</span>
+            <span>Create Auction</span>
           </button>
         </div>
       </div>
