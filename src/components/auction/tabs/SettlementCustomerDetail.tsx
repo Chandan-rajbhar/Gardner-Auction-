@@ -3,16 +3,16 @@ import { SettlementCustomer, SettlementEntry } from '../../../types/auctionDetai
 import { auctionService } from '../../../services/auctionService';
 import { FormModal } from '../../Common/FormModal';
 import { FormField } from '../../Common/FormField';
-import { 
-  ArrowLeft, 
-  Printer, 
-  CreditCard, 
-  Plus, 
-  PackageCheck, 
-  RefreshCw, 
-  Trash2, 
-  Check, 
-  Clock, 
+import {
+  ArrowLeft,
+  Printer,
+  CreditCard,
+  Plus,
+  PackageCheck,
+  RefreshCw,
+  Trash2,
+  Check,
+  Clock,
   ExternalLink,
   DollarSign
 } from 'lucide-react';
@@ -106,7 +106,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           }}
         >
           <ArrowLeft size={16} />
-          <span>← Return To Previous Page</span>
+          <span>Return To Previous Page</span>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -131,8 +131,8 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
       </div>
 
       {/* Customer Header Banner matching requirement */}
-      <div 
-        className="syndication-card"
+      <div
+        className="settlement-table-card"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -159,11 +159,11 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           <div style={{ fontSize: 12, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
             Customer Balance
           </div>
-          <div style={{ 
-            fontFamily: 'var(--font-mono)', 
-            fontSize: 26, 
-            fontWeight: 700, 
-            color: customer.balance > 0 ? '#dc2626' : '#059669' 
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 26,
+            fontWeight: 700,
+            color: customer.balance > 0 ? '#dc2626' : '#059669'
           }}>
             {formatCurrency(customer.balance)}
           </div>
@@ -190,7 +190,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
 
       {/* INVOICE TAB */}
       {activeTab === 'invoice' && (
-        <div className="syndication-card">
+        <div className="settlement-table-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
             <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
               Settlement Ledger & Charges
@@ -221,7 +221,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           </div>
 
           {/* Table: Lot #, Status, Title / Notes, Qty Sold, Entries */}
-          <div className="catalog-table-scroll" style={{ border: '1px solid var(--border-subtle)', borderRadius: 6 }}>
+          <div className="settlement-table-scroll">
             <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
@@ -237,7 +237,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 {customer.lots.map(lot => (
                   <tr key={lot.id}>
                     <td style={{ textAlign: 'center' }}>
-                      <input 
+                      <input
                         type="checkbox"
                         checked={lot.isShipped}
                         onChange={async (e) => {
@@ -253,10 +253,10 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                       #{lot.lotNumber}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span style={{ 
-                        padding: '2px 8px', 
-                        borderRadius: 4, 
-                        fontSize: 11, 
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        fontSize: 11,
                         fontWeight: 600,
                         background: '#dcfce7',
                         color: '#15803d'
@@ -277,11 +277,11 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                       {/* Entries Breakdown List */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 0' }}>
                         {lot.entries.map(ent => (
-                          <div 
+                          <div
                             key={ent.id}
-                            style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
                               justifyContent: 'space-between',
                               fontSize: 12,
                               background: '#fcfbf9',
@@ -363,7 +363,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
 
       {/* SHIPMENTS TAB */}
       {activeTab === 'shipments' && (
-        <div className="syndication-card">
+        <div className="settlement-table-card">
           <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 12 }}>
             Shipping & Fulfilment Status
           </h3>
@@ -377,15 +377,15 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 </span>
               </div>
               <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
-                <div style={{ 
-                  height: '100%', 
-                  background: 'var(--gold-primary)', 
-                  width: `${(customer.shippedCount / Math.max(1, customer.totalLotsCount || customer.lots.length)) * 100}%` 
+                <div style={{
+                  height: '100%',
+                  background: 'var(--gold-primary)',
+                  width: `${(customer.shippedCount / Math.max(1, customer.totalLotsCount || customer.lots.length)) * 100}%`
                 }} />
               </div>
             </div>
 
-            <div className="catalog-table-scroll" style={{ border: '1px solid var(--border-subtle)', borderRadius: 6 }}>
+            <div className="settlement-table-scroll">
               <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
                 <thead>
                   <tr>
@@ -401,10 +401,10 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                       <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>#{lot.lotNumber}</td>
                       <td>{lot.title}</td>
                       <td style={{ textAlign: 'center' }}>
-                        <span style={{ 
-                          padding: '2px 8px', 
-                          borderRadius: 4, 
-                          fontSize: 11, 
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          fontSize: 11,
                           fontWeight: 600,
                           background: lot.isShipped ? '#dcfce7' : '#fee2e2',
                           color: lot.isShipped ? '#15803d' : '#b91c1c'
@@ -456,7 +456,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           </FormField>
 
           <FormField label="Amount ($) *" required>
-            <input 
+            <input
               type="number"
               step="0.01"
               required
@@ -469,7 +469,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           </FormField>
 
           <FormField label="Description">
-            <textarea 
+            <textarea
               rows={2}
               placeholder="e.g. Registered insured courier postage and armored transport handling"
               value={chargeDesc}
