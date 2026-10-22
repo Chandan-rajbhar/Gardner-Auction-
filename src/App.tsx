@@ -35,6 +35,8 @@ import {
   CURRENT_AUCTIONS,
   CURRENT_AUCTION_LOT_ITEMS
 } from './data/currentAuctionData';
+import type { CurrentAuction } from './data/currentAuctionData';
+import { supabase } from './lib/supabase';
 import { playBidSuccessSound } from './utils/sound';
 import {
   Bookmark,
@@ -71,7 +73,8 @@ export type AppRoute =
   | { view: 'lot-detail'; lotId: string; auctionId?: string };
 
 export const App: React.FC = () => {
-  // State: Lots & Live Data
+  // State: Dynamic Auctions & Lots from Supabase
+  const [allAuctions, setAllAuctions] = useState<CurrentAuction[]>(CURRENT_AUCTIONS);
   const [spotlightLot, setSpotlightLot] = useState<LotItem>(SPOTLIGHT_LOT);
   const [liveLots, setLiveLots] = useState<LotItem[]>(CURRENT_AUCTION_LOT_ITEMS);
   const [watchlist, setWatchlist] = useState<string[]>(['spotlight-104']);
@@ -279,6 +282,87 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch dynamic auctions from Supabase with Realtime updates for live buyer site
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchDynamicAuctions() {
+      try {
+        const [{ data: dbAuctions, error }, { data: allLots }] = await Promise.all([
+          supabase.from('auctions').select('*').order('start_date', { ascending: false }),
+          supabase.from('lots').select('id, auction_id, image')
+        ]);
+
+        if (!error && dbAuctions && dbAuctions.length > 0 && isMounted) {
+          const mappedFromDb: CurrentAuction[] = dbAuctions.map((row: any) => {
+            const matchingLots = allLots?.filter((l: any) => l.auction_id === row.id) || [];
+            const lotsCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0) || 12;
+            const isLive = row.status === 'In Progress';
+            const isOpen = row.status === 'Open';
+            const badge = isLive ? 'LIVE WEBCAST' : isOpen ? 'CATALOG OPEN' : 'CLOSING TODAY';
+            const badgeType: 'red' | 'green' | 'gold' = isLive ? 'red' : isOpen ? 'green' : 'gold';
+            const statusText = isLive ? 'Live Webcast Auction' : isOpen ? 'Catalog Open' : 'Closing Today';
+            const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url)
+              ? row.featured_images[0].url
+              : (matchingLots[0]?.image || '/assets/gold-coin.jpg');
+
+            return {
+              id: row.id,
+              title: row.name,
+              sessionTitle: `SESSION I: ${row.name.toUpperCase()}`,
+              auctionType: isLive ? 'Live Webcast Auction' : 'Online Only Auction',
+              status: statusText as any,
+              badge,
+              badgeType,
+              companyName: 'Gardner Auction Service',
+              galleryName: 'Heritage Saleroom & Online Simulcast',
+              address: row.address1 || '1960 Heritage Way, Suite 400',
+              cityStateZip: `${row.city || 'Missoula'}, ${row.state || 'MT'} ${row.zip || '59801'}`,
+              location: `${row.city || 'Missoula'}, ${row.state || 'MT'} Saleroom & HiBid Simulcast`,
+              dateRange: `${row.start_date || 'Oct 22'} – ${row.end_date || 'Oct 29'}`,
+              dateLabel: isLive ? 'LIVE NOW' : 'ONLINE CATALOG',
+              scheduleText: 'Simulcast bidding open daily; live clerk begins at 10:00 AM MDT',
+              typeTag: (row.auction_type || 'Coins & Currency').toUpperCase(),
+              lotsCount,
+              estimate: '$50,000 – $750,000',
+              description: row.description || 'Verified authentic curated collectibles from private family estates.',
+              category: row.category || 'Coins & Currency',
+              lots: [],
+              image: img,
+              buttonText: isLive ? 'ENTER LIVE AUCTION' : 'BROWSE CATALOG',
+              buttonVariant: isLive ? 'dark' : 'gold',
+              detailUrl: '#current-auction'
+            };
+          });
+
+          // Merge: DB auctions first, then mock auctions not in DB
+          const dbIds = new Set(mappedFromDb.map(a => a.id));
+          const merged = [...mappedFromDb, ...CURRENT_AUCTIONS.filter(a => !dbIds.has(a.id))];
+          setAllAuctions(merged);
+        }
+      } catch (err) {
+        console.warn('[App] Supabase dynamic auctions fetch error:', err);
+      }
+    }
+
+    fetchDynamicAuctions();
+
+    // Listen to Supabase Realtime changes on auctions table
+    const channel = supabase
+      .channel('realtime:frontend_auctions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, () => {
+        fetchDynamicAuctions();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lots' }, () => {
+        fetchDynamicAuctions();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Format seconds into display strings
   const formatTime = (totalSeconds: number, formatHour = false): string => {
     if (totalSeconds <= 0) return 'CLOSING NOW';
@@ -419,9 +503,9 @@ export const App: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Filtered & Sorted Current Auction Events (from shared Current Auctions data source)
+  // Filtered & Sorted Current Auction Events (from shared dynamic Supabase + mock data source)
   const filteredEvents = useMemo(() => {
-    let result = CURRENT_AUCTIONS.filter((event) => {
+    let result = allAuctions.filter((event) => {
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -447,7 +531,7 @@ export const App: React.FC = () => {
     }
 
     return result;
-  }, [searchTerm, selectedCategory, sortOrder]);
+  }, [allAuctions, searchTerm, selectedCategory, sortOrder]);
 
   // Filtered & Sorted Live Lots
   const filteredSortedLots = useMemo(() => {
