@@ -27,7 +27,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onCancel} style={{ zIndex: 100 }}>
+    <div className="modal-overlay" onClick={onCancel} style={{ zIndex: 9999 }}>
       <div 
         className="modal-content" 
         onClick={(e) => e.stopPropagation()}

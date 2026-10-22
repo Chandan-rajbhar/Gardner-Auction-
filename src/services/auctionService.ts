@@ -195,20 +195,17 @@ class AuctionService {
   }
 
   public async deleteAuction(id: string): Promise<boolean> {
-    const prevLen = this.auctions.length;
     this.auctions = this.auctions.filter(a => a.id !== id);
-    if (this.auctions.length !== prevLen) {
-      this.persist();
+    this.persist();
 
-      try {
-        await supabaseAdmin.from('auctions').delete().eq('id', id);
-      } catch (e) {
-        console.warn('[AuctionService] Supabase delete notice:', e);
-      }
-
-      return true;
+    try {
+      await supabaseAdmin.from('auctions').delete().eq('id', id);
+      await supabaseAdmin.from('lots').delete().eq('auction_id', id);
+    } catch (e) {
+      console.warn('[AuctionService] Supabase delete notice:', e);
     }
-    return false;
+
+    return true;
   }
 
   // Settlements

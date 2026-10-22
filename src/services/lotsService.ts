@@ -69,13 +69,13 @@ export function lotItemToDB(lot: LotItem): DBLotRow {
     auction_id: lot.auctionId || 'auc-001',
     lot_number: lot.lotNumber,
     title: lot.title,
-    category: lot.category,
+    category: lot.category || 'Rare Numismatics & Curated Lots',
     image: lot.image || '/assets/gold-coin.jpg',
-    starting_bid: lot.startingBid,
-    reserve_price: lot.reservePrice,
-    estimate_low: lot.estimateLow,
-    estimate_high: lot.estimateHigh,
-    current_bid: lot.currentBid,
+    starting_bid: Number(lot.startingBid) || 0,
+    reserve_price: Number(lot.reservePrice) || 0,
+    estimate_low: Number(lot.estimateLow) || 0,
+    estimate_high: Number(lot.estimateHigh) || 0,
+    current_bid: Number(lot.currentBid) || Number(lot.startingBid) || 0,
     high_bidder_paddle: lot.highBidderPaddle || null,
     high_bidder_name: lot.highBidderName || null,
     status: lot.status,
@@ -197,10 +197,18 @@ export const lotsService = {
    */
   async deleteLot(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabaseAdmin
+      let { error } = await supabaseAdmin
         .from('lots')
         .delete()
         .eq('id', id);
+
+      if (error) {
+        const fallback = await supabase
+          .from('lots')
+          .delete()
+          .eq('id', id);
+        error = fallback.error;
+      }
 
       if (error) {
         console.error('[lotsService] Delete lot error:', error.message);
