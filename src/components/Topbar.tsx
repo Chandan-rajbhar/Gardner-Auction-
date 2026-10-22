@@ -1,6 +1,4 @@
-import React from 'react';
-import { Bell } from 'lucide-react';
-import { FiSidebar } from 'react-icons/fi';
+import { Bell, PanelLeft } from 'lucide-react';
 import { Auction, NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -60,7 +58,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           aria-expanded={isSidebarOpen}
           id="btn-toggle-sidebar"
         >
-          <FiSidebar size={18} />
+          <PanelLeft size={18} />
         </button>
         <div className="topbar-breadcrumb-title">
           <span>{getSectionTitle(currentSection)}</span>
