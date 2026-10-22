@@ -138,9 +138,8 @@
    2. Main Two-Column Layout (Sidebar + Grid)
    ========================================================================== */
 .cap-main-catalog-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 32px;
+  display: block;
+  width: 100%;
 }
 
 /* ==========================================================================
@@ -284,12 +283,11 @@
    4. Right Column: Content Header & Grid
    ========================================================================== */
 .cap-catalog-content {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   background: #141517;
   border: 1px solid #282c35;
   border-radius: 14px;
-  padding: 24px 24px 20px 24px;
+  padding: 28px 28px 24px 28px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
@@ -299,37 +297,77 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #24272e;
 }
 
 .cap-content-title-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  max-width: 800px;
+}
+
+.cap-header-meta-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .cap-gold-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #dfba52;
 }
 
+.cap-session-status-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .cap-content-main-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 28px;
-  font-weight: 500;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 600;
   color: #ffffff;
   margin: 0;
   line-height: 1.2;
 }
 
+.cap-content-subtitle {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.cap-header-right-meta {
+  display: flex;
+  align-items: center;
+}
+
 .cap-lots-counter {
-  font-size: 13px;
-  color: #8e96a4;
+  font-size: 13.5px;
+  color: #94a3b8;
+  background: #1c1f26;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #2d313b;
+}
+
+.cap-lots-counter strong {
+  color: #dfba52;
 }
 
 /* Controls Bar (Filter Pills & Sort) */
@@ -599,8 +637,8 @@
 
 .cap-products-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
   width: 100%;
 }
 
@@ -772,7 +810,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.cap-card-bid-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #78716c;
 }
 
 .cap-card-cat-tag {
@@ -784,7 +830,7 @@
 }
 
 .cap-card-bid-val {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: #15171e;
 }
@@ -1167,6 +1213,28 @@
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 12px;
+}
+
+.cap-lot-seller-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(223, 186, 82, 0.12);
+  border: 1px solid rgba(223, 186, 82, 0.35);
+  color: #dfba52;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 9px;
+  border-radius: 12px;
+}
+
+.cap-lot-seller-badge strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.cap-seller-icon {
+  color: #dfba52;
 }
 
 .cap-shield-icon {
@@ -3412,4 +3480,412 @@
     grid-template-columns: 1fr;
     gap: 14px;
   }
+}
+
+/* ==========================================================================
+   MULTI-AUCTION OVERVIEW STYLING (Tarika 1: Multi-Auction Card Flow)
+   ========================================================================== */
+
+.cap-auctions-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.cap-auctions-overview-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cap-auctions-header-text {
+  flex: 1;
+  min-width: 280px;
+}
+
+.cap-auctions-header-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #dfba52;
+  margin-bottom: 8px;
+}
+
+.cap-auctions-header-title {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  line-height: 1.25;
+}
+
+.cap-auctions-header-sub {
+  font-size: 14.5px;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 680px;
+  line-height: 1.55;
+}
+
+/* Filter Pills Bar */
+.cap-auctions-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cap-auctions-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cap-auction-filter-pill {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #15171a;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cap-auction-filter-pill:hover {
+  background: rgba(223, 186, 82, 0.1);
+  color: #ffffff;
+  border-color: rgba(223, 186, 82, 0.35);
+}
+
+.cap-auction-filter-pill.active {
+  background: linear-gradient(135deg, rgba(223, 186, 82, 0.2) 0%, rgba(197, 155, 39, 0.28) 100%);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+.cap-auction-pill-badge {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cap-auction-filter-pill.active .cap-auction-pill-badge {
+  background: #dfba52;
+  color: #0c0d0e;
+}
+
+/* Multi-Auction Cards Grid */
+.cap-auctions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 26px;
+}
+
+@media (max-width: 440px) {
+  .cap-auctions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cap-auction-card {
+  background: #131518;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.cap-auction-card:hover {
+  border-color: rgba(223, 186, 82, 0.6);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(223, 186, 82, 0.25);
+}
+
+/* Media Banner */
+.cap-auction-card-media {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: #1c1f24;
+  cursor: pointer;
+}
+
+.cap-auction-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.cap-auction-card:hover .cap-auction-card-img {
+  transform: scale(1.04);
+}
+
+.cap-auction-media-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(19, 21, 24, 0.95) 0%, rgba(19, 21, 24, 0.25) 55%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+}
+
+.cap-auction-card-badges {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 2;
+}
+
+.cap-status-pill-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+}
+
+.cap-status-pill-closing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(223, 186, 82, 0.92);
+  color: #0c0d0e;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.cap-status-pill-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.92);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.cap-pulse-dot-red {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation: pulse-dot 1.4s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.cap-auction-lots-pill {
+  background: rgba(12, 13, 14, 0.88);
+  border: 1px solid rgba(223, 186, 82, 0.35);
+  color: #dfba52;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  letter-spacing: 0.5px;
+}
+
+/* Card Body Content */
+.cap-auction-card-body {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.cap-auction-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cap-auction-card-code {
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #dfba52;
+  letter-spacing: 0.8px;
+}
+
+.cap-auction-card-category {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cap-auction-card-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.cap-auction-card-title:hover {
+  color: #f5cb50;
+}
+
+.cap-auction-card-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.55;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card Meta Details */
+.cap-auction-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 12.5px;
+  color: #cbd5e1;
+}
+
+.cap-meta-row-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cap-meta-ico {
+  color: #dfba52;
+  flex-shrink: 0;
+}
+
+/* Card Action Button */
+.cap-auction-card-footer {
+  padding: 0 22px 22px 22px;
+}
+
+.cap-btn-browse-catalog {
+  width: 100%;
+  height: 44px;
+  background: linear-gradient(135deg, #dfba52 0%, #c59b27 100%);
+  color: #0c0d0e;
+  border: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.3px;
+}
+
+.cap-btn-browse-catalog:hover {
+  background: linear-gradient(135deg, #f5cb50 0%, #dfba52 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(223, 186, 82, 0.4);
+}
+
+/* Top Breadcrumb Bar when viewing an Auction's Catalog */
+.cap-catalog-breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #131518;
+  border: 1px solid rgba(223, 186, 82, 0.3);
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.cap-breadcrumb-back-btn {
+  background: none;
+  border: none;
+  color: #dfba52;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  transition: color 0.15s ease;
+}
+
+.cap-breadcrumb-back-btn:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.cap-breadcrumb-event-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.cap-breadcrumb-badge {
+  background: rgba(223, 186, 82, 0.18);
+  color: #dfba52;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
 }

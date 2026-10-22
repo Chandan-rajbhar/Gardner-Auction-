@@ -40,6 +40,8 @@ export interface CatalogLot {
   estimate: string;
   presets: number[];
   recentBids: BidEntry[];
+  sellerName?: string;
+  quantity?: number;
 }
 
 export interface CurrentAuction extends CuratedEvent {
@@ -78,6 +80,8 @@ export const INITIAL_CATALOG_LOTS: CatalogLot[] = [
     categoryKey: 'coins',
     title: '1924 Saint-Gaudens Gold Eagle',
     description: 'A beautifully preserved $20 gold coin, graded MS-64.',
+    sellerName: 'Philadelphia Estate Consignor',
+    quantity: 1,
     currentBid: 17200,
     bidsCount: 12,
     buttonVariant: 'gold',

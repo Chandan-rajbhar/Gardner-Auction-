@@ -2,10 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import './CurrentAuctionPage.css';
 import {
   Search, Heart, X, ChevronDown, ChevronLeft, ChevronRight, Gavel, Diamond, Lock, Percent, FileCheck,
-  Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, Users, Phone, Truck, Crown,
-  Sun, Moon, ArrowUp
+  Volume2, VolumeX, Shield, Radio, ZoomIn, RotateCw, Maximize2, Feather, User, Users, Phone, Truck, Crown,
+  Sun, Moon, ArrowUp, ArrowLeft, Calendar, MapPin, Clock, Sparkles, Layers
 } from 'lucide-react';
 import type { EnrichedLotItem } from './types';
+import { supabase } from '../../lib/supabase';
 
 interface CurrentAuctionPageProps {
   watchlist: string[];
@@ -30,20 +31,97 @@ import type {
 export { INITIAL_CATALOG_LOTS, CURRENT_AUCTIONS };
 export type { BidEntry, CategoryKey, CatalogLot, CurrentAuction };
 
+export interface ActiveAuctionCardItem {
+  id: string;
+  code: string;
+  title: string;
+  sessionTitle: string;
+  category: string;
+  description: string;
+  status: 'Live Webcast Auction' | 'Closing Today' | 'Catalog Open' | 'Upcoming';
+  badge: string;
+  badgeType: 'red' | 'green' | 'gold';
+  lotsCount: number;
+  endsAtText: string;
+  estimate: string;
+  image: string;
+  platform: string;
+  lots?: CatalogLot[];
+}
+
+export const INITIAL_ACTIVE_AUCTIONS: ActiveAuctionCardItem[] = [
+  {
+    id: 'auc-spring',
+    code: 'AUC-SPRING',
+    title: 'Spring Collector Auction',
+    sessionTitle: 'Session II: Rarities of the United States Mint',
+    category: 'Coins & Currency',
+    status: 'Live Webcast Auction',
+    badge: 'LIVE WEBCAST',
+    badgeType: 'red',
+    lotsCount: 15,
+    endsAtText: 'Ends Today • 4:30 PM EST',
+    estimate: 'Est. $840,000 – $1,140,000',
+    image: '/images/hero_coin.jpg',
+    platform: 'HiBid & Live Rostrum Simulcast',
+    description: 'Featuring certified private vault numismatics including 1924 Saint-Gaudens Double Eagle and 1889 Morgan Silver Dollar with verified CAC gold shields.',
+    lots: INITIAL_CATALOG_LOTS
+  },
+  {
+    id: 'auc-002',
+    code: 'HGS-2026-10-22',
+    title: 'Highlander Gold & Silver 10/22/26',
+    sessionTitle: 'Session I: Fine Gold & Silver Bullion',
+    category: 'Rare US Gold & Bullion',
+    status: 'Closing Today',
+    badge: 'CLOSING TODAY',
+    badgeType: 'gold',
+    lotsCount: 272,
+    endsAtText: 'Ends Oct 22 • 7:00 PM MT',
+    estimate: 'Est. $1,420,000 – $2,100,000',
+    image: '/images/hero_coin.jpg',
+    platform: 'HiBid Online Only Store',
+    description: 'Fine investment bullion, historic pre-1933 US gold double eagles, and high-grade Carson City Morgan silver dollars from private vaults.',
+    lots: INITIAL_CATALOG_LOTS.filter((l) => l.categoryKey === 'coins')
+  },
+  {
+    id: 'auc-001',
+    code: 'GA-2026-10-GOLD',
+    title: 'Rolex, Fine Jewelry & Historic Numismatics',
+    sessionTitle: 'Session III: Estate Diamonds & Luxury Watches',
+    category: 'Jewelry & Watches',
+    status: 'Catalog Open',
+    badge: 'CATALOG OPEN',
+    badgeType: 'green',
+    lotsCount: 45,
+    endsAtText: 'Ends Oct 25 • 8:00 PM EST',
+    estimate: 'Est. $1,250,000 – $1,650,000',
+    image: '/images/diamond_ring.jpg',
+    platform: 'Gardner Saleroom Webcast',
+    description: 'Curated certified estate jewelry, Old European diamond solitaires, and Swiss investment chronometers from prominent estate collections.',
+    lots: INITIAL_CATALOG_LOTS.filter((l) => l.categoryKey === 'jewelry' || l.categoryKey === 'horology')
+  }
+];
+
 export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   watchlist,
   searchQuery,
   onToggleWatchlist,
   onAddToast
 }) => {
+  // Multi-Auction Selection State (Tarika 1: Multi-Auction Card Flow)
+  const [activeAuctions, setActiveAuctions] = useState<ActiveAuctionCardItem[]>(INITIAL_ACTIVE_AUCTIONS);
+  const [selectedAuctionId, setSelectedAuctionId] = useState<string | null>(null);
+  const [auctionSearch, setAuctionSearch] = useState<string>('');
+  const [auctionFilter, setAuctionFilter] = useState<'all' | 'live' | 'closing' | 'open'>('all');
+
   const [lots, setLots] = useState<CatalogLot[]>(INITIAL_CATALOG_LOTS);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('all');
   const [activeTab, setActiveTab] = useState<'all' | 'ending' | 'featured'>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'price-asc' | 'price-desc' | 'bids'>('recommended');
   const [localSearch, setLocalSearch] = useState<string>('');
 
-  // Pagination State: 6 lots per page
-  const ITEMS_PER_PAGE = 6;
+  // Pagination State: 9 lots per page (3x3 grid)
+  const ITEMS_PER_PAGE = 9;
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Scroll container reference for smooth internal products scrolling
@@ -60,8 +138,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   // Interactive View Lot Terminal States
   const [isLightTheme, setIsLightTheme] = useState<boolean>(true);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
-  const [activeThumb, setActiveThumb] = useState<'obverse' | 'reverse' | 'edge view' | 'full slab'>('obverse');
-  const [activeDossierTab, setActiveDossierTab] = useState<'specs' | 'provenance' | 'condition' | 'vaulting'>('specs');
+  const [activeThumb, setActiveThumb] = useState<string>('primary view');
   const [stageZoom, setStageZoom] = useState<boolean>(false);
   const [stageRotated, setStageRotated] = useState<boolean>(false);
 
@@ -171,32 +248,156 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
         });
       }
     }
-  }, [selectedCategory, activeTab, localSearch, searchQuery, sortBy]);
+  }, [activeTab, localSearch, searchQuery, sortBy]);
 
   // Search query sync from header if passed
   const effectiveSearch = localSearch || searchQuery || '';
 
-  // Category counts
-  const counts = useMemo(() => {
-    return {
-      all: lots.length,
-      coins: lots.filter((l) => l.categoryKey === 'coins').length,
-      jewelry: lots.filter((l) => l.categoryKey === 'jewelry').length,
-      art: lots.filter((l) => l.categoryKey === 'art').length,
-      antiques: lots.filter((l) => l.categoryKey === 'antiques').length,
-      horology: lots.filter((l) => l.categoryKey === 'horology').length,
-      americana: lots.filter((l) => l.categoryKey === 'americana').length,
-      decorative: lots.filter((l) => l.categoryKey === 'decorative').length
-    };
-  }, [lots]);
+  function mapCategoryToKey(cat?: string): CategoryKey {
+    if (!cat) return 'coins';
+    const c = cat.toLowerCase();
+    if (c.includes('coin') || c.includes('gold') || c.includes('silver') || c.includes('currency') || c.includes('numismatic')) return 'coins';
+    if (c.includes('jewel') || c.includes('diamond') || c.includes('ring')) return 'jewelry';
+    if (c.includes('art') || c.includes('paint') || c.includes('print')) return 'art';
+    if (c.includes('antique')) return 'antiques';
+    if (c.includes('watch') || c.includes('horolog') || c.includes('clock')) return 'horology';
+    if (c.includes('americana') || c.includes('manuscript') || c.includes('document')) return 'americana';
+    if (c.includes('decor') || c.includes('furniture')) return 'decorative';
+    return 'coins';
+  }
+
+  const currentAuctionInfo = useMemo(() => {
+    return activeAuctions.find((a) => a.id === selectedAuctionId) || activeAuctions[0];
+  }, [activeAuctions, selectedAuctionId]);
+
+  // 1. Fetch dynamic auctions from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSupabaseAuctions() {
+      try {
+        const { data, error } = await supabase
+          .from('auctions')
+          .select('*')
+          .order('start_date', { ascending: false });
+
+        if (!error && data && data.length > 0 && isMounted) {
+          const mappedFromDb: ActiveAuctionCardItem[] = data.map((row: any) => {
+            const lotCount = row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0) || 12;
+            const status = row.status === 'In Progress' ? 'Live Webcast Auction' : row.status === 'Open' ? 'Catalog Open' : 'Closing Today';
+            const badge = row.status === 'In Progress' ? 'LIVE WEBCAST' : row.status === 'Open' ? 'CATALOG OPEN' : 'CLOSING TODAY';
+            const badgeType = row.status === 'In Progress' ? 'red' : row.status === 'Open' ? 'green' : 'gold';
+            const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url) ? row.featured_images[0].url : '/images/hero_coin.jpg';
+
+            return {
+              id: row.id,
+              code: row.code || `AUC-${row.id.toString().slice(-4)}`,
+              title: row.name,
+              sessionTitle: `${row.code || 'AUCTION'} Session`,
+              category: row.auction_type === 'HiBid' ? 'HiBid Simulcast' : 'Catalog Auction',
+              description: row.description || 'Premier curated collector items, verified authentic and certified.',
+              status: status as any,
+              badge,
+              badgeType: badgeType as any,
+              lotsCount: lotCount,
+              endsAtText: row.end_date ? `Ends ${row.end_date}` : 'Closing Today',
+              estimate: 'Est. $600,000 – $1,200,000',
+              image: img,
+              platform: row.auction_type || 'HiBid Simulcast'
+            };
+          });
+
+          setActiveAuctions((prev) => {
+            const dbIds = new Set(mappedFromDb.map((a) => a.id));
+            const remainingCustom = prev.filter((a) => !dbIds.has(a.id));
+            return [...mappedFromDb, ...remainingCustom];
+          });
+        }
+      } catch (err) {
+        console.warn('[CurrentAuctionPage] Supabase auctions fetch notice:', err);
+      }
+    }
+
+    loadSupabaseAuctions();
+    return () => { isMounted = false; };
+  }, []);
+
+  // 2. Fetch dynamic lots from Supabase when an auction is selected
+  useEffect(() => {
+    if (!selectedAuctionId) return;
+    let isMounted = true;
+
+    async function loadAuctionLots() {
+      try {
+        const { data, error } = await supabase
+          .from('lots')
+          .select('*')
+          .eq('auction_id', selectedAuctionId)
+          .order('lot_number', { ascending: true });
+
+        if (!error && data && data.length > 0 && isMounted) {
+          const converted: CatalogLot[] = data.map((d: any) => ({
+            id: d.id,
+            lotNumber: `LOT ${d.lot_number}`,
+            categoryTag: (d.category || 'Coins & Currency').toUpperCase(),
+            categoryKey: mapCategoryToKey(d.category),
+            title: d.title,
+            description: d.condition_report || d.title,
+            currentBid: Number(d.current_bid) || Number(d.starting_bid) || 100,
+            bidsCount: Number(d.bids_count) || 0,
+            buttonVariant: 'gold',
+            isEndingSoon: d.status === 'upcoming',
+            isFeatured: true,
+            artType: 'gold-slab',
+            image: d.image || '/images/hero_coin.jpg',
+            estimate: `$${Number(d.estimate_low || 1000).toLocaleString()} – $${Number(d.estimate_high || 2000).toLocaleString()}`,
+            presets: [100, 250, 500],
+            recentBids: [],
+            sellerName: d.seller_name || d.seller || 'Estate Consignor #101',
+            quantity: Number(d.quantity) || 1
+          }));
+          setLots(converted);
+          return;
+        }
+      } catch (e) {
+        console.warn('[CurrentAuctionPage] Supabase lots fetch notice:', e);
+      }
+
+      // Fallback to local lots if not found in Supabase
+      const found = activeAuctions.find((a) => a.id === selectedAuctionId);
+      if (found && found.lots && found.lots.length > 0) {
+        setLots(found.lots);
+      } else {
+        setLots(INITIAL_CATALOG_LOTS);
+      }
+    }
+
+    loadAuctionLots();
+    return () => { isMounted = false; };
+  }, [selectedAuctionId, activeAuctions]);
+
+  // Filtered active auctions for the Multi-Auction view
+  const filteredAuctions = useMemo(() => {
+    return activeAuctions.filter((auc) => {
+      const matchesSearch =
+        !auctionSearch.trim() ||
+        auc.title.toLowerCase().includes(auctionSearch.toLowerCase()) ||
+        auc.code.toLowerCase().includes(auctionSearch.toLowerCase()) ||
+        auc.category.toLowerCase().includes(auctionSearch.toLowerCase()) ||
+        auc.description.toLowerCase().includes(auctionSearch.toLowerCase());
+
+      const matchesFilter =
+        auctionFilter === 'all' ||
+        (auctionFilter === 'live' && (auc.status === 'Live Webcast Auction' || auc.badgeType === 'red')) ||
+        (auctionFilter === 'closing' && (auc.status === 'Closing Today' || auc.badgeType === 'gold')) ||
+        (auctionFilter === 'open' && (auc.status === 'Catalog Open' || auc.badgeType === 'green'));
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [activeAuctions, auctionSearch, auctionFilter]);
 
   // Filtered and Sorted Lots
   const filteredLots = useMemo(() => {
     let result = [...lots];
-
-    if (selectedCategory !== 'all') {
-      result = result.filter((l) => l.categoryKey === selectedCategory);
-    }
 
     if (activeTab === 'ending') {
       result = result.filter((l) => l.isEndingSoon);
@@ -210,8 +411,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
         (l) =>
           l.lotNumber.toLowerCase().includes(q) ||
           l.title.toLowerCase().includes(q) ||
-          l.description.toLowerCase().includes(q) ||
-          l.categoryTag.toLowerCase().includes(q)
+          l.description.toLowerCase().includes(q)
       );
     }
 
@@ -224,7 +424,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     }
 
     return result;
-  }, [lots, selectedCategory, activeTab, effectiveSearch, sortBy]);
+  }, [lots, activeTab, effectiveSearch, sortBy]);
 
   // Pagination calculations (6 lots per page)
   const totalPages = Math.ceil(filteredLots.length / ITEMS_PER_PAGE);
@@ -333,17 +533,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     setBidError(null);
   };
 
-  // Category title display on right side
-  const getCategoryTitle = () => {
-    if (selectedCategory === 'coins') return 'Coins & currency';
-    if (selectedCategory === 'jewelry') return 'Jewelry & watches';
-    if (selectedCategory === 'art') return 'Fine art';
-    if (selectedCategory === 'antiques') return 'Antiques & silver';
-    if (selectedCategory === 'horology') return 'Horology & timepieces';
-    if (selectedCategory === 'americana') return 'Americana & manuscripts';
-    if (selectedCategory === 'decorative') return 'Mid-century & decorative';
-    return 'All products';
-  };
+
 
   const getBadgeClass = (type: BidEntry['type']) => {
     switch (type) {
@@ -358,137 +548,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     }
   };
 
-  const getLotAboutDetails = (lot: CatalogLot) => {
-    switch (lot.id) {
-      case 'spotlight-104':
-        return {
-          aboutText:
-            'A certified 1924 $20 gold coin with the celebrated high-relief Liberty design by Augustus Saint-Gaudens. Preserved in a protective grading holder and suited to U.S. gold and numismatic collections.',
-          yearOrigin: '1924 · United States',
-          material: 'Gold · $20 denomination',
-          condition: 'PCGS MS-64 · certified'
-        };
-      case 'lot-701':
-        return {
-          aboutText:
-            'A classic 1889 Philadelphia mint Morgan silver dollar with sharp breast feathers and frosted cartwheel luster. Housed in a sonically sealed NGC tamper-evident slab.',
-          yearOrigin: '1889 · Philadelphia, PA',
-          material: 'Silver · $1 denomination',
-          condition: 'NGC MS-62 · certified'
-        };
-      case 'lot-702':
-        return {
-          aboutText:
-            'Finely pierced platinum filigree setting mounting a central 1.85-carat old European-cut diamond, bordered by natural calibre-cut accent stones and milgrain edging.',
-          yearOrigin: 'c. 1910 · England',
-          material: 'Platinum & 1.85ct Diamond',
-          condition: 'Excellent · period authentic'
-        };
-      case 'lot-703':
-        return {
-          aboutText:
-            'Heavy-gauge four-piece sterling silver service by Gorham, comprising teapot, covered sugar, waste bowl, and creamer with hand-chased floral repoussé scrollwork.',
-          yearOrigin: 'c. 1895 · Providence, RI',
-          material: 'Sterling Silver (.925)',
-          condition: 'Polished · original patina'
-        };
-      case 'lot-704':
-        return {
-          aboutText:
-            'Nocturnal industrial landscape depicting Pittsburgh blast furnaces reflecting across river waters. Signed lower left in period carved giltwood frame.',
-          yearOrigin: 'c. 1912 · Pittsburgh, PA',
-          material: 'Oil on linen canvas',
-          condition: 'Conserved · framed original'
-        };
-      case 'lot-705':
-        return {
-          aboutText:
-            'High-grade 18-karat yellow gold hunter-case pocket watch featuring 21-jewel Swiss movement, enamel dial with Roman numerals, and engine-turned scroll case.',
-          yearOrigin: 'c. 1905 · Switzerland',
-          material: '18k Yellow Gold · Enamel',
-          condition: 'Running · excellent case'
-        };
-      case 'lot-706':
-        return {
-          aboutText:
-            'First year of issue Augustus Saint-Gaudens Indian Head design struck without motto. Displays radiant honey luster with pristine fields and sharp feather definition.',
-          yearOrigin: '1907 · Philadelphia, PA',
-          material: 'Gold · $10 denomination',
-          condition: 'PCGS MS-63 · certified'
-        };
-      case 'lot-707':
-        return {
-          aboutText:
-            'Geometric French platinum link articulated bracelet mounted with 28 matched calibre-cut untreated Ceylon blue sapphires and 4.2 carats of transition-cut diamonds.',
-          yearOrigin: 'c. 1925 · Paris, France',
-          material: 'Platinum, Sapphire & Diamond',
-          condition: 'Pristine · clasp secure'
-        };
-      case 'lot-708':
-        return {
-          aboutText:
-            'Dramatic atmospheric night vista of the Monongahela River industrial corridor with smoke plumes illuminated by Bessemer converters. Original Pittsburgh provenance.',
-          yearOrigin: '1916 · Pennsylvania',
-          material: 'Oil on artist board',
-          condition: 'Cleaned · museum glaze'
-        };
-      case 'lot-709':
-        return {
-          aboutText:
-            'Philadelphia blockfront four-drawer bureau with carved fan prospect door, fluted quarter columns, and bold ogee bracket feet. Retains original brasses.',
-          yearOrigin: 'c. 1775 · Philadelphia, PA',
-          material: 'Carved solid mahogany',
-          condition: 'Historic patina · all original'
-        };
-      case 'lot-710':
-        return {
-          aboutText:
-            'Classic monochromatic silver sunburst dial chronograph with tachymeter track and Valjoux 72 manual-wind movement in an unpolished stainless steel Oyster case.',
-          yearOrigin: '1964 · Geneva, Switzerland',
-          material: 'Stainless Steel · Valjoux 72',
-          condition: 'Collector grade · serviced'
-        };
-      case 'lot-711':
-        return {
-          aboutText:
-            'Handwritten folio letter regarding Revolutionary War militia supply logistics, with complete wax seal remnant and ink docketing on heavy chain-laid rag paper.',
-          yearOrigin: '1776 · Philadelphia, PA',
-          material: 'Rag paper · iron gall ink',
-          condition: 'Archivally stabilized'
-        };
-      case 'lot-712':
-        return {
-          aboutText:
-            'Early production Herman Miller model 670 & 671 featuring figured Brazilian rosewood five-ply shells and supple black glove leather cushions with down filling.',
-          yearOrigin: '1968 · Zeeland, Michigan',
-          material: 'Rosewood, Leather & Cast Alum',
-          condition: 'Light patina · patent labels'
-        };
-      case 'lot-713':
-        return {
-          aboutText:
-            'High-grade manual-wind observatory chronometer with Breguet overcoil hairspring, Geneva seal finishing, and immaculate guilloché silver dial.',
-          yearOrigin: '1968 · Le Locle, Switzerland',
-          material: 'Solid 18k Gold & Sapphire',
-          condition: 'Pristine · archival papers'
-        };
-      case 'lot-714':
-        return {
-          aboutText:
-            'Museum-exhibited maritime landscape captured with rich nocturnal chiaroscuro and masterfully layered tonal glazes in an ornate giltwood frame.',
-          yearOrigin: 'c. 1895 · Boston, MA',
-          material: 'Oil on linen canvas',
-          condition: 'Conserved · original frame'
-        };
-      default:
-        return {
-          aboutText: lot.description,
-          yearOrigin: '1924 · United States',
-          material: 'Museum / Collector Grade',
-          condition: 'Certified · Authenticated'
-        };
-    }
-  };
+
 
   // =========================================================================
   // VIEW LOT DETAIL VIEW (DESKTOP PAGE LAYOUT MATCHING USER SCREENSHOT)
@@ -497,24 +557,19 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     const currentInputVal = parseInt(customBidInput, 10) || (activeDetailLot.currentBid + (activeDetailLot.presets[0] || 100));
     const buyersPremiumAmount = Math.round(currentInputVal * 0.15);
     const hammerTotal = currentInputVal + buyersPremiumAmount;
-    const lotAbout = getLotAboutDetails(activeDetailLot);
-
-    const lowEstimate = Math.round(activeDetailLot.currentBid * 0.90);
-    const highEstimate = Math.round(activeDetailLot.currentBid * 1.15);
-    const progressPercent = Math.min(100, Math.max(10, Math.round((activeDetailLot.currentBid / highEstimate) * 100)));
 
     return (
       <div className={`cap-curated-page-root cap-terminal-root ${isLightTheme ? 'cap-theme-light' : 'cap-theme-dark'}`}>
         <div className="cap-terminal-wrapper">
-          {/* Top Bar: Sovereign Galleries, Terminal Connected, Paddle info, Audio, Close button */}
+          {/* Top Bar: Brand, Terminal Connected, Paddle info, Audio, Close button */}
           <header className="cap-terminal-topbar">
             <div className="cap-terminal-brand">
               <div className="cap-terminal-gold-icon">
                 <Crown size={15} />
               </div>
               <div className="cap-terminal-brand-titles">
-                <span className="cap-terminal-gallery-name">SOVEREIGN GALLERIES</span>
-                <span className="cap-terminal-session-name">Session II: Rarities of the United States Mint</span>
+                <span className="cap-terminal-gallery-name">GARDNER AUCTIONS</span>
+                <span className="cap-terminal-session-name">{currentAuctionInfo.title}</span>
               </div>
             </div>
 
@@ -568,21 +623,25 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
             </div>
           </header>
 
-          {/* Main Lot Banner Header: LOT 104, Breadcrumb, Reserve Met, Big Title, Subtitle, Live Timer, Cam */}
+          {/* Main Lot Banner Header: LOT Number, Session Title, Big Title, Subtitle, Live Timer, Cam */}
           <div className="cap-terminal-lot-header">
             <div className="cap-lot-header-left">
               <div className="cap-lot-tags-row">
                 <span className="cap-lot-pill-gold">{activeDetailLot.lotNumber}</span>
-                <span className="cap-lot-cat-breadcrumb">{activeDetailLot.categoryTag} • U.S. DOUBLE EAGLES</span>
+                <span className="cap-lot-cat-breadcrumb">{currentAuctionInfo.title.toUpperCase()}</span>
+                <span className="cap-lot-seller-badge">
+                  <User size={12} className="cap-seller-icon" />
+                  Seller: <strong>{activeDetailLot.sellerName || 'Estate Consignor #101'}</strong>
+                </span>
                 <span className="cap-reserve-met-badge">
                   <Shield size={12} className="cap-shield-icon" />
-                  Reserve Met
+                  Cataloged &amp; Verified
                 </span>
               </div>
 
               <h1 className="cap-terminal-lot-title">{activeDetailLot.title}</h1>
               <p className="cap-terminal-lot-sub">
-                {activeDetailLot.description} • Pop 12/None Finer • Lustrous Original Mint Frost &amp; Deep Die Polish Fields
+                {activeDetailLot.description}
               </p>
             </div>
 
@@ -615,9 +674,9 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                   <div className="cap-stage-overlay-top">
                     <span className="cap-pcgs-badge">
                       <Shield size={12} />
-                      PCGS MS67 WIRE EDGE
+                      AUTHENTICATED LOT
                     </span>
-                    <span className="cap-cert-pill">Cert #34567890</span>
+                    <span className="cap-cert-pill">LOT #{activeDetailLot.lotNumber}</span>
 
                     <div className="cap-stage-tools">
                       <button
@@ -647,7 +706,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                     </div>
                   </div>
 
-                  {/* Lot Authentic Image (User said: "bs image jo h whi use krna baki kuch chnage mt krna") */}
+                  {/* Lot Authentic Image */}
                   <div className={`cap-stage-img-frame ${stageZoom ? 'zoomed' : ''} ${stageRotated ? 'rotated' : ''}`}>
                     <img
                       src={activeDetailLot.image}
@@ -658,38 +717,11 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
 
                   {/* Stage Bottom Controls Overlay */}
                   <div className="cap-stage-overlay-bottom">
-                    <span className="cap-drag-hint">👆 Hover &amp; drag to examine wire edge detail</span>
+                    <span className="cap-drag-hint">👆 Interactive High-Resolution Inspection</span>
                     <span className="cap-nfc-tag">
                       <Shield size={12} />
-                      NFC AUTHENTICATED HOLDER
+                      GARDNER VERIFIED
                     </span>
-                  </div>
-                </div>
-
-                {/* Sub-stage thumbnails and verification */}
-                <div className="cap-stage-sub-bar">
-                  <div className="cap-view-thumbs-list">
-                    {(['obverse', 'reverse', 'edge view', 'full slab'] as const).map((angle) => (
-                      <button
-                        key={angle}
-                        type="button"
-                        className={`cap-view-thumb-pill ${activeThumb === angle ? 'active' : ''}`}
-                        onClick={() => setActiveThumb(angle)}
-                      >
-                        <span className="cap-thumb-dot" />
-                        {angle.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="cap-cac-verified-badge">
-                    <div className="cap-cac-icon">
-                      <Shield size={14} />
-                    </div>
-                    <div className="cap-cac-text">
-                      <span className="cap-cac-title">PCGS CAC Verified</span>
-                      <span className="cap-cac-sub">Population 12 · None Higher</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -699,132 +731,39 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                 <div className="cap-dossier-header">
                   <div className="cap-dossier-title-wrap">
                     <Feather size={15} className="cap-gold-quill-icon" />
-                    <span className="cap-dossier-title">LOT DOSSIER &amp; SPECIFICATIONS</span>
-                  </div>
-
-                  <div className="cap-dossier-tabs" role="tablist">
-                    {(['specs', 'provenance', 'condition', 'vaulting'] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        type="button"
-                        className={`cap-dossier-tab-btn ${activeDossierTab === tab ? 'active' : ''}`}
-                        onClick={() => setActiveDossierTab(tab)}
-                      >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                      </button>
-                    ))}
+                    <span className="cap-dossier-title">LOT SPECIFICATIONS &amp; DESCRIPTION</span>
                   </div>
                 </div>
 
                 <div className="cap-dossier-narrative">
-                  {activeDossierTab === 'specs' && (
-                    <p>
-                      An impeccably preserved, museum-grade {activeDetailLot.title} exhibiting the celebrated high-relief Liberty design by Augustus Saint-Gaudens. Struck with razor-sharp wire rims, deeply frosted central devices, and swirling cartwheel luster across both obverse and reverse fields. Sealed within an archival PCGS security slab.
-                    </p>
-                  )}
-                  {activeDossierTab === 'provenance' && (
-                    <p>
-                      Private Philadelphia Collector (1924–1968) · Acquired at Sotheby's New York Fine Numismatics Session (1989, Lot 342) · Private Sovereign Vault Repository (2014–Present). All transfer certificates intact.
-                    </p>
-                  )}
-                  {activeDossierTab === 'condition' && (
-                    <p>
-                      Flawless surface preservation with complete wire rim extension. Unbroken original mint frost accompanied by sharp central feather definition and vivid golden-amber patina. Graded MS-67 by PCGS with CAC gold endorsement.
-                    </p>
-                  )}
-                  {activeDossierTab === 'vaulting' && (
-                    <p>
-                      Depository custody at Armored Brink’s High-Security Depository (New York). Covered by comprehensive marine and vaulting insurance policy up to $100,000 USD. Immediate secure courier transit upon cleared settlement.
-                    </p>
-                  )}
+                  <p>
+                    {activeDetailLot.description || `Cataloged lot ${activeDetailLot.lotNumber} for ${currentAuctionInfo.title}. Verified authentic and available for immediate bidding.`}
+                  </p>
                 </div>
 
                 <div className="cap-dossier-metrics-grid">
                   <div className="cap-spec-box">
-                    <span className="cap-spec-label">YEAR / ORIGIN</span>
-                    <strong className="cap-spec-val">{lotAbout.yearOrigin}</strong>
-                    <span className="cap-spec-sub">Philadelphia Mint</span>
+                    <span className="cap-spec-label">LOT NUMBER</span>
+                    <strong className="cap-spec-val">{activeDetailLot.lotNumber}</strong>
+                    <span className="cap-spec-sub">Catalog ID</span>
                   </div>
 
                   <div className="cap-spec-box">
-                    <span className="cap-spec-label">COMPOSITION</span>
-                    <strong className="cap-spec-val">{lotAbout.material}</strong>
-                    <span className="cap-spec-sub">0.9675 oz Net AGW</span>
+                    <span className="cap-spec-label">SELLER / CONSIGNOR</span>
+                    <strong className="cap-spec-val cap-gold-accent">{activeDetailLot.sellerName || 'Estate Consignor #101'}</strong>
+                    <span className="cap-spec-sub">Verified Consignment</span>
                   </div>
 
                   <div className="cap-spec-box">
-                    <span className="cap-spec-label">CERTIFIED GRADE</span>
-                    <strong className="cap-spec-val cap-gold-accent">PCGS MS-67</strong>
-                    <span className="cap-spec-sub">Wire Edge Sharp</span>
+                    <span className="cap-spec-label">QUANTITY</span>
+                    <strong className="cap-spec-val">{activeDetailLot.quantity || 1} Item</strong>
+                    <span className="cap-spec-sub">Complete Lot</span>
                   </div>
 
                   <div className="cap-spec-box">
-                    <span className="cap-spec-label">INSURED VALUE</span>
-                    <strong className="cap-spec-val cap-green-accent">$35,000 USD</strong>
-                    <span className="cap-spec-sub">Armored Brink's</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: BID HISTORY PROGRESSION (Glowing Chart) */}
-              <div className="cap-terminal-card cap-progression-chart-card">
-                <div className="cap-chart-header-row">
-                  <div className="cap-chart-title-left">
-                    <strong className="cap-chart-heading">BID HISTORY PROGRESSION</strong>
-                    <span className="cap-chart-subheading">Dynamic pacing across {activeDetailLot.bidsCount + 12} registered competitive bids</span>
-                  </div>
-
-                  <span className="cap-chart-est-badge">+14.2% Over Low Est.</span>
-                </div>
-
-                <div className="cap-svg-chart-container">
-                  <svg viewBox="0 0 680 180" className="cap-progression-svg" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="terminal-gold-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#dfba52" stopOpacity="0.25" />
-                        <stop offset="60%" stopColor="#dfba52" stopOpacity="0.08" />
-                        <stop offset="100%" stopColor="#dfba52" stopOpacity="0.0" />
-                      </linearGradient>
-                      <filter id="terminal-glow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#dfba52" floodOpacity="0.45" />
-                      </filter>
-                    </defs>
-
-                    {/* Area under curve */}
-                    <path
-                      d="M 30 148 L 120 138 L 240 128 L 380 112 L 510 94 L 640 60 L 640 170 L 30 170 Z"
-                      fill="url(#terminal-gold-fill)"
-                    />
-
-                    {/* Main stroke line */}
-                    <path
-                      d="M 30 148 L 120 138 L 240 128 L 380 112 L 510 94 L 640 60"
-                      fill="none"
-                      stroke="#dfba52"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      filter="url(#terminal-glow)"
-                    />
-
-                    {/* Data dots */}
-                    <circle cx="30" cy="148" r="4.5" fill="#ffffff" stroke="#dfba52" strokeWidth="2.5" />
-                    <circle cx="120" cy="138" r="4.5" fill="#ffffff" stroke="#dfba52" strokeWidth="2.5" />
-                    <circle cx="240" cy="128" r="4.5" fill="#ffffff" stroke="#dfba52" strokeWidth="2.5" />
-                    <circle cx="380" cy="112" r="4.5" fill="#ffffff" stroke="#dfba52" strokeWidth="2.5" />
-                    <circle cx="510" cy="94" r="4.5" fill="#ffffff" stroke="#dfba52" strokeWidth="2.5" />
-
-                    {/* Active Pulsing Head Dot */}
-                    <circle cx="640" cy="60" r="10" fill="none" stroke="#dfba52" strokeWidth="1.5" opacity="0.6" />
-                    <circle cx="640" cy="60" r="6" fill="#ffffff" stroke="#dfba52" strokeWidth="3" />
-                  </svg>
-
-                  <div className="cap-chart-x-axis">
-                    <span>2:40 PM (Open)</span>
-                    <span>3:15 PM</span>
-                    <span>3:50 PM</span>
-                    <span>4:30 PM</span>
-                    <span className="cap-now-point">4:47 PM (Now: ${activeDetailLot.currentBid.toLocaleString()})</span>
+                    <span className="cap-spec-label">CATALOG STATUS</span>
+                    <strong className="cap-spec-val cap-green-accent">Live Catalog</strong>
+                    <span className="cap-spec-sub">Open for Bidding</span>
                   </div>
                 </div>
               </div>
@@ -848,25 +787,6 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                   <div className="cap-console-inc-block">
                     <span className="cap-console-lbl">NEXT MIN INCREMENT</span>
                     <strong className="cap-inc-val">+$100</strong>
-                  </div>
-                </div>
-
-                {/* Estimate Range & Dynamic Bar */}
-                <div className="cap-console-estimate-box">
-                  <div className="cap-est-labels-row">
-                    <span className="cap-est-txt">Estimate Range</span>
-                    <strong className="cap-est-range-val">{activeDetailLot.estimate}</strong>
-                  </div>
-
-                  <div className="cap-est-progress-track">
-                    <div className="cap-est-progress-fill" style={{ width: `${progressPercent}%` }} />
-                    <div className="cap-est-marker" style={{ left: `${progressPercent}%` }} />
-                  </div>
-
-                  <div className="cap-est-sub-row">
-                    <span>Low: ${lowEstimate.toLocaleString()}</span>
-                    <span className="cap-est-highlight">Current at {progressPercent}% of High</span>
-                    <span>High: ${highEstimate.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -1006,12 +926,12 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
           {/* Bottom Meta Bar */}
           <footer className="cap-terminal-meta-footer">
             <div className="cap-meta-col-left">
-              <span>Session ID: <strong>#NY-2024-OCT-104</strong></span>
+              <span>Session: <strong>{currentAuctionInfo.title}</strong></span>
               <span className="cap-meta-pipe">|</span>
               <span>Auctioneer: <strong>M. Sterling (Lic #84210)</strong></span>
             </div>
             <div className="cap-meta-col-right">
-              <span>Time Zone: <strong>New York (EDT UTC-4)</strong></span>
+              <span>Time Zone: <strong>Eastern Time (ET UTC-5)</strong></span>
             </div>
           </footer>
         </div>
@@ -1020,17 +940,211 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   }
 
   // =========================================================================
+  // MULTI-AUCTION OVERVIEW VIEW (Tarika 1: Multi-Auction Card Flow)
+  // Shown when buyer clicks "CURRENT AUCTIONS" before picking an auction
+  // =========================================================================
+  if (!selectedAuctionId) {
+    return (
+      <div className="cap-curated-page-root">
+        <div className="cap-page-container">
+          <div className="cap-auctions-overview-section">
+            {/* Hero Header */}
+            <header className="cap-auctions-overview-header">
+              <div className="cap-auctions-header-text">
+                <span className="cap-auctions-header-tag">
+                  <Sparkles size={14} color="#dfba52" />
+                  CURRENT AUCTIONS
+                </span>
+                <h1 className="cap-auctions-header-title">Active &amp; Upcoming Auction Sessions</h1>
+                <p className="cap-auctions-header-sub">
+                  Select an active catalog session below to explore curated rare lots, view live estimates, and submit advance bids.
+                </p>
+              </div>
+
+              <div className="cap-hero-search-wrap" style={{ maxWidth: 360, width: '100%' }}>
+                <Search size={16} className="cap-search-icon" />
+                <input
+                  type="text"
+                  value={auctionSearch}
+                  onChange={(e) => setAuctionSearch(e.target.value)}
+                  placeholder="Search auctions by title or code..."
+                  className="cap-hero-search-input"
+                />
+                {auctionSearch && (
+                  <button
+                    type="button"
+                    className="cap-search-clear-btn"
+                    onClick={() => setAuctionSearch('')}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </header>
+
+            {/* Filter Pills Bar */}
+            <div className="cap-auctions-controls-bar">
+              <div className="cap-auctions-filter-pills">
+                <button
+                  type="button"
+                  className={`cap-auction-filter-pill ${auctionFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setAuctionFilter('all')}
+                >
+                  <span>All Active Sessions</span>
+                  <span className="cap-auction-pill-badge">{activeAuctions.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cap-auction-filter-pill ${auctionFilter === 'live' ? 'active' : ''}`}
+                  onClick={() => setAuctionFilter('live')}
+                >
+                  <span className="cap-pulse-dot-red" />
+                  <span>Live Webcasts</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cap-auction-filter-pill ${auctionFilter === 'closing' ? 'active' : ''}`}
+                  onClick={() => setAuctionFilter('closing')}
+                >
+                  <span>Closing Soon</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cap-auction-filter-pill ${auctionFilter === 'open' ? 'active' : ''}`}
+                  onClick={() => setAuctionFilter('open')}
+                >
+                  <span>Catalog Open</span>
+                </button>
+              </div>
+
+              <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                Showing <strong>{filteredAuctions.length}</strong> active auction events
+              </div>
+            </div>
+
+            {/* Active Auctions Cards Grid */}
+            <div className="cap-auctions-grid">
+              {filteredAuctions.map((auction) => (
+                <div key={auction.id} className="cap-auction-card">
+                  <div>
+                    {/* Media Banner */}
+                    <div
+                      className="cap-auction-card-media"
+                      onClick={() => setSelectedAuctionId(auction.id)}
+                    >
+                      <img
+                        src={auction.image}
+                        alt={auction.title}
+                        className="cap-auction-card-img"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/images/hero_coin.jpg';
+                        }}
+                      />
+                      <div className="cap-auction-media-overlay" />
+                      <div className="cap-auction-card-badges">
+                        {auction.badgeType === 'red' ? (
+                          <span className="cap-status-pill-live">
+                            <span className="cap-pulse-dot-red" />
+                            {auction.badge}
+                          </span>
+                        ) : auction.badgeType === 'green' ? (
+                          <span className="cap-status-pill-open">
+                            {auction.badge}
+                          </span>
+                        ) : (
+                          <span className="cap-status-pill-closing">
+                            {auction.badge}
+                          </span>
+                        )}
+
+                        <span className="cap-auction-lots-pill">
+                          {auction.lotsCount} LOTS
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Body Content */}
+                    <div className="cap-auction-card-body">
+                      <div className="cap-auction-code-row">
+                        <span className="cap-auction-card-code">{auction.code}</span>
+                        <span className="cap-auction-card-category">{auction.category}</span>
+                      </div>
+
+                      <h3
+                        className="cap-auction-card-title"
+                        onClick={() => setSelectedAuctionId(auction.id)}
+                      >
+                        {auction.title}
+                      </h3>
+
+                      <p className="cap-auction-card-desc">
+                        {auction.description}
+                      </p>
+
+                      <div className="cap-auction-card-meta">
+                        <div className="cap-meta-row-item">
+                          <Clock size={14} className="cap-meta-ico" />
+                          <span>{auction.endsAtText}</span>
+                        </div>
+                        <div className="cap-meta-row-item">
+                          <Layers size={14} className="cap-meta-ico" />
+                          <span>Platform: <strong>{auction.platform}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer CTA Button */}
+                  <div className="cap-auction-card-footer">
+                    <button
+                      type="button"
+                      className="cap-btn-browse-catalog"
+                      onClick={() => setSelectedAuctionId(auction.id)}
+                    >
+                      <span>Browse Catalog</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
   // CATALOG COLLECTION GRID VIEW (WITH EXPANDED PRODUCT TYPES & VIEW MORE)
+  // Shown when an auction is selected from the Active Auctions list
   // =========================================================================
   return (
     <div className="cap-curated-page-root">
       <div className="cap-page-container">
+        {/* Breadcrumb Bar to return to All Current Auctions */}
+        <div className="cap-catalog-breadcrumb-bar">
+          <button 
+            type="button" 
+            className="cap-breadcrumb-back-btn"
+            onClick={() => setSelectedAuctionId(null)}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to All Current Auctions</span>
+          </button>
+
+          <div className="cap-breadcrumb-event-info">
+            <span>Viewing Session:</span>
+            <strong style={{ color: '#ffffff' }}>{currentAuctionInfo.title}</strong>
+            <span className="cap-breadcrumb-badge">{currentAuctionInfo.code}</span>
+          </div>
+        </div>
+
         {/* Top Hero Banner */}
         <header className="cap-hero-header">
           <div className="cap-hero-text-block">
             <span className="cap-hero-tag">BROWSE AUCTION LOTS</span>
             <h1 className="cap-hero-title">Find something remarkable.</h1>
-            <p className="cap-hero-sub">Choose a product type and explore the lots in this auction.</p>
+            <p className="cap-hero-sub">Explore the lots cataloged for {currentAuctionInfo.title}.</p>
           </div>
 
           <div className="cap-hero-search-wrap">
@@ -1056,127 +1170,25 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
           </div>
         </header>
 
-        {/* Main 2-Column Catalog Body */}
+        {/* Main Full-Width Catalog Body */}
         <div className="cap-main-catalog-layout">
-          {/* Left Column: Expanded Product Types Sidebar Card */}
-          <aside className="cap-sidebar-card" aria-label="Product Types Filter">
-            <div className="cap-sidebar-top-section">
-              <h2 className="cap-sidebar-title">Product types</h2>
-              <p className="cap-sidebar-hint">
-                Choose a type to explore the products available in this auction.
-              </p>
-
-              <nav className="cap-category-list" role="tablist">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'all'}
-                  className={`cap-cat-item ${selectedCategory === 'all' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('all')}
-                >
-                  <span className="cap-cat-name">All products</span>
-                  <span className="cap-cat-badge">{counts.all}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'coins'}
-                  className={`cap-cat-item ${selectedCategory === 'coins' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('coins')}
-                >
-                  <span className="cap-cat-name">Coins &amp; currency</span>
-                  <span className="cap-cat-badge">{counts.coins}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'jewelry'}
-                  className={`cap-cat-item ${selectedCategory === 'jewelry' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('jewelry')}
-                >
-                  <span className="cap-cat-name">Jewelry &amp; watches</span>
-                  <span className="cap-cat-badge">{counts.jewelry}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'art'}
-                  className={`cap-cat-item ${selectedCategory === 'art' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('art')}
-                >
-                  <span className="cap-cat-name">Fine art</span>
-                  <span className="cap-cat-badge">{counts.art}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'antiques'}
-                  className={`cap-cat-item ${selectedCategory === 'antiques' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('antiques')}
-                >
-                  <span className="cap-cat-name">Antiques &amp; silver</span>
-                  <span className="cap-cat-badge">{counts.antiques}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'horology'}
-                  className={`cap-cat-item ${selectedCategory === 'horology' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('horology')}
-                >
-                  <span className="cap-cat-name">Horology &amp; timepieces</span>
-                  <span className="cap-cat-badge">{counts.horology}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'americana'}
-                  className={`cap-cat-item ${selectedCategory === 'americana' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('americana')}
-                >
-                  <span className="cap-cat-name">Americana &amp; manuscripts</span>
-                  <span className="cap-cat-badge">{counts.americana}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'decorative'}
-                  className={`cap-cat-item ${selectedCategory === 'decorative' ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory('decorative')}
-                >
-                  <span className="cap-cat-name">Mid-century &amp; decorative</span>
-                  <span className="cap-cat-badge">{counts.decorative}</span>
-                </button>
-              </nav>
-            </div>
-
-            <div className="cap-sidebar-bottom-section">
-              <div className="cap-sidebar-divider" />
-              <div className="cap-sidebar-footer">
-                <span className="cap-sub-label">Showing lots from</span>
-                <strong className="cap-session-name">Spring Collector Auction</strong>
-                <span className="cap-session-schedule">Ends today · 4:30 PM EST</span>
-              </div>
-            </div>
-          </aside>
-
-          {/* Right Column: Collection Header, Filter Tabs & Product Cards Grid */}
           <section className="cap-catalog-content" aria-label="Curated Lots Collection">
             <div className="cap-content-header">
               <div className="cap-content-title-wrap">
-                <span className="cap-gold-tag">SPRING COLLECTOR AUCTION</span>
-                <h2 className="cap-content-main-title">{getCategoryTitle()}</h2>
+                <div className="cap-header-meta-pill-row">
+                  <span className="cap-gold-tag">{currentAuctionInfo.code || 'AUCTION CATALOG'}</span>
+                  <span className="cap-session-status-badge">{currentAuctionInfo.endsAtText}</span>
+                </div>
+                <h2 className="cap-content-main-title">{currentAuctionInfo.title}</h2>
+                <p className="cap-content-subtitle">
+                  {currentAuctionInfo.description || 'Browse all cataloged lots available for live and advance bidding in this session.'}
+                </p>
               </div>
-              <span className="cap-lots-counter">
-                {filteredLots.length} {filteredLots.length === 1 ? 'lot' : 'lots'} · curated collection
-              </span>
+              <div className="cap-header-right-meta">
+                <span className="cap-lots-counter">
+                  <strong>{filteredLots.length}</strong> {filteredLots.length === 1 ? 'lot' : 'lots'} in catalog
+                </span>
+              </div>
             </div>
 
             <div className="cap-controls-bar">
@@ -1229,7 +1241,6 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                   type="button"
                   className="cap-reset-btn"
                   onClick={() => {
-                    setSelectedCategory('all');
                     setActiveTab('all');
                     setLocalSearch('');
                   }}
@@ -1281,7 +1292,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
 
                         <div className="cap-card-body">
                           <div className="cap-card-meta-row">
-                            <span className="cap-card-cat-tag">{lot.categoryTag}</span>
+                            <span className="cap-card-bid-label">CURRENT BID</span>
                             <span className="cap-card-bid-val">${lot.currentBid.toLocaleString()}</span>
                           </div>
 
