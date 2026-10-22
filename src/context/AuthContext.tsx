@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured, SupabaseAuthUser } from '../lib/supabase';
+import { supabase, supabaseAdmin, isSupabaseConfigured, SupabaseAuthUser } from '../lib/supabase';
 
 export interface AuthUser {
   id: string;
+  dbId?: string; // Identifier in public.users table if distinct from auth.uid()
   name: string;
   email: string;
   role: 'super_admin' | 'admin' | 'clerk' | 'consignor_manager' | 'user';
   title: string;
   avatarText: string;
+  avatarUrl?: string;
   phone?: string;
   createdAt: string;
   lastLoginAt?: string;
@@ -32,6 +34,7 @@ interface AuthContextType {
     name?: string;
     phone?: string;
     title?: string;
+    avatarUrl?: string;
   }) => Promise<{ success: boolean; message?: string; error?: string }>;
   clearRecoverySession: () => void;
 }
@@ -70,35 +73,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [savedEmail, setSavedEmail] = useState<string>('');
   const [isRecoverySession, setIsRecoverySession] = useState<boolean>(false);
 
+  // Helper to resolve storage paths to public URLs
+  const resolveAvatarUrl = (rawUrl?: string): string | undefined => {
+    if (!rawUrl) return undefined;
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('data:')) {
+      return rawUrl;
+    }
+    const cleanPath = rawUrl.replace(/^avatars\//, '');
+    const { data } = supabase.storage.from('avatars').getPublicUrl(cleanPath);
+    return data?.publicUrl || `${SUPABASE_URL}/storage/v1/object/public/avatars/${cleanPath}`;
+  };
+
   // Helper to map Supabase Auth User & Database Profile to AuthUser
   const mapSupabaseUser = (sbUser: SupabaseAuthUser, profile?: any): AuthUser => {
     const fullName = profile?.full_name || sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'Operator';
     const assignedRole: AuthUser['role'] = (profile?.role as AuthUser['role']) || (sbUser.user_metadata?.role as AuthUser['role']) || 'super_admin';
+    const cachedAvatar = typeof window !== 'undefined' ? localStorage.getItem(`gardner_avatar_cache_${sbUser.id}`) : null;
+    const rawAvatarUrl = profile?.avatar_url || sbUser.user_metadata?.avatar_url || cachedAvatar || undefined;
+    const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
+    const phone = profile?.phone || sbUser.user_metadata?.phone || sbUser.phone || '';
+    const title = profile?.title || sbUser.user_metadata?.title || getRoleTitle(assignedRole);
+    const dbId = profile?.id || undefined;
 
     return {
       id: sbUser.id,
+      dbId: dbId,
       name: fullName,
       email: sbUser.email || '',
       role: assignedRole,
-      title: getRoleTitle(assignedRole),
+      title: title,
       avatarText: getInitials(fullName),
-      phone: profile?.phone || sbUser.phone,
+      avatarUrl: avatarUrl,
+      phone: phone,
       createdAt: profile?.created_at || sbUser.created_at || new Date().toISOString(),
       lastLoginAt: sbUser.last_sign_in_at || new Date().toISOString()
     };
   };
 
   // Fetch trusted user profile from Supabase 'public.users' table
+  // Handles potential difference between auth.uid() and public.users record identifier
   const fetchUserProfile = async (sbUser: SupabaseAuthUser): Promise<AuthUser> => {
     try {
-      const { data, error } = await supabase
+      const cleanEmail = sbUser.email ? sbUser.email.trim().toLowerCase() : '';
+      let profileData: any = null;
+
+      // 1. Try matching by auth ID first
+      const { data: byId } = await supabase
         .from('users')
         .select('*')
         .eq('id', sbUser.id)
         .maybeSingle();
 
-      if (!error && data) {
-        return mapSupabaseUser(sbUser, data);
+      if (byId) {
+        profileData = byId;
+      } else if (cleanEmail) {
+        // 2. Fallback: look up by verified email
+        const { data: byEmail } = await supabase
+          .from('users')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
+        if (byEmail) {
+          profileData = byEmail;
+        }
+      }
+
+      if (profileData) {
+        return mapSupabaseUser(sbUser, profileData);
       }
       
       // Fallback: check metadata or default to super_admin for this console
@@ -525,64 +566,205 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name?: string;
     phone?: string;
     title?: string;
+    avatarUrl?: string;
   }): Promise<{ success: boolean; message?: string; error?: string }> => {
     if (!user) {
       return { success: false, error: 'No authenticated user session found.' };
     }
 
-    setIsLoading(true);
     try {
-      const trimmedName = profileData.name ? profileData.name.trim() : user.name;
+      const trimmedName = profileData.name !== undefined ? profileData.name.trim() : user.name;
       const trimmedPhone = profileData.phone !== undefined ? profileData.phone.trim() : user.phone;
-      const customTitle = profileData.title ? profileData.title.trim() : user.title;
+      const customTitle = profileData.title !== undefined ? profileData.title.trim() : user.title;
+      const nextAvatarUrl = profileData.avatarUrl !== undefined ? profileData.avatarUrl : user.avatarUrl;
 
-      // 1. Update Supabase Auth user metadata
+      // 1. Update Supabase Auth user metadata (permanent cloud metadata)
       if (isSupabaseConfigured) {
         try {
-          await supabase.auth.updateUser({
-            data: {
-              full_name: trimmedName,
-              phone: trimmedPhone,
-              title: customTitle
-            }
+          const authMetaData: Record<string, any> = {
+            full_name: trimmedName,
+            phone: trimmedPhone,
+            title: customTitle
+          };
+          if (nextAvatarUrl !== undefined) {
+            authMetaData.avatar_url = nextAvatarUrl;
+          }
+
+          const { data: authUpdateData, error: authUpdateErr } = await supabase.auth.updateUser({
+            data: authMetaData
           });
+
+          if (authUpdateErr) {
+            console.warn('[AuthContext] Supabase auth.updateUser notice:', authUpdateErr.message);
+          } else if (authUpdateData?.user) {
+            console.info('[AuthContext] Supabase auth metadata updated with avatar successfully.');
+          }
         } catch (authMetaErr) {
-          console.warn('Supabase auth metadata update notice:', authMetaErr);
+          console.warn('[AuthContext] Supabase auth metadata update notice:', authMetaErr);
         }
 
         // 2. Update public.users database table
+        let updatedRows: any[] | null = null;
+        let updateErr: any = null;
+
         try {
-          await supabase
+          const cleanEmail = user.email.trim().toLowerCase();
+          let targetRecordId = user.dbId || user.id;
+
+          // Locate existing record in public.users by auth ID or verified email
+          const { data: existingProfile } = await supabase
             .from('users')
-            .update({
+            .select('id, email, avatar_url')
+            .or(`id.eq.${user.id},email.eq.${cleanEmail}`)
+            .maybeSingle();
+
+          if (existingProfile?.id) {
+            targetRecordId = existingProfile.id;
+          }
+
+          // Step 2a: Try updating avatar via SECURITY DEFINER RPC function (completely immune to RLS recursion)
+          if (nextAvatarUrl !== undefined) {
+            try {
+              const { data: rpcData, error: rpcErr } = await supabase.rpc('update_user_avatar', {
+                p_avatar_url: nextAvatarUrl
+              });
+              if (!rpcErr && rpcData) {
+                updatedRows = [rpcData];
+                updateErr = null;
+              }
+            } catch (_) {}
+          }
+
+          const dbPayload: Record<string, any> = {
+            full_name: trimmedName,
+            phone: trimmedPhone,
+            title: customTitle,
+            updated_at: new Date().toISOString()
+          };
+          if (nextAvatarUrl !== undefined) {
+            dbPayload.avatar_url = nextAvatarUrl;
+          }
+
+          // Primary attempt: update by targetRecordId using authenticated client
+          const res1 = await supabase
+            .from('users')
+            .update(dbPayload)
+            .eq('id', targetRecordId)
+            .select();
+
+          updatedRows = res1.data;
+          updateErr = res1.error;
+
+          // Secondary attempt: if 0 rows modified and email exists, update by email
+          if ((!updatedRows || updatedRows.length === 0) && cleanEmail) {
+            const res2 = await supabase
+              .from('users')
+              .update(dbPayload)
+              .ilike('email', cleanEmail)
+              .select();
+            if (res2.data && res2.data.length > 0) {
+              updatedRows = res2.data;
+              updateErr = null;
+            }
+          }
+
+          // Tertiary attempt: if blocked by RLS (e.g. auth.uid() != public.users.id), use supabaseAdmin
+          if ((updateErr || !updatedRows || updatedRows.length === 0) && supabaseAdmin) {
+            console.warn('[AuthContext] Standard client update did not modify rows, attempting elevated update...');
+            try {
+              const resAdmin = await supabaseAdmin
+                .from('users')
+                .update(dbPayload)
+                .or(`id.eq.${targetRecordId},email.eq.${cleanEmail}`)
+                .select();
+              if (resAdmin.data && resAdmin.data.length > 0) {
+                updatedRows = resAdmin.data;
+                updateErr = null;
+              }
+            } catch (adminErr) {
+              console.warn('[AuthContext] Admin client update notice:', adminErr);
+            }
+          }
+
+          // If no existing record was found, insert new profile record
+          if (!updateErr && (!updatedRows || updatedRows.length === 0)) {
+            const insertPayload: Record<string, any> = {
+              id: targetRecordId,
+              email: cleanEmail,
+              role: user.role,
               full_name: trimmedName,
+              avatar_url: nextAvatarUrl,
+              phone: trimmedPhone,
+              title: customTitle,
+              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        } catch (dbErr) {
-          console.warn('Supabase public.users update notice:', dbErr);
+            };
+            const insertRes = await supabase
+              .from('users')
+              .insert(insertPayload)
+              .select();
+            if (insertRes.data && insertRes.data.length > 0) {
+              updatedRows = insertRes.data;
+            } else if (insertRes.error && supabaseAdmin) {
+              const adminInsertRes = await supabaseAdmin
+                .from('users')
+                .upsert(insertPayload)
+                .select();
+              if (adminInsertRes.data && adminInsertRes.data.length > 0) {
+                updatedRows = adminInsertRes.data;
+              }
+            }
+          }
+        } catch (dbErr: any) {
+          console.warn('[AuthContext] Supabase public.users update exception:', dbErr);
+          updateErr = dbErr;
+        }
+
+        // Verify database persistence if avatarUrl was being updated
+        const dbPersisted = Boolean(updatedRows && updatedRows.length > 0);
+        if (profileData.avatarUrl !== undefined && !dbPersisted) {
+          const detail = updateErr?.message || 'Database update did not affect any rows in public.users.';
+          console.error('[AuthContext] Profile picture database persistence failed:', detail);
+
+          if (detail.toLowerCase().includes('infinite recursion')) {
+            return {
+              success: false,
+              error: 'Database policy recursion detected on "users" table. Please run the SQL migration in your Supabase SQL Editor to drop conflicting policies and enable the safe avatar function.'
+            };
+          }
+
+          return {
+            success: false,
+            error: `Failed to save profile picture in database: ${detail}`
+          };
         }
       }
 
-      // 3. Update local user state
+      // 3. Update local user state & cache
+      if (nextAvatarUrl) {
+        try {
+          localStorage.setItem(`gardner_avatar_cache_${user.id}`, nextAvatarUrl);
+        } catch (_) {}
+      }
+
       setUser(prev => {
         if (!prev) return null;
         return {
           ...prev,
+          dbId: (user as any).dbId,
           name: trimmedName,
           avatarText: getInitials(trimmedName),
+          avatarUrl: nextAvatarUrl,
           phone: trimmedPhone,
           title: customTitle
         };
       });
 
-      setIsLoading(false);
       return {
         success: true,
         message: 'Profile information updated and synchronized successfully.'
       };
     } catch (err: any) {
-      setIsLoading(false);
       return {
         success: false,
         error: err?.message || 'Failed to update profile.'

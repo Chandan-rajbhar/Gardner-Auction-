@@ -1,0 +1,244 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 9 0 R 11 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
+endobj
+6 0 obj
+<< /Length 5319 >>
+stream
+0.15 0.39 0.92 rg 40 760 515 4 re f
+0.96 0.97 0.99 rg 40 680 515 70 re f
+0.85 0.88 0.93 RG 1 w 40 680 515 70 re S
+BT /F2 20 Tf 0.06 0.09 0.16 rg 40 795 Td (AuctionFlex360 (AF360) Complete Workflow Guide) Tj ET
+BT /F1 11 Tf 0.39 0.45 0.55 rg 40 775 Td (Complete Module-by-Module Operational Reference & System Architecture) Tj ET
+BT /F2 9 Tf 0.39 0.45 0.55 rg 55 730 Td (ACCOUNT OWNER:) Tj ET
+BT /F2 10 Tf 0.06 0.09 0.16 rg 55 715 Td (Chandan Kumar) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.35 rg 55 698 Td (chandankumar@gmail.com) Tj ET
+BT /F2 9 Tf 0.39 0.45 0.55 rg 180 730 Td (ORGANIZATION:) Tj ET
+BT /F2 10 Tf 0.06 0.09 0.16 rg 180 715 Td (bitlyze) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.35 rg 180 698 Td (Org ID: 73368) Tj ET
+BT /F2 9 Tf 0.39 0.45 0.55 rg 310 730 Td (CORE APPLICATION:) Tj ET
+BT /F2 10 Tf 0.06 0.09 0.16 rg 310 715 Td (auctionflex360.com) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.35 rg 310 698 Td (Single Page App (#/)) Tj ET
+BT /F2 9 Tf 0.39 0.45 0.55 rg 440 730 Td (REPORTING PORTAL:) Tj ET
+BT /F2 10 Tf 0.06 0.09 0.16 rg 440 715 Td (portal.auctionflex360.com) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.35 rg 440 698 Td (Visual Analytics & BI) Tj ET
+0.15 0.39 0.92 rg 40 645 4 16 re f
+BT /F2 14 Tf 0.06 0.09 0.16 rg 50 648 Td (1. System Architecture & High-Level Flow) Tj ET
+BT /F1 10 Tf 0.2 0.25 0.35 rg 40 625 Td 14 TL
+(AuctionFlex360 (AF360) is an enterprise cloud auction ERP platform developed by Sandhills Global.) Tj T*
+(It connects two core stakeholders in every auction business:) Tj T*
+(  1. Consignor (Seller): Brings items/inventory to be sold on commission.) Tj T*
+(  2. Bidder (Buyer): Registers, bids live or online, and makes payments for won lots.) Tj T*
+(AF360 automates this entire lifecycle from intake to cataloging, live bidding, and consignor checks.) Tj ET
+0.96 0.97 0.99 rg 40 500 95 45 re f 0.85 0.88 0.93 RG 1 w 40 500 95 45 re S
+BT /F2 9 Tf 0.15 0.39 0.92 rg 48 532 Td (STAGE 1) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 48 518 Td (Consignor Intake) Tj ET
+BT /F1 7.5 Tf 0.4 0.45 0.55 rg 48 506 Td (Customer CRM & Lot Tag) Tj ET
+0.96 0.97 0.99 rg 145 500 95 45 re f 0.85 0.88 0.93 RG 1 w 145 500 95 45 re S
+BT /F2 9 Tf 0.15 0.39 0.92 rg 153 532 Td (STAGE 2) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 153 518 Td (Pre-Auction) Tj ET
+BT /F1 7.5 Tf 0.4 0.45 0.55 rg 153 506 Td (Cataloging & HiBid Sync) Tj ET
+0.96 0.97 0.99 rg 250 500 95 45 re f 0.85 0.88 0.93 RG 1 w 250 500 95 45 re S
+BT /F2 9 Tf 0.15 0.39 0.92 rg 258 532 Td (STAGE 3) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 258 518 Td (Auction Day) Tj ET
+BT /F1 7.5 Tf 0.4 0.45 0.55 rg 258 506 Td (Check-In & Clerking) Tj ET
+0.96 0.97 0.99 rg 355 500 95 45 re f 0.85 0.88 0.93 RG 1 w 355 500 95 45 re S
+BT /F2 9 Tf 0.15 0.39 0.92 rg 363 532 Td (STAGE 4) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 363 518 Td (Settlement) Tj ET
+BT /F1 7.5 Tf 0.4 0.45 0.55 rg 363 506 Td (Batch Clerk & Payout) Tj ET
+0.96 0.97 0.99 rg 460 500 95 45 re f 0.85 0.88 0.93 RG 1 w 460 500 95 45 re S
+BT /F2 9 Tf 0.15 0.39 0.92 rg 468 532 Td (STAGE 5) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 468 518 Td (Analytics) Tj ET
+BT /F1 7.5 Tf 0.4 0.45 0.55 rg 468 506 Td (Hammer Value Reports) Tj ET
+0.15 0.39 0.92 rg 40 460 4 16 re f
+BT /F2 14 Tf 0.06 0.09 0.16 rg 50 463 Td (2. Module 1: Customers Module (CRM & Directory)) Tj ET
+BT /F3 9 Tf 0.4 0.45 0.55 rg 50 448 Td (Path: #/organization/73368/customers/customers) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 430 Td 13 TL
+(The Customers Module houses the universal registry for all buyers, consignors, and vendors.) Tj T*
+(  * Customer List: Main CRM table. In your live account, code f778f81f-6 is Chandan Kumar (bitlyze).) Tj T*
+(  * Dual Role Architecture: A customer record can simultaneously be a Consignor (seller) and a Bidder.) Tj T*
+(  * Permanent Bidders: VIP recurring buyers assigned static paddle numbers (e.g. Card #5).) Tj T*
+(  * Mailing Lists: Segmentation for marketing blasts based on interest (Art, Heavy Equipment, Coins).) Tj T*
+(  * Action Buttons: + NEW CUSTOMER (single entry), IMPORT CUSTOMERS (bulk CSV), EXPORT CUSTOMER.) Tj ET
+0.15 0.39 0.92 rg 40 330 4 16 re f
+BT /F2 14 Tf 0.06 0.09 0.16 rg 50 333 Td (3. Module 2: Miscellaneous Module (Accounting & Admin Setup)) Tj ET
+BT /F3 9 Tf 0.4 0.45 0.55 rg 50 318 Td (Path: #/organization/73368/miscellaneous/accounting) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 300 Td 13 TL
+(This module establishes the financial and operational settings of your auction company:) Tj T*
+(  * Accounts (Chart of Accounts): Live record verified: Account #1010 | Type: ASSET | 'money in or out'.) Tj T*
+(    Manages double-entry bookkeeping: Cash receipts, commission revenue, and tax liabilities.) Tj T*
+(  * Formulas: Sliding-scale commission calculators (e.g. 20% under $500, 15% thereafter) & Buyer's Premium.) Tj T*
+(  * Payment Processor: Merchant gateway configuration (Global Payments) for credit card self-checkout.) Tj T*
+(  * User List: Staff credentials with role-based permissions (Super Admin, Clerk, Cashier, Cataloger).) Tj T*
+(  * Company Details: Legal name, physical auction house address, auctioneer state licenses, and tax IDs.) Tj ET
+0.85 0.88 0.93 RG 1 w 40 50 515 0.5 re S
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 40 38 Td (AuctionFlex360 Official Master Reference Guide) Tj ET
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 500 38 Td (Page 1 of 3) Tj ET
+
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 6 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
+endobj
+8 0 obj
+<< /Length 4493 >>
+stream
+0.15 0.39 0.92 rg 40 810 515 4 re f
+BT /F2 16 Tf 0.06 0.09 0.16 rg 40 788 Td (4. Module 3: Auctions Module & Complete 3-Stage Lifecycle) Tj ET
+BT /F3 9.5 Tf 0.4 0.45 0.55 rg 40 773 Td (Path: #/organization/73368/auctions - Live Auctions: 'fgf' & 'XCXZC' [10/21/2026 - 10/30/2026]) Tj ET
+0.93 0.97 0.94 rg 40 710 515 48 re f 0.15 0.65 0.3 RG 1 w 40 710 515 48 re S
+BT /F2 11 Tf 0.08 0.45 0.2 rg 50 742 Td (STAGE 1: PRE-AUCTION (Setup, Cataloging & HiBid Sync)) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 730 Td (Details Sub-tab: Event title, dates, Tax Exempt All toggle, featured banners, auction terms and links.) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 718 Td (Upload Settings: Starting Card 7000 (prevents collision with floor card 1-500), Soft Close timer, Credit card hold.) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 692 Td 13 TL
+(  * Lots Sub-tab: Inventory cataloging. Har item ko Lot #, Title, Description, Consignor Code aur) Tj T*
+(    Reserve Price ke sath tag kiya jata hai. Unsold items reserve price ke neeche nahi bikte.) Tj T*
+(  * Action Buttons: + NEW LOT (manual), IMPORT LOTS (bulk CSV/Excel), IMPORT LOTS BY BARCODE,) Tj T*
+(    SCAN LOT (warehouse handheld scanner), SALE ORDER (re-order lot sequence).) Tj T*
+(  * Lot Images: Drag-and-drop multi-photo batch uploader with automated cloud thumbnails.) Tj T*
+(  * Expenses Sub-tab: Advertising costs, labor, and transport deductions logged against the auction.) Tj ET
+0.95 0.96 0.99 rg 40 590 515 48 re f 0.2 0.4 0.9 RG 1 w 40 590 515 48 re S
+BT /F2 11 Tf 0.1 0.25 0.75 rg 50 622 Td (STAGE 2: AUCTION DAY (Operations & Live Clerking)) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 610 Td (Dashboard Sub-tab: Live metrics - Lot Count, Registered Check-In Bidders, Unique Sellers, Hammer Total.) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 598 Td (Check-In Sub-tab: Front-desk registers buyers, scans IDs, and issues physical bidding paddles.) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 572 Td 13 TL
+(  * Clerking Sub-tab (Core Engine): Clerk records winning bids in real time as auctioneer sells.) Tj T*
+(    - Pre-Cataloged Mode: Item is already on screen. Clerk types Hammer Price (e.g. $450) and) Tj T*
+(      Bidder Card # (e.g. 102) and presses Enter. Advances to next lot in under 3 seconds.) Tj T*
+(    - On-The-Fly Mode: For uncataloged estate/storage sales. Clerk types item description live.) Tj T*
+(  * Alternate Bids Sub-tab: Auto-notifies clerk when floor bids challenge absentee/phone bids.) Tj ET
+0.99 0.96 0.96 rg 40 470 515 48 re f 0.85 0.2 0.2 RG 1 w 40 470 515 48 re S
+BT /F2 11 Tf 0.7 0.1 0.1 rg 50 502 Td (STAGE 3: SETTLEMENT (Closing, Invoicing & Payouts)) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 490 Td (Batch Clerk Action: Bidding close hone ke baad admin Batch Clerk chalata hai jo sabhi winning lots group karta hai.) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.3 rg 50 478 Td (Settlement vs. Invoice: Settlement internal tax audit sheet hai; Invoice external online payment bill hai.) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 452 Td 13 TL
+(  * BATCH SHIPMENTS: Calculates shipping weight and courier freight for winning bidders.) Tj T*
+(  * UPDATE INVOICES: Refreshes total payable balance with packing, freight, and sales tax.) Tj T*
+(  * PRINT / EMAIL: Batch dispatches payment link via SMS/Email to winning buyers for online checkout.) Tj T*
+(  * Seller Settlement: Consignor ka commission (e.g. 15%) aur fees kaat kar net payout check release karta hai.) Tj ET
+0.15 0.39 0.92 rg 40 360 4 16 re f
+BT /F2 14 Tf 0.06 0.09 0.16 rg 50 363 Td (5. Module 4: Reports & Analytics Portal (portal.auctionflex360.com)) Tj ET
+BT /F1 9.5 Tf 0.2 0.25 0.35 rg 40 340 Td 13 TL
+(The Reporting Portal provides visual intelligence, exports, and executive company configuration:) Tj T*
+(  * Hammer Value Widget: Displays Gross Merchandise Value (GMV) across completed auctions.) Tj T*
+(  * Auctions Held: Total event counter (Currently 2 in bitlyze account: 'fgf' and 'XCXZC').) Tj T*
+(  * Lots by Clerking Status: Real-time pie chart of Sold, Unsold/Passed, and Pending lots.) Tj T*
+(  * Reports Library: Certified accounting reports, consignor statements, sales tax audits, IRS 1099s.) Tj T*
+(  * Settings (/settings): Custom Company Logo Uploader (Max 500KB) watermarked on all invoices & paddles.) Tj ET
+0.85 0.88 0.93 RG 1 w 40 50 515 0.5 re S
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 40 38 Td (AuctionFlex360 Official Master Reference Guide) Tj ET
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 500 38 Td (Page 2 of 3) Tj ET
+
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 8 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
+endobj
+10 0 obj
+<< /Length 5636 >>
+stream
+0.15 0.39 0.92 rg 40 810 515 4 re f
+BT /F2 16 Tf 0.06 0.09 0.16 rg 40 788 Td (6. Real-World End-to-End Walkthrough (Step-by-Step Scenario)) Tj ET
+BT /F1 9.5 Tf 0.4 0.45 0.55 rg 40 773 Td (Example: How an item travels from seller intake to customer payment and consignor payout) Tj ET
+0.15 0.39 0.92 rg 40 735 515 22 re f
+BT /F2 8.5 Tf 1 1 1 rg 48 742 Td (STEP) Tj ET
+BT /F2 8.5 Tf 1 1 1 rg 95 742 Td (ROLE) Tj ET
+BT /F2 8.5 Tf 1 1 1 rg 170 742 Td (MODULE / SCREEN) Tj ET
+BT /F2 8.5 Tf 1 1 1 rg 310 742 Td (ACTION & SYSTEM EXECUTION) Tj ET
+0.96 0.97 0.99 rg 40 705 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 705 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 718 Td (Step 1) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 718 Td (Staff) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 718 Td (Customers Module) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 722 Td (Consignor 'Rahul' registered. Unique Consignor Code #C-104 assigned.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 711 Td (Profile stores seller payout bank details and tax ID.) Tj ET
+1 1 1 rg 40 675 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 675 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 688 Td (Step 2) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 688 Td (Cataloger) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 688 Td (Auctions > Lots) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 692 Td (Lot #1 'Vintage Rolex Watch' created. Linked to Consignor #C-104.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 681 Td (Reserve $1,500 set; 4 photos uploaded in Lot Images.) Tj ET
+0.96 0.97 0.99 rg 40 645 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 645 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 658 Td (Step 3) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 658 Td (Admin) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 658 Td (Auctions > Upload Settings) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 662 Td (Internet Only selected. Starting card 7000 set. Uploaded to HiBid.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 651 Td (Auction goes live for global internet pre-bidding.) Tj ET
+1 1 1 rg 40 615 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 615 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 628 Td (Step 4) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 628 Td (Clerk) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 628 Td (Auctions > Clerking) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 632 Td (Online Bidder #7045 wins lot at $2,000. Clerk records Hammer Price.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 621 Td (Presses Enter; lot is marked Sold and closed.) Tj ET
+0.96 0.97 0.99 rg 40 585 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 585 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 598 Td (Step 5) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 598 Td (Cashier) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 598 Td (Auctions > Settlement) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 602 Td (Admin runs Batch Clerk. System adds 10% BP ($200) + tax ($176).) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 591 Td (Total $2,376 invoice dispatched to Bidder #7045 for online credit card payment.) Tj ET
+1 1 1 rg 40 555 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 555 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 568 Td (Step 6) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 568 Td (Accountant) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 568 Td (Auctions > Seller Settlement) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 572 Td (Seller settlement generated. 15% commission ($300) deducted from $2,000.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 561 Td (Net $1,700 payout check printed and released to Consignor Rahul.) Tj ET
+0.96 0.97 0.99 rg 40 525 515 30 re f 0.85 0.88 0.93 RG 0.5 w 40 525 515 30 re S
+BT /F2 8.5 Tf 0.15 0.39 0.92 rg 48 538 Td (Step 7) Tj ET
+BT /F1 8.5 Tf 0.06 0.09 0.16 rg 95 538 Td (Owner) Tj ET
+BT /F2 8.5 Tf 0.06 0.09 0.16 rg 170 538 Td (Portal Dashboard) Tj ET
+BT /F1 8.5 Tf 0.2 0.25 0.35 rg 310 542 Td (Gross Hammer Value increases by $2,000; Net House Profit: $500.) Tj ET
+BT /F3 7.5 Tf 0.4 0.45 0.55 rg 310 531 Td (Commissions ($300) + Buyer's Premium ($200) logged in Asset #1010.) Tj ET
+0.98 0.97 0.93 rg 40 370 515 125 re f 0.85 0.65 0.1 RG 1 w 40 370 515 125 re S
+BT /F2 11 Tf 0.7 0.4 0.05 rg 52 475 Td (Hinglish Summary & Operational Takeaways (Aapke Liye Zaroori Baatein):) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.35 rg 52 458 Td 13 TL
+(1. System ek unified ERP hai jahan Consignor (maal bechne wala) aur Bidder (khareedne wala) dono) Tj T*
+(   Customers module me maintain hote hain.) Tj T*
+(2. Auction Day me live clerking sirf Hammer Price aur Paddle Card number daal kar Enter dabane se chalti hai.) Tj T*
+(3. Settlement ke waqt Batch Clerk chalta hai jisse sabhi jeete hue items group hokar Invoices ban jate hain) Tj T*
+(   aur direct online credit card payment link SMS/Email chala jata hai.) Tj T*
+(4. Seller Settlement me consignor ka 15% commission automatic cut hokar unka net bank check print hota hai.) Tj T*
+(5. Reporting Portal (portal.auctionflex360.com) me Hammer Value aur tax audit documents live update hote hain.) Tj ET
+0.93 0.98 0.94 rg 40 280 515 65 re f 0.15 0.65 0.3 RG 1 w 40 280 515 65 re S
+BT /F2 11 Tf 0.08 0.45 0.2 rg 52 325 Td (Aapka Account Ready Hai: bitlyze (Org ID: 73368)) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.3 rg 52 308 Td 13 TL
+(User: Chandan Kumar (chandankumar@gmail.com) | 2 Active Test Auctions ('fgf' aur 'XCXZC') already bane hue hain.) Tj T*
+(Chart of Accounts me Asset Account #1010 ready hai. Aap live items catalog karke live test run kar sakte hain.) Tj ET
+0.85 0.88 0.93 RG 1 w 40 50 515 0.5 re S
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 40 38 Td (AuctionFlex360 Official Master Reference Guide) Tj ET
+BT /F1 8.5 Tf 0.5 0.55 0.65 rg 500 38 Td (Page 3 of 3) Tj ET
+
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 10 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000128 00000 n 
+0000000198 00000 n 
+0000000273 00000 n 
+0000000351 00000 n 
+0000005722 00000 n 
+0000005874 00000 n 
+0000010419 00000 n 
+0000010571 00000 n 
+0000016260 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+16414
+%%EOF

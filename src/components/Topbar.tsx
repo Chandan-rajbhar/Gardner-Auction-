@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Bell, Radio, ChevronDown } from 'lucide-react';
+import React from 'react';
+import { Bell } from 'lucide-react';
+import { FiSidebar } from 'react-icons/fi';
 import { Auction, NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,161 +9,72 @@ interface TopbarProps {
   auctions?: Auction[];
   selectedAuctionId?: string;
   onSelectAuction?: (id: string) => void;
-  onOpenMobileMenu: () => void;
+  onToggleSidebar?: () => void;
+  onOpenMobileMenu?: () => void;
+  isSidebarOpen?: boolean;
   onTriggerHiBidSync?: () => void;
   isSyncing?: boolean;
   unreadLogsCount: number;
   onOpenNotifications: () => void;
+  onNavigateProfile?: () => void;
 }
 
+const getSectionTitle = (section?: NavigationSection): string => {
+  switch (section) {
+    case 'overview': return 'Dashboard';
+    case 'live_clerking': return 'Live Clerking Block';
+    case 'auctions': return 'Auction Catalog';
+    case 'lots': return 'Catalog Lots';
+    case 'users': return 'Bidders & Consignors';
+    case 'payments': return 'Settlement & Invoices';
+    case 'reports': return 'Reports & Analytics';
+    case 'logs': return 'Activity & Audit Log';
+    case 'settings': return 'Settings & Portal Config';
+    case 'profile': return 'Administrator Profile';
+    default: return 'Dashboard';
+  }
+};
+
 export const Topbar: React.FC<TopbarProps> = ({
-  auctions = [],
-  selectedAuctionId,
-  onSelectAuction = () => {},
+  currentSection = 'overview',
+  onToggleSidebar,
   onOpenMobileMenu,
+  isSidebarOpen = true,
   unreadLogsCount,
-  onOpenNotifications
+  onOpenNotifications,
+  onNavigateProfile
 }) => {
   const { user } = useAuth();
-  const [isAuctionMenuOpen, setIsAuctionMenuOpen] = useState(false);
-  const auctionMenuRef = useRef<HTMLDivElement>(null);
-
-  const currentSelectedAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (auctionMenuRef.current && !auctionMenuRef.current.contains(event.target as Node)) {
-        setIsAuctionMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleToggle = onToggleSidebar || onOpenMobileMenu;
 
   return (
     <header className="executive-topbar">
-      {/* Left: Mobile hamburger */}
+      {/* Left: Sidebar Toggle (App Sidebar Icon) & Breadcrumb */}
       <div className="topbar-left-zone">
         <button 
-          className="topbar-icon-button mobile-only-toggle" 
-          onClick={onOpenMobileMenu}
-          aria-label="Open Navigation Menu"
-          title="Open Menu"
+          type="button"
+          className="topbar-icon-button sidebar-toggle-btn" 
+          onClick={handleToggle}
+          aria-label={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          aria-expanded={isSidebarOpen}
+          id="btn-toggle-sidebar"
         >
-          <Menu size={20} />
+          <FiSidebar size={18} />
         </button>
+        <div className="topbar-breadcrumb-title">
+          <span>{getSectionTitle(currentSection)}</span>
+        </div>
       </div>
 
-      {/* Right: Current Auction Selector, Notification & Profile */}
+      {/* Right: Notifications & Administrator Profile */}
       <div className="topbar-right-zone">
-        {/* Current Auction Selector Dropdown (Left of Bell Icon) */}
-        <div className="current-auction-dropdown-wrapper" ref={auctionMenuRef} style={{ position: 'relative' }}>
-          <button
-            type="button"
-            className="current-auction-btn"
-            onClick={() => setIsAuctionMenuOpen(!isAuctionMenuOpen)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#ffffff',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 6,
-              padding: '6px 12px',
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: 'var(--text-main)',
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-xs)'
-            }}
-            aria-expanded={isAuctionMenuOpen}
-            title="Switch Global Active Auction Context"
-          >
-            <Radio size={13} color="var(--gold-primary)" className="auction-radio-pulse" />
-            <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentSelectedAuction?.title || (currentSelectedAuction as any)?.name || 'Select Auction'}
-            </span>
-            <ChevronDown size={14} color="#64748b" />
-          </button>
-
-          {isAuctionMenuOpen && (
-            <div 
-              className="auction-dropdown-popover"
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 6,
-                background: '#ffffff',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 8,
-                boxShadow: 'var(--shadow-dropdown)',
-                zIndex: 60,
-                minWidth: 320,
-                maxWidth: 380,
-                maxHeight: 360,
-                overflowY: 'auto',
-                padding: '8px 0'
-              }}
-            >
-              <div style={{ padding: '6px 14px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
-                Select Active Saleroom Auction
-              </div>
-              {auctions.map(a => {
-                const isSelected = a.id === selectedAuctionId;
-                const title = a.title || (a as any).name;
-                const status = a.status;
-
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => {
-                      onSelectAuction(a.id);
-                      setIsAuctionMenuOpen(false);
-                    }}
-                    style={{
-                      padding: '10px 14px',
-                      cursor: 'pointer',
-                      background: isSelected ? '#fbf8f2' : 'transparent',
-                      borderLeft: isSelected ? '3px solid var(--gold-primary)' : '3px solid transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      transition: 'background 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#f8fafc';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--gold-dark)' : 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {title}
-                      </div>
-                      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)', marginTop: 2 }}>
-                        {a.code} • {status?.toUpperCase()}
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <span style={{ fontSize: 11, color: 'var(--gold-primary)', fontWeight: 700 }}>
-                        ✓ Active
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
         <button 
           className="topbar-icon-button" 
           onClick={onOpenNotifications}
           title="View Activity Logs & Alerts"
           aria-label="View notifications"
+          id="btn-topbar-notifications"
         >
           <Bell size={18} />
           {unreadLogsCount > 0 && (
@@ -170,18 +82,45 @@ export const Topbar: React.FC<TopbarProps> = ({
           )}
         </button>
 
-        {/* Administrator Profile (Static badge without dropdown) */}
-        <div className="topbar-user-badge" title={`Signed in as ${user?.name || 'Todd Gardner'}`}>
+        {/* Administrator Profile (Clickable Navigation to Profile Page) */}
+        <button
+          type="button"
+          className="topbar-user-badge clickable"
+          onClick={onNavigateProfile}
+          title={`View Profile: ${user?.name || 'Administrator'}`}
+          aria-label="View Administrator Profile"
+          id="btn-topbar-profile"
+        >
           <div className="topbar-user-avatar">
-            {user?.avatarText || 'TG'}
+            {user?.avatarUrl ? (
+              <img 
+                src={user.avatarUrl} 
+                alt={user?.name || 'Administrator'} 
+                className="topbar-user-avatar-img"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.topbar-avatar-fallback') as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <span 
+              className="topbar-avatar-fallback" 
+              style={{ display: user?.avatarUrl ? 'none' : 'flex' }}
+            >
+              {user?.avatarText || 'CK'}
+            </span>
           </div>
           <div className="topbar-user-details">
-            <span className="topbar-user-name">{user?.name || 'Todd Gardner'}</span>
-            <span className="topbar-user-role">{user?.role || 'super_admin'}</span>
+            <span className="topbar-user-name">{user?.name || 'Chandan Kumar'}</span>
+            <span className="topbar-user-role">
+              {user?.role ? user.role.replace('_', ' ') : 'super_admin'}
+            </span>
           </div>
-        </div>
+        </button>
       </div>
     </header>
   );
 };
+
 

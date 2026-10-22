@@ -1,20 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  LayoutDashboard, 
+  LayoutDashboard,
+  LayoutGrid, 
+  Calendar,
+  Clock,
   Users, 
-  Gavel, 
   Layers, 
-  Radio, 
-  Receipt, 
+  CreditCard,
   BarChart3, 
   Bell, 
   Settings, 
+  Globe,
   ShieldCheck,
   ExternalLink,
   X,
   LogOut,
   ChevronDown,
-  User
+  User,
+  Gavel
 } from 'lucide-react';
 import { NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +26,7 @@ interface SidebarProps {
   currentSection: NavigationSection;
   setCurrentSection: (section: NavigationSection) => void;
   isOpen: boolean;
+  isCollapsed?: boolean;
   onClose: () => void;
   liveLotsCount: number;
   pendingVerifications: number;
@@ -33,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentSection,
   setCurrentSection,
   isOpen,
+  isCollapsed = false,
   onClose,
   liveLotsCount,
   pendingVerifications,
@@ -61,8 +66,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isLive?: boolean;
   }> = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { id: 'live_clerking', label: 'Auction Day', icon: Gavel },
-    { id: 'auctions', label: 'Pre Auction', icon: Gavel, badge: auctionsCount },
+    { id: 'live_clerking', label: 'Auction Day', icon: Gavel, badge: 'LIVE', isLive: true },
+    { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
+    { id: 'lots', label: 'Catalog Lots', icon: Layers, badge: liveLotsCount },
     { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
   ];
 
@@ -72,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ElementType;
     badge?: string | number;
   }> = [
-    { id: 'payments', label: 'Settlement & Invoices', icon: Receipt },
+    { id: 'payments', label: 'Settlement & Invoices', icon: CreditCard },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
     { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
@@ -95,11 +101,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      <aside className={`sidebar-executive ${isOpen ? 'open' : ''}`}>
+      <aside className={`sidebar-executive ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
         {/* Brand Area */}
         <div className="sidebar-brand-area">
-          <div className="sidebar-brand-crest">
-            <span className="crest-monogram">G</span>
+          <div className="sidebar-brand-crest" title="Gardner Auction">
+            <img 
+              src="/images/gardner_logo.png" 
+              alt="Gardner Auction" 
+              className="sidebar-brand-logo-img"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.parentElement?.querySelector('.crest-monogram') as HTMLElement;
+                if (fallback) fallback.style.display = 'block';
+              }}
+            />
+            <span className="crest-monogram" style={{ display: 'none' }}>G</span>
             <div className="crest-glow" />
           </div>
           <div className="sidebar-brand-text">
@@ -134,8 +150,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setCurrentSection(item.id);
                       onClose();
                     }}
+                    title={item.label}
+                    aria-label={item.label}
                   >
-                    <Icon size={18} className="sidebar-nav-icon" />
+                    <Icon size={19} className="sidebar-nav-icon" />
                     <span className="sidebar-nav-label">{item.label}</span>
                     {item.badge !== undefined && (
                       <span className={`sidebar-badge ${item.isLive ? 'live-rostrum-pulse' : ''}`}>
@@ -166,8 +184,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setCurrentSection(item.id);
                       onClose();
                     }}
+                    title={item.label}
+                    aria-label={item.label}
                   >
-                    <Icon size={18} className="sidebar-nav-icon" />
+                    <Icon size={19} className="sidebar-nav-icon" />
                     <span className="sidebar-nav-label">{item.label}</span>
                     {item.badge !== undefined && (
                       <span className="sidebar-badge">{item.badge}</span>
@@ -182,22 +202,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Sidebar Footer */}
         <div className="sidebar-executive-footer">
-          <div className="sidebar-system-links">
-            <span className="sidebar-system-status">
-              <span className="status-live-dot" />
-              <span>Gardner v24.2 Linked</span>
-            </span>
+          {isCollapsed ? (
             <a 
               href="https://gardner-auction.vercel.app/" 
               target="_blank" 
               rel="noreferrer" 
-              className="sidebar-public-site-link"
-              title="Open public bidder portal"
+              className="sidebar-collapsed-globe-btn"
+              title="Public Bidder Portal (Website)"
+              aria-label="Public Bidder Portal"
             >
-              <span>Public Site</span>
-              <ExternalLink size={11} />
+              <Globe size={19} />
             </a>
-          </div>
+          ) : (
+            <div className="sidebar-system-links">
+              <span className="sidebar-system-status">
+                <span className="status-live-dot" />
+                <span>Gardner v24.2 Linked</span>
+              </span>
+              <a 
+                href="https://gardner-auction.vercel.app/" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="sidebar-public-site-link"
+                title="Open public bidder portal"
+              >
+                <span>Public Site</span>
+                <ExternalLink size={11} />
+              </a>
+            </div>
+          )}
 
           {/* Administrator Profile Card with Toggle Dropdown */}
           <div className="sidebar-profile-wrapper" ref={profileMenuRef}>
@@ -266,7 +299,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
             >
               <div className="sidebar-profile-avatar">
-                <span>{user?.avatarText || 'TG'}</span>
+                {user?.avatarUrl ? (
+                  <img 
+                    src={user.avatarUrl} 
+                    alt={user?.name || 'Administrator'} 
+                    className="sidebar-profile-avatar-img"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const fallback = e.currentTarget.parentElement?.querySelector('.sidebar-avatar-fallback') as HTMLElement;
+                      if (fallback) fallback.style.display = 'inline';
+                    }}
+                  />
+                ) : null}
+                <span 
+                  className="sidebar-avatar-fallback" 
+                  style={{ display: user?.avatarUrl ? 'none' : 'inline' }}
+                >
+                  {user?.avatarText || 'CK'}
+                </span>
               </div>
               <div className="sidebar-profile-details">
                 <span className="sidebar-profile-name">{user?.name || 'Todd Gardner'}</span>

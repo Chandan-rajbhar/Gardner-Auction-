@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  NavigationSection, 
-  Auction, 
-  LotItem, 
-  UserBidder, 
-  LiveBid, 
-  InvoiceSettlement, 
-  ConsignorSettlement, 
-  ActivityLog 
+import {
+  NavigationSection,
+  Auction,
+  LotItem,
+  UserBidder,
+  LiveBid,
+  InvoiceSettlement,
+  ConsignorSettlement,
+  ActivityLog
 } from './types';
-import { 
-  INITIAL_AUCTIONS, 
-  INITIAL_LOTS, 
-  INITIAL_USERS, 
-  INITIAL_BIDS, 
-  INITIAL_INVOICES, 
-  INITIAL_CONSIGNOR_SETTLEMENTS, 
-  INITIAL_LOGS 
+import {
+  INITIAL_AUCTIONS,
+  INITIAL_LOTS,
+  INITIAL_USERS,
+  INITIAL_BIDS,
+  INITIAL_INVOICES,
+  INITIAL_CONSIGNOR_SETTLEMENTS,
+  INITIAL_LOGS
 } from './data/mockData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -181,8 +181,36 @@ const AdminConsole: React.FC = () => {
   const [auctionStage, setAuctionStage] = useState<StageType>('pre-auction');
   const [auctionSubTab, setAuctionSubTab] = useState<string | undefined>(undefined);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gardner_sidebar_collapsed');
+      return saved === 'true';
+    }
+    return false;
+  });
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncStep, setSyncStep] = useState(0);
+
+  // Responsive sidebar toggle: desktop/tablet collapse/expand into icon rail, mobile drawer open/close
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileMenuOpen(prev => !prev);
+    } else {
+      setIsSidebarCollapsed(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('gardner_sidebar_collapsed', String(next));
+        } catch {
+          // Ignore
+        }
+        return next;
+      });
+    }
+  };
+
+  const isSidebarOpen = typeof window !== 'undefined' && window.innerWidth < 768
+    ? isMobileMenuOpen
+    : !isSidebarCollapsed;
 
   // Application Data States
   const [auctions, setAuctions] = useState<Auction[]>(INITIAL_AUCTIONS);
@@ -256,9 +284,9 @@ const AdminConsole: React.FC = () => {
     setCurrentSection(section);
     if (section === 'auctions') {
       setActiveAuctionDetailId(null);
-      try { window.history.pushState({}, '', '/auctions'); } catch (e) {}
+      try { window.history.pushState({}, '', '/auctions'); } catch (e) { }
     } else {
-      try { window.history.pushState({}, '', `/${section}`); } catch (e) {}
+      try { window.history.pushState({}, '', `/${section}`); } catch (e) { }
     }
   };
 
@@ -518,8 +546,8 @@ const AdminConsole: React.FC = () => {
   // Next Catalog Lot Handler
   const handleNextLot = () => {
     const currentIndex = lots.findIndex(l => l.id === activeLotOnBlock?.id);
-    const nextLot = lots.slice(currentIndex + 1).find(l => l.status === 'upcoming') || 
-                    lots.find(l => l.status === 'upcoming' && l.id !== activeLotOnBlock?.id);
+    const nextLot = lots.slice(currentIndex + 1).find(l => l.status === 'upcoming') ||
+      lots.find(l => l.status === 'upcoming' && l.id !== activeLotOnBlock?.id);
 
     if (nextLot) {
       setActiveLotId(nextLot.id);
@@ -557,10 +585,11 @@ const AdminConsole: React.FC = () => {
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         currentSection={currentSection}
         setCurrentSection={handleNavigateSection}
         isOpen={isMobileMenuOpen}
+        isCollapsed={isSidebarCollapsed}
         onClose={() => setIsMobileMenuOpen(false)}
         liveLotsCount={lots.filter(l => l.status === 'on_block' || l.status === 'upcoming').length}
         pendingVerifications={bidders.filter(b => b.status === 'pending_verification').length}
@@ -569,21 +598,24 @@ const AdminConsole: React.FC = () => {
 
       {/* Main App Body */}
       <div className="main-wrapper">
-        <Topbar 
+        <Topbar
           currentSection={currentSection}
           auctions={auctions}
           selectedAuctionId={selectedAuctionId}
           onSelectAuction={setSelectedAuctionId}
-          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenMobileMenu={handleToggleSidebar}
+          isSidebarOpen={isSidebarOpen}
           onTriggerHiBidSync={triggerHiBidSync}
           isSyncing={isSyncModalOpen && syncStep < 4}
           unreadLogsCount={logs.filter(l => l.severity === 'warning' || l.severity === 'alert').length}
-          onOpenNotifications={() => setCurrentSection('logs')}
+          onOpenNotifications={() => handleNavigateSection('logs')}
+          onNavigateProfile={() => handleNavigateSection('profile')}
         />
 
         <main className="content-body">
           {currentSection === 'overview' && (
-            <OverviewView 
+            <OverviewView
               auction={currentAuction}
               lots={lots}
               bidders={bidders}
@@ -596,7 +628,7 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'users' && (
-            <UsersView 
+            <UsersView
               users={bidders}
               onUpdateUser={(updated) => setBidders(prev => prev.map(u => u.id === updated.id ? updated : u))}
               onAddUser={(newUser) => setBidders(prev => [newUser, ...prev])}
@@ -604,7 +636,7 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'auctions' && (
-            <AuctionsView 
+            <AuctionsView
               auctions={auctions}
               selectedAuctionId={selectedAuctionId}
               onSelectAuction={setSelectedAuctionId}
@@ -636,7 +668,7 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'lots' && (
-            <LotsView 
+            <LotsView
               lots={lots}
               onAddLot={async (newLot) => {
                 // Optimistic UI update
@@ -680,7 +712,7 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'payments' && (
-            <PaymentsView 
+            <PaymentsView
               invoices={invoices}
               consignorSettlements={consignors}
               onUpdateInvoiceStatus={(id, status) => {
@@ -694,14 +726,14 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'reports' && (
-            <ReportsView 
+            <ReportsView
               auction={currentAuction}
               lots={lots}
             />
           )}
 
           {currentSection === 'logs' && (
-            <LogsView 
+            <LogsView
               logs={logs}
             />
           )}
@@ -711,7 +743,7 @@ const AdminConsole: React.FC = () => {
           )}
 
           {currentSection === 'profile' && (
-            <ProfileView onNavigate={setCurrentSection} />
+            <ProfileView onNavigate={handleNavigateSection} />
           )}
         </main>
       </div>
