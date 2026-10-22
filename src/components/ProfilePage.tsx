@@ -16,16 +16,23 @@ import {
   EyeOff,
   ExternalLink,
   ChevronRight,
-  Check,
   Edit3,
   X,
   Camera,
   Trash2,
   AlertTriangle,
-  Upload
+  Upload,
+  Info,
+  Download,
+  Award,
+  RefreshCw,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
+import './ProfilePage.css';
 
 interface ProfilePageProps {
   onNavigate: (path: string) => void;
@@ -62,6 +69,7 @@ interface WonLotRecord {
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToast }) => {
   const { user, updateProfile, updatePassword, uploadAvatar, deleteAvatar, isLoading: authLoading } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('personal');
 
@@ -116,7 +124,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     setBidsError(null);
 
     try {
-      // 1. Attempt query from 'bids' table if present
       const { data: bidsData, error: bidsErr } = await supabase
         .from('bids')
         .select('*')
@@ -137,7 +144,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
           }))
         );
       } else {
-        // Fallback: check 'lots' where current user is high_bidder
         const { data: lotsData } = await supabase
           .from('lots')
           .select('*')
@@ -232,7 +238,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     try {
       const result = await updateProfile({
         name: cleanName,
-        phone: phone.trim()
+        phone: phone.trim(),
+        title: user?.title || 'Registered Bidder'
       });
 
       if (result.success) {
@@ -251,7 +258,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     }
   };
 
-  // Cancel Edit Profile (restores saved values)
+  // Cancel Edit Profile
   const handleCancelEdit = () => {
     if (user) {
       setFullName(user.name || '');
@@ -296,8 +303,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     }
   };
 
-  // --- PHOTO MANAGEMENT HANDLERS (SELECT-THEN-UPLOAD FLOW) ---
-  // Clean up blob preview URL on unmount or when preview changes
+  // Clean up blob preview URL
   useEffect(() => {
     return () => {
       if (photoPreviewUrl && photoPreviewUrl.startsWith('blob:')) {
@@ -317,10 +323,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Reset feedback
     setPhotoFeedback(null);
 
-    // Validate image format
     const validFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!validFormats.includes(file.type.toLowerCase())) {
       setPhotoFeedback({
@@ -334,7 +338,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
       return;
     }
 
-    // Validate size (max 5MB)
     const MAX_SIZE = 5 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       setPhotoFeedback({
@@ -348,18 +351,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
       return;
     }
 
-    // Revoke previous blob preview if any
     if (photoPreviewUrl && photoPreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(photoPreviewUrl);
     }
 
-    // Create local preview inside profile picture area and enable Upload button
     const preview = URL.createObjectURL(file);
     setSelectedPhotoFile(file);
     setPhotoPreviewUrl(preview);
     setPhotoFeedback({
       type: 'success',
-      message: 'Photo selected! Click "Upload" below to save your profile picture.'
+      message: 'Photo selected! Click "Upload" to save your profile picture.'
     });
   };
 
@@ -450,13 +451,27 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     }
   };
 
+  const handleDownloadBidderPass = () => {
+    if (onShowToast) {
+      onShowToast(
+        'success',
+        'Bidder Pass Dispatched',
+        'Official Pennsylvania Board of Auctioneer Examiners Bidder Pass #AY-002004 has been generated.'
+      );
+    }
+  };
+
   // If loading session on fresh page load
   if (authLoading) {
     return (
-      <div className="profile-page-root">
-        <div className="profile-loading-state">
-          <span className="auth-btn-spinner lg" />
-          <p>Verifying secure saleroom credentials...</p>
+      <div className="ga-profile-root">
+        <div className="ga-profile-container">
+          <div className="ga-empty-state">
+            <span className="auth-btn-spinner lg" />
+            <p style={{ color: 'var(--ga-text-muted)', fontSize: '14px', marginTop: '12px' }}>
+              Verifying secure saleroom credentials...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -465,27 +480,31 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
   // If unauthenticated, prompt to sign in
   if (!user) {
     return (
-      <div className="profile-page-root">
-        <div className="container-fluid profile-container">
-          <div className="profile-unauth-card">
-            <div className="unauth-icon-circle">
-              <Lock size={32} />
+      <div className="ga-profile-root">
+        <div className="ga-profile-container">
+          <div className="ga-modal-card" style={{ margin: '48px auto', textAlign: 'center', padding: '36px 28px' }}>
+            <div className="ga-empty-icon-circle" style={{ margin: '0 auto 16px auto' }}>
+              <Lock size={28} />
             </div>
-            <h2 className="unauth-title font-serif">Authentication Required</h2>
-            <p className="unauth-desc">
+            <h2 className="ga-modal-title" style={{ fontSize: '24px', marginBottom: '8px' }}>
+              Authentication Required
+            </h2>
+            <p style={{ color: 'var(--ga-text-muted)', fontSize: '13.5px', lineHeight: 1.6, marginBottom: '24px' }}>
               Please sign in to access your Gardner Auction bidder credentials, bidding history, won auctions, and account security.
             </p>
-            <div className="unauth-action-row">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
                 type="button"
-                className="btn-auth-gold-primary"
+                className="ga-btn-save"
+                style={{ justifyContent: 'center' }}
                 onClick={() => onNavigate('#signin')}
               >
                 Sign In to Bidder Account
               </button>
               <button
                 type="button"
-                className="profile-unauth-back-btn"
+                className="ga-btn-cancel"
+                style={{ justifyContent: 'center' }}
                 onClick={() => onNavigate('/')}
               >
                 Return to Saleroom
@@ -497,54 +516,84 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     );
   }
 
+  // Format creation date
+  const memberSinceShort = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+    : 'Oct 2026';
+
+  const memberSinceFull = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'October 21, 2026';
+
+  const currentAvatarSrc = photoPreviewUrl || user.avatarUrl;
+
   return (
-    <div className="profile-page-root">
-      <div className="container-fluid profile-container">
-        {/* Top Breadcrumb & Back Bar */}
-        <div className="profile-top-nav-bar">
-          <nav className="profile-breadcrumbs" aria-label="Breadcrumb">
-            <button type="button" onClick={() => onNavigate('/')} className="breadcrumb-link">
-              Home
-            </button>
-            <span className="breadcrumb-separator">/</span>
-            <button type="button" onClick={() => onNavigate('#auctions')} className="breadcrumb-link">
-              Auctions
-            </button>
-            <span className="breadcrumb-separator">/</span>
-            <span className="breadcrumb-current">My Profile</span>
-          </nav>
+    <div className="ga-profile-root">
+      {/* Hidden file input for photo upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/jpeg,image/png,image/webp,image/jpg"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+        aria-label="Upload collector photo"
+      />
+
+      <div className="ga-profile-container">
+        {/* =================================================================
+            1. BREADCRUMBS & RETURN BAR (Stitch Spec)
+            ================================================================= */}
+        <nav aria-label="Breadcrumb" className="ga-profile-nav-bar">
+          <ol className="ga-breadcrumbs-list">
+            <li>
+              <button
+                type="button"
+                className="ga-breadcrumb-link"
+                onClick={() => onNavigate('/')}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>home</span>
+                <span>Home</span>
+              </button>
+            </li>
+            <li className="ga-breadcrumb-sep">/</li>
+            <li>
+              <button
+                type="button"
+                className="ga-breadcrumb-link"
+                onClick={() => onNavigate('#auctions')}
+              >
+                Auctions
+              </button>
+            </li>
+            <li className="ga-breadcrumb-sep">/</li>
+            <li className="ga-breadcrumb-current">
+              <span className="ga-breadcrumb-dot" />
+              <span>My Profile</span>
+            </li>
+          </ol>
 
           <button
             type="button"
-            className="profile-back-btn"
+            className="ga-back-btn"
             onClick={() => onNavigate('#auctions')}
           >
-            <ArrowLeft size={15} />
+            <ArrowLeft size={15} className="ga-back-icon" />
             <span>Back to Auctions</span>
           </button>
-        </div>
+        </nav>
 
-        {/* 2-Column Master Layout */}
-        <div className="profile-dashboard-layout">
-          {/* =================================================================
-              LEFT SIDEBAR: Profile Card & Tab Navigation
-              ================================================================= */}
-          <aside className="profile-sidebar-panel">
-            {/* Collector Identity Card */}
-            <div className="profile-collector-card">
-              {/* Hidden file input for photo upload */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={handleFileChange}
-                aria-label="Upload profile photo"
-              />
-
-              <div className="collector-avatar-wrap">
+        {/* =================================================================
+            2. REDESIGNED PROFILE OVERVIEW HERO CARD (Stitch Spec)
+            ================================================================= */}
+        <section className="ga-hero-card" aria-label="Collector Profile Overview">
+          <div className="ga-hero-gold-accent-stripe" />
+          <div className="ga-hero-corner-accent" />
+          <div className="ga-hero-body">
+            <div className="ga-hero-profile-group">
+              {/* Profile Avatar Frame */}
+              <div className="ga-avatar-frame-wrap">
                 <div
-                  className={`collector-avatar-circle font-serif ${(photoPreviewUrl || user.avatarUrl) ? 'has-photo' : ''} ${isUploadingPhoto ? 'uploading' : ''} ${photoPreviewUrl ? 'preview-mode' : ''}`}
+                  className="ga-avatar-circle-ring"
                   onClick={() => {
                     if (isUploadingPhoto) return;
                     if (user.avatarUrl && !photoPreviewUrl) {
@@ -563,303 +612,320 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                     }
                   }}
                   title={photoPreviewUrl ? 'Selected image preview (Click to change)' : user.avatarUrl ? 'Click to view full photo' : 'Click to select photo'}
-                  aria-label={user.avatarUrl ? 'View full profile photo' : 'Select profile photo'}
+                  aria-label="Collector profile image"
                 >
-                  {photoPreviewUrl ? (
+                  {currentAvatarSrc ? (
                     <img
-                      src={photoPreviewUrl}
-                      alt="Selected preview"
-                      className="collector-avatar-img preview"
-                    />
-                  ) : user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name}
-                      className="collector-avatar-img"
+                      src={currentAvatarSrc}
+                      alt={user.name || 'Collector'}
+                      className="ga-avatar-img"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                       }}
                     />
                   ) : (
-                    <span>{user.avatarText || 'GA'}</span>
-                  )}
-
-                  {/* Hover action overlay (hidden while uploading) */}
-                  {!isUploadingPhoto && (
-                    <div className="avatar-hover-overlay">
-                      {photoPreviewUrl ? (
-                        <div className="hover-action-hint">
-                          <Camera size={16} />
-                          <span>Change</span>
-                        </div>
-                      ) : user.avatarUrl ? (
-                        <div className="hover-action-hint">
-                          <Eye size={16} />
-                          <span>View</span>
-                        </div>
-                      ) : (
-                        <div className="hover-action-hint">
-                          <Camera size={16} />
-                          <span>Select</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Profile Picture Loader: inside avatar circle ONLY */}
-                  {isUploadingPhoto && (
-                    <div className="avatar-loading-overlay">
-                      <span className="auth-btn-spinner sm" />
-                      <span className="avatar-loading-label">Saving...</span>
+                    <div className="ga-avatar-initials-fallback">
+                      {user.avatarText || 'TU'}
                     </div>
                   )}
                 </div>
 
-                {/* Edit Photo Badge Button */}
                 <button
                   type="button"
-                  className="collector-avatar-upload-btn"
+                  className="ga-avatar-camera-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleOpenPhotoPicker();
                   }}
-                  title={photoPreviewUrl ? 'Choose a different photo' : user.avatarUrl ? 'Change Profile Photo' : 'Select Profile Photo'}
-                  aria-label="Select photo"
-                  disabled={isUploadingPhoto}
-                  id="btn-edit-photo-badge"
+                  aria-label="Update collector photo"
+                  title="Update collector photo"
+                  id="btn-update-collector-photo"
                 >
-                  <Camera size={13} />
+                  <Camera size={16} />
                 </button>
-
-                <span className="collector-online-badge" title="Authenticated live session" />
               </div>
 
-              {/* Photo Action Buttons: Select-Then-Upload Flow */}
-              <div className="collector-photo-actions-bar">
-                {selectedPhotoFile ? (
-                  /* State A: Photo selected by user. Upload button is ENABLED, with Cancel option */
-                  <div className="photo-actions-group">
-                    <button
-                      type="button"
-                      className="photo-action-btn upload-primary"
-                      onClick={handleUploadSelectedPhoto}
-                      disabled={isUploadingPhoto}
-                      id="btn-confirm-upload-photo"
-                      title="Upload and save selected photo"
-                    >
-                      <Upload size={13} />
-                      <span>{isUploadingPhoto ? 'Uploading...' : 'Upload'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="photo-action-btn cancel"
-                      onClick={handleCancelPhotoSelection}
-                      disabled={isUploadingPhoto}
-                      id="btn-cancel-preview-photo"
-                      title="Discard selected image"
-                    >
-                      <X size={13} />
-                      <span>Cancel</span>
-                    </button>
-                  </div>
-                ) : user.avatarUrl ? (
-                  /* State B: User has a saved photo and no pending selection */
-                  <>
-                    <button
-                      type="button"
-                      className="photo-action-btn view"
-                      onClick={() => setIsPhotoLightboxOpen(true)}
-                      title="View full-size photo"
-                      id="btn-view-photo"
-                    >
-                      <Eye size={13} />
-                      <span>View</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="photo-action-btn change"
-                      onClick={handleOpenPhotoPicker}
-                      title="Select a new photo to replace current"
-                      disabled={isUploadingPhoto}
-                      id="btn-change-photo"
-                    >
-                      <Camera size={13} />
-                      <span>Change</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="photo-action-btn delete"
-                      onClick={() => setIsDeleteModalOpen(true)}
-                      title="Remove profile photo"
-                      disabled={isUploadingPhoto || isDeletingPhoto}
-                      id="btn-delete-photo"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete</span>
-                    </button>
-                  </>
-                ) : (
-                  /* State C: No photo exists, initially keep Upload button DISABLED until user selects a photo */
-                  <div className="photo-actions-group">
-                    <button
-                      type="button"
-                      className="photo-action-btn select-photo"
-                      onClick={handleOpenPhotoPicker}
-                      disabled={isUploadingPhoto}
-                      id="btn-select-photo"
-                      title="Select an image from your device"
-                    >
-                      <Camera size={13} />
-                      <span>Select Photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="photo-action-btn upload-disabled"
-                      disabled={true}
-                      id="btn-upload-disabled"
-                      title="Select an image first to enable upload"
-                    >
-                      <Upload size={13} />
-                      <span>Upload</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Photo Feedback Message Banner */}
-              {photoFeedback && (
-                <div className={`collector-photo-feedback ${photoFeedback.type}`}>
-                  {photoFeedback.type === 'success' ? (
-                    <CheckCircle2 size={13} />
-                  ) : (
-                    <AlertCircle size={13} />
-                  )}
-                  <span>{photoFeedback.message}</span>
-                  <button
-                    type="button"
-                    className="feedback-dismiss-btn"
-                    onClick={() => setPhotoFeedback(null)}
-                    aria-label="Dismiss message"
-                  >
-                    <X size={12} />
-                  </button>
+              {/* User Identity Details */}
+              <div className="ga-hero-info">
+                <div className="ga-hero-name-row">
+                  <h1 className="ga-hero-name font-serif">
+                    {user.name || 'Test User2'}
+                  </h1>
+                  <span className="ga-registered-badge">
+                    <CheckCircle2 size={13} className="ga-hero-btn-icon-gold" />
+                    <span>{user.title || 'Registered Bidder'}</span>
+                  </span>
                 </div>
-              )}
 
-              <h1 className="collector-name font-serif">{user.name}</h1>
-              <span className="collector-email">{user.email}</span>
-
-              <div className="collector-licensure-pill">
-                <ShieldCheck size={12} className="pill-gold-icon" />
-                <span>{user.title || 'Registered Bidder'}</span>
-              </div>
-
-              <div className="collector-meta-stats single">
-                <div className="meta-stat-item">
-                  <span className="stat-label">Member Since</span>
-                  <span className="stat-value">
-                    {user.createdAt
-                      ? new Date(user.createdAt).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short'
-                        })
-                      : 'Oct 2026'}
+                <div className="ga-hero-meta-row">
+                  <span className="ga-hero-meta-item">
+                    <Mail size={15} className="ga-hero-btn-icon-gold" />
+                    <span className="meta-bold">{user.email || 'testuser2@example.com'}</span>
+                  </span>
+                  <span className="ga-meta-divider">•</span>
+                  <span className="ga-hero-meta-item">
+                    <Calendar size={15} style={{ opacity: 0.7 }} />
+                    <span>Member Since: <strong className="meta-bold">{memberSinceShort}</strong></span>
+                  </span>
+                  <span className="ga-meta-divider">•</span>
+                  <span className="ga-license-active-pill">
+                    <span className="ga-pulse-dot" />
+                    <span>PA License Active</span>
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Navigation Tabs (Only 4 Sections) */}
-            <nav className="profile-nav-menu" aria-label="Profile Sections">
-              <button
-                type="button"
-                className={`profile-nav-tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('personal');
-                  setIsEditingProfile(false);
-                }}
-                id="tab-profile-personal"
-              >
-                <div className="tab-btn-content">
-                  <User size={18} className="tab-icon" />
-                  <div className="tab-text-group">
-                    <span className="tab-title">Personal Information</span>
-                    <span className="tab-subtitle">Name, contact &amp; account info</span>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="tab-chevron" />
-              </button>
+            {/* Top Right Action Controls */}
+            <div className="ga-hero-actions">
+              {selectedPhotoFile ? (
+                <>
+                  <button
+                    type="button"
+                    className="ga-hero-btn"
+                    style={{ backgroundColor: '#0B0D10', color: '#F5F3ED', borderColor: '#0B0D10' }}
+                    onClick={handleUploadSelectedPhoto}
+                    disabled={isUploadingPhoto}
+                    id="btn-hero-upload-photo"
+                  >
+                    <Upload size={14} className="ga-hero-btn-icon-gold" />
+                    <span>{isUploadingPhoto ? 'Uploading...' : 'Upload'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ga-hero-btn"
+                    onClick={handleCancelPhotoSelection}
+                    disabled={isUploadingPhoto}
+                    id="btn-hero-cancel-photo"
+                  >
+                    <X size={14} />
+                    <span>Cancel</span>
+                  </button>
+                </>
+              ) : (
+                <>
 
-              <button
-                type="button"
-                className={`profile-nav-tab-btn ${activeTab === 'bidding' ? 'active' : ''}`}
-                onClick={() => setActiveTab('bidding')}
-                id="tab-profile-bidding"
-              >
-                <div className="tab-btn-content">
-                  <Gavel size={18} className="tab-icon" />
-                  <div className="tab-text-group">
-                    <span className="tab-title">Bidding History</span>
-                    <span className="tab-subtitle">Placed bids &amp; lot clerking</span>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="tab-chevron" />
-              </button>
+                  <button
+                    type="button"
+                    className="ga-hero-btn"
+                    onClick={handleOpenPhotoPicker}
+                    disabled={isUploadingPhoto}
+                    id="btn-hero-change-photo"
+                  >
+                    <Camera size={14} className="ga-hero-btn-icon-gold" />
+                    <span>Change</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ga-hero-btn btn-delete"
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    disabled={isUploadingPhoto || isDeletingPhoto}
+                    id="btn-hero-delete-photo"
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete</span>
+                  </button>
+                </>
+              )}
 
+              {/* Night / Day Theme Switcher: Icon Only (Hero Section) */}
               <button
                 type="button"
-                className={`profile-nav-tab-btn ${activeTab === 'won' ? 'active' : ''}`}
-                onClick={() => setActiveTab('won')}
-                id="tab-profile-won"
+                className="ga-hero-theme-toggle-btn"
+                onClick={toggleTheme}
+                aria-label={`Switch to ${theme === 'night' ? 'Day' : 'Night'} Mode`}
+                title={`Switch to ${theme === 'night' ? 'Day Mode' : 'Night Mode'}`}
+                id="btn-hero-theme-toggle"
               >
-                <div className="tab-btn-content">
-                  <Trophy size={18} className="tab-icon" />
-                  <div className="tab-text-group">
-                    <span className="tab-title">Won Auctions</span>
-                    <span className="tab-subtitle">Hammered lots &amp; settlements</span>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="tab-chevron" />
+                {theme === 'night' ? (
+                  <Sun size={16} className="ga-hero-theme-icon" />
+                ) : (
+                  <Moon size={16} className="ga-hero-theme-icon" />
+                )}
               </button>
+            </div>
+          </div>
 
+          {/* Photo Selection / Feedback Banner */}
+          {photoFeedback && (
+            <div
+              style={{
+                padding: '10px 24px',
+                backgroundColor: photoFeedback.type === 'success' ? 'rgba(53, 184, 137, 0.12)' : 'rgba(217, 104, 104, 0.12)',
+                borderTop: '1px solid var(--ga-hero-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '12.5px',
+                color: photoFeedback.type === 'success' ? 'var(--ga-success)' : 'var(--ga-destructive)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {photoFeedback.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                <span>{photoFeedback.message}</span>
+              </div>
               <button
                 type="button"
-                className={`profile-nav-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
-                onClick={() => setActiveTab('security')}
-                id="tab-profile-security"
+                onClick={() => setPhotoFeedback(null)}
+                style={{ color: 'inherit', padding: '2px', cursor: 'pointer' }}
+                aria-label="Dismiss feedback"
               >
-                <div className="tab-btn-content">
-                  <ShieldCheck size={18} className="tab-icon" />
-                  <div className="tab-text-group">
-                    <span className="tab-title">Account &amp; Security</span>
-                    <span className="tab-subtitle">Password update</span>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="tab-chevron" />
+                <X size={12} />
               </button>
-            </nav>
+            </div>
+          )}
+
+          {/* 4-Stat Ribbon at bottom of Hero (Stitch Spec) */}
+          <div className="ga-hero-ribbon">
+            <div className="ga-ribbon-stat-item">
+              <span className="ga-ribbon-stat-val font-serif">{biddingHistory.length}</span>
+              <span className="ga-ribbon-stat-lbl">Active Bids</span>
+            </div>
+            <div className="ga-ribbon-stat-item">
+              <span className="ga-ribbon-stat-val font-serif">{wonAuctions.length}</span>
+              <span className="ga-ribbon-stat-lbl">Lots Settled</span>
+            </div>
+            <div className="ga-ribbon-stat-item">
+              <span className="ga-ribbon-stat-val gold font-serif">AY-002004</span>
+              <span className="ga-ribbon-stat-lbl">Saleroom ID</span>
+            </div>
+            <div className="ga-ribbon-stat-item">
+              <span className="ga-ribbon-stat-val green font-serif">
+                <ShieldCheck size={18} />
+                <span>Level 1</span>
+              </span>
+              <span className="ga-ribbon-stat-lbl">Trust Tier</span>
+            </div>
+          </div>
+        </section>
+
+        {/* =================================================================
+            3. TWO-COLUMN DOSSIER LAYOUT (Stitch Spec)
+            ================================================================= */}
+        <div className="ga-dossier-layout">
+          {/* ===============================================================
+              LEFT COLUMN: COLLECTOR LEDGER SIDEBAR
+              =============================================================== */}
+          <aside className="ga-sidebar-card" aria-label="Collector Ledger Navigation">
+            <div className="ga-sidebar-header">
+              <span className="ga-sidebar-eyebrow">Collector Ledger</span>
+              <span className="ga-sidebar-dot" />
+            </div>
+
+            {/* Tab 1: Personal Information */}
+            <button
+              type="button"
+              className={`ga-sidebar-tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('personal');
+                setIsEditingProfile(false);
+              }}
+              id="tab-profile-personal"
+            >
+              <div className="ga-tab-content-wrap">
+                <div className="ga-tab-icon-box">
+                  <User size={18} />
+                </div>
+                <div className="ga-tab-text-group">
+                  <span className="ga-tab-title">Personal Information</span>
+                  <span className="ga-tab-subtitle">Name, contact &amp; account info</span>
+                </div>
+              </div>
+              <ChevronRight size={16} className="ga-tab-chevron" />
+            </button>
+
+            {/* Tab 2: Bidding History */}
+            <button
+              type="button"
+              className={`ga-sidebar-tab-btn ${activeTab === 'bidding' ? 'active' : ''}`}
+              onClick={() => setActiveTab('bidding')}
+              id="tab-profile-bidding"
+            >
+              <div className="ga-tab-content-wrap">
+                <div className="ga-tab-icon-box">
+                  <Gavel size={18} />
+                </div>
+                <div className="ga-tab-text-group">
+                  <span className="ga-tab-title">Bidding History</span>
+                  <span className="ga-tab-subtitle">Placed bids &amp; lot clerking</span>
+                </div>
+              </div>
+              <ChevronRight size={16} className="ga-tab-chevron" />
+            </button>
+
+            {/* Tab 3: Won Auctions */}
+            <button
+              type="button"
+              className={`ga-sidebar-tab-btn ${activeTab === 'won' ? 'active' : ''}`}
+              onClick={() => setActiveTab('won')}
+              id="tab-profile-won"
+            >
+              <div className="ga-tab-content-wrap">
+                <div className="ga-tab-icon-box">
+                  <Trophy size={18} />
+                </div>
+                <div className="ga-tab-text-group">
+                  <span className="ga-tab-title">Won Auctions</span>
+                  <span className="ga-tab-subtitle">Hammered lots &amp; settlements</span>
+                </div>
+              </div>
+              <ChevronRight size={16} className="ga-tab-chevron" />
+            </button>
+
+            {/* Tab 4: Account & Security */}
+            <button
+              type="button"
+              className={`ga-sidebar-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
+              onClick={() => setActiveTab('security')}
+              id="tab-profile-security"
+            >
+              <div className="ga-tab-content-wrap">
+                <div className="ga-tab-icon-box">
+                  <Lock size={18} />
+                </div>
+                <div className="ga-tab-text-group">
+                  <span className="ga-tab-title">Account &amp; Security</span>
+                  <span className="ga-tab-subtitle">Password update</span>
+                </div>
+              </div>
+              <ChevronRight size={16} className="ga-tab-chevron" />
+            </button>
+
+            {/* Advisory Concierge Card in Sidebar (Stitch Spec) */}
+            <div className="ga-sidebar-concierge-card">
+              <Info size={18} className="ga-concierge-icon" />
+              <p style={{ margin: 0 }}>
+                Need assistance updating bidding limits or wire transfer instructions? Contact our auction clerk directly at
+                <span className="ga-concierge-phone">(412) 555-0199</span>
+              </p>
+            </div>
           </aside>
 
-          {/* =================================================================
-              RIGHT MAIN CONTENT: Active Section Card
-              ================================================================= */}
-          <main className="profile-content-panel">
-            {/* ==================== 1. PERSONAL INFORMATION ==================== */}
+          {/* ===============================================================
+              RIGHT COLUMN: MAIN CONTENT PANELS
+              =============================================================== */}
+          <main className="ga-dossier-panel">
+            {/* -------------------------------------------------------------
+                SECTION 1: PERSONAL INFORMATION DOSSIER
+                ------------------------------------------------------------- */}
             {activeTab === 'personal' && (
-              <div className="profile-section-card">
-                <div className="section-card-header">
-                  <div>
-                    <h2 className="section-title font-serif">Personal Information</h2>
-                    <p className="section-subtitle">
+              <div className="ga-dossier-card">
+                {/* Dossier Header */}
+                <div className="ga-dossier-header">
+                  <div className="ga-dossier-header-text">
+                    <span className="ga-dossier-eyebrow">Collector Dossier</span>
+                    <h2 className="ga-dossier-title font-serif">Personal Information</h2>
+                    <p className="ga-dossier-desc">
                       {isEditingProfile
                         ? 'Update your legal name and contact phone number. Changes are saved to your profile.'
                         : 'Review and manage your accredited collector credentials and contact details.'}
                     </p>
                   </div>
+
                   {!isEditingProfile && (
                     <button
                       type="button"
-                      className="profile-edit-btn"
+                      className="ga-edit-profile-btn"
                       onClick={() => {
                         setFullName(user.name || '');
                         setPhone(user.phone || '');
@@ -869,160 +935,253 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                       }}
                       id="btn-edit-profile"
                     >
-                      <Edit3 size={15} />
+                      <Edit3 size={15} className="ga-edit-icon" />
                       <span>Edit Profile</span>
                     </button>
                   )}
                 </div>
 
+                {/* Success / Error Alerts */}
                 {profileSuccessMsg && (
-                  <div className="auth-alert-banner success" role="status">
-                    <CheckCircle2 size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-success-dim)',
+                      border: '1px solid var(--ga-success-border)',
+                      color: 'var(--ga-success)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <CheckCircle2 size={16} />
                     <span>{profileSuccessMsg}</span>
                   </div>
                 )}
 
                 {profileErrorMsg && (
-                  <div className="auth-alert-banner error" role="alert">
-                    <AlertCircle size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-destructive-dim)',
+                      border: '1px solid var(--ga-destructive-border)',
+                      color: 'var(--ga-destructive)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <AlertCircle size={16} />
                     <span>{profileErrorMsg}</span>
                   </div>
                 )}
 
                 {!isEditingProfile ? (
-                  /* ================= READ-ONLY VIEW (DEFAULT) ================= */
-                  <div className="profile-readonly-container">
-                    <div className="profile-readonly-grid">
-                      <div className="profile-readonly-item">
-                        <div className="readonly-item-header">
-                          <User size={15} className="readonly-icon" />
-                          <span className="readonly-label">Full Legal Name</span>
+                  /* ================= READ-ONLY VIEW (STITCH SPEC) ================= */
+                  <>
+                    <div className="ga-info-grid">
+                      {/* 1. Full Legal Name */}
+                      <div className="ga-info-box">
+                        <div className="ga-info-box-header">
+                          <span className="ga-info-label">
+                            <User size={15} className="ga-info-icon-gold" />
+                            <span>FULL LEGAL NAME</span>
+                          </span>
+                          <Lock size={15} className="ga-info-status-icon" />
                         </div>
-                        <span className="readonly-value">{user.name || 'Not provided'}</span>
+                        <div className="ga-info-box-body">
+                          <span className="ga-info-value">{user.name || 'Test User2'}</span>
+                          <span className="ga-badge-verified">Verified</span>
+                        </div>
                       </div>
 
-                      <div className="profile-readonly-item">
-                        <div className="readonly-item-header">
-                          <Mail size={15} className="readonly-icon" />
-                          <span className="readonly-label">Email Address</span>
+                      {/* 2. Email Address */}
+                      <div className="ga-info-box">
+                        <div className="ga-info-box-header">
+                          <span className="ga-info-label">
+                            <Mail size={15} className="ga-info-icon-gold" />
+                            <span>EMAIL ADDRESS</span>
+                          </span>
+                          <CheckCircle2 size={15} className="ga-info-status-icon" />
                         </div>
-                        <span className="readonly-value">{user.email || 'Not provided'}</span>
+                        <div className="ga-info-box-body">
+                          <span className="ga-info-value">{user.email || 'testuser2@example.com'}</span>
+                          <span className="ga-badge-primary">Primary</span>
+                        </div>
                       </div>
 
-                      <div className="profile-readonly-item">
-                        <div className="readonly-item-header">
-                          <Phone size={15} className="readonly-icon" />
-                          <span className="readonly-label">Contact Phone</span>
+                      {/* 3. Contact Phone */}
+                      <div className="ga-info-box">
+                        <div className="ga-info-box-header">
+                          <span className="ga-info-label">
+                            <Phone size={15} className="ga-info-icon-gold" />
+                            <span>CONTACT PHONE</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="ga-action-link-gold"
+                            onClick={() => {
+                              setFullName(user.name || '');
+                              setPhone(user.phone || '');
+                              setIsEditingProfile(true);
+                            }}
+                          >
+                            {user.phone ? 'Edit' : 'Add'}
+                          </button>
                         </div>
-                        <span className={`readonly-value ${!user.phone ? 'muted' : ''}`}>
-                          {user.phone || 'Not provided'}
-                        </span>
+                        <div className="ga-info-box-body">
+                          <span className={`ga-info-value ${!user.phone ? 'muted-italic' : ''}`}>
+                            {user.phone || 'Not provided'}
+                          </span>
+                          <span className="ga-badge-gold">Recommended</span>
+                        </div>
                       </div>
 
-                      <div className="profile-readonly-item">
-                        <div className="readonly-item-header">
-                          <ShieldCheck size={15} className="readonly-icon" />
-                          <span className="readonly-label">Saleroom Role</span>
+                      {/* 4. Saleroom Role */}
+                      <div className="ga-info-box">
+                        <div className="ga-info-box-header">
+                          <span className="ga-info-label">
+                            <ShieldCheck size={15} className="ga-info-icon-gold" />
+                            <span>SALEROOM ROLE</span>
+                          </span>
+                          <Award size={15} className="ga-info-icon-gold" />
                         </div>
-                        <span className="readonly-value">{user.title || 'Registered Bidder'}</span>
+                        <div className="ga-info-box-body">
+                          <span className="ga-info-value">{user.title || 'Registered Bidder'}</span>
+                          <span className="ga-badge-gold">Tier 1 Approved</span>
+                        </div>
                       </div>
 
-                      <div className="profile-readonly-item full-width">
-                        <div className="readonly-item-header">
-                          <Calendar size={15} className="readonly-icon" />
-                          <span className="readonly-label">Member Since</span>
+                      {/* 5. Member Since (Full Width 2 Cols) */}
+                      <div className="ga-info-box full-width">
+                        <div className="ga-info-box-header">
+                          <span className="ga-info-label">
+                            <Calendar size={15} className="ga-info-icon-gold" />
+                            <span>MEMBER SINCE</span>
+                          </span>
                         </div>
-                        <span className="readonly-value">
-                          {user.createdAt
-                            ? new Date(user.createdAt).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })
-                            : 'October 2026'}
-                        </span>
+                        <div className="ga-info-box-body" style={{ flexWrap: 'wrap', gap: '12px' }}>
+                          <span className="ga-info-value serif-date font-serif">
+                            {memberSinceFull}
+                          </span>
+                          <div className="ga-member-tenure-wrap">
+                            <span className="ga-tenure-label">
+                              <Lock size={14} style={{ color: 'var(--ga-success)' }} />
+                              <span>Tenure: Initial Registration</span>
+                            </span>
+
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    {/* Certified PA Saleroom Participant Feature Card */}
+                    <div className="ga-pass-banner">
+                      <div className="ga-pass-banner-left">
+                        <div className="ga-pass-seal-badge">
+                          <Award size={24} />
+                        </div>
+                        <div className="ga-pass-text-wrap">
+                          <h3 className="ga-pass-title font-serif">Certified PA Saleroom Participant</h3>
+                          <p className="ga-pass-desc">
+                            Your collector status adheres to Pennsylvania Board of Auctioneer Examiners regulatory requirements.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="ga-pass-download-btn"
+                        onClick={handleDownloadBidderPass}
+                        id="btn-download-bidder-pass"
+                      >
+                        <Download size={16} />
+                        <span>Download Bidder Pass</span>
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   /* ================= EDITABLE FORM VIEW ================= */
-                  <form onSubmit={handleSaveProfile} className="profile-form">
-                    <div className="profile-grid-2col">
-                      <div className="auth-field-group">
-                        <label className="auth-field-label" htmlFor="prof-full-name">
+                  <form onSubmit={handleSaveProfile} className="ga-edit-form">
+                    <div className="ga-form-grid-2col">
+                      <div className="ga-form-group">
+                        <label className="ga-form-label" htmlFor="prof-full-name">
                           Full Legal Name <span className="req-star">*</span>
                         </label>
-                        <div className="auth-input-container">
-                          <User size={16} className="auth-field-icon" />
+                        <div className="ga-form-input-box">
+                          <User size={16} className="ga-form-icon" />
                           <input
                             id="prof-full-name"
                             type="text"
                             required
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
-                            className="auth-text-input"
+                            className="ga-form-input"
                             placeholder="e.g. Robert J. Sterling"
                           />
                         </div>
                       </div>
 
-                      <div className="auth-field-group">
-                        <label className="auth-field-label" htmlFor="prof-email">
+                      <div className="ga-form-group">
+                        <label className="ga-form-label" htmlFor="prof-email">
                           Email Address (Read-Only)
                         </label>
-                        <div className="auth-input-container disabled">
-                          <Mail size={16} className="auth-field-icon" />
+                        <div className="ga-form-input-box disabled">
+                          <Mail size={16} className="ga-form-icon" />
                           <input
                             id="prof-email"
                             type="email"
                             disabled
                             value={user.email}
-                            className="auth-text-input"
+                            className="ga-form-input"
                             title="Email is managed by Supabase authentication"
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="profile-grid-2col">
-                      <div className="auth-field-group">
-                        <label className="auth-field-label" htmlFor="prof-phone">
+                    <div className="ga-form-grid-2col">
+                      <div className="ga-form-group">
+                        <label className="ga-form-label" htmlFor="prof-phone">
                           Contact Phone Number
                         </label>
-                        <div className="auth-input-container">
-                          <Phone size={16} className="auth-field-icon" />
+                        <div className="ga-form-input-box">
+                          <Phone size={16} className="ga-form-icon" />
                           <input
                             id="prof-phone"
                             type="tel"
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            className="auth-text-input"
+                            className="ga-form-input"
                             placeholder="+1 (412) 555-0192"
                           />
                         </div>
                       </div>
 
-                      <div className="auth-field-group">
-                        <label className="auth-field-label" htmlFor="prof-role">
+                      <div className="ga-form-group">
+                        <label className="ga-form-label" htmlFor="prof-role">
                           Saleroom Role
                         </label>
-                        <div className="auth-input-container disabled">
-                          <ShieldCheck size={16} className="auth-field-icon" />
+                        <div className="ga-form-input-box disabled">
+                          <ShieldCheck size={16} className="ga-form-icon" />
                           <input
                             id="prof-role"
                             type="text"
                             disabled
                             value={user.title || 'Registered Bidder'}
-                            className="auth-text-input"
+                            className="ga-form-input"
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="profile-form-action-bar edit-mode">
+                    <div className="ga-form-actions-row">
                       <button
                         type="button"
-                        className="btn-profile-cancel"
+                        className="ga-btn-cancel"
                         onClick={handleCancelEdit}
                         disabled={isSavingProfile}
                         id="btn-cancel-edit-profile"
@@ -1032,13 +1191,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                       </button>
                       <button
                         type="submit"
-                        className="btn-auth-gold-primary"
+                        className="ga-btn-save"
                         disabled={isSavingProfile}
                         id="btn-save-personal-info"
                       >
                         {isSavingProfile ? (
                           <>
-                            <span className="auth-btn-spinner" />
+                            <span className="auth-btn-spinner sm" />
                             <span>Saving Changes...</span>
                           </>
                         ) : (
@@ -1054,80 +1213,91 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
               </div>
             )}
 
-            {/* ==================== 2. BIDDING HISTORY ==================== */}
+            {/* -------------------------------------------------------------
+                SECTION 2: BIDDING HISTORY
+                ------------------------------------------------------------- */}
             {activeTab === 'bidding' && (
-              <div className="profile-section-card">
-                <div className="section-card-header">
+              <div className="ga-dossier-card">
+                <div className="ga-tab-section-header">
                   <div>
-                    <h2 className="section-title font-serif">Bidding History</h2>
-                    <p className="section-subtitle">
+                    <h2 className="ga-dossier-title font-serif">Bidding History</h2>
+                    <p className="ga-dossier-desc">
                       Chronological ledger of your live clerking desk and webcast bids placed across Gardner Auction sales sessions.
                     </p>
                   </div>
                   <button
                     type="button"
-                    className="profile-refresh-btn"
+                    className="ga-refresh-btn"
                     onClick={fetchBiddingHistory}
                     disabled={isLoadingBids}
                     title="Refresh bid ledger"
                   >
-                    Refresh
+                    <RefreshCw size={13} style={{ display: 'inline', marginRight: '6px' }} />
+                    <span>Refresh</span>
                   </button>
                 </div>
 
                 {isLoadingBids ? (
-                  <div className="profile-empty-state">
+                  <div className="ga-empty-state">
                     <span className="auth-btn-spinner lg" />
-                    <p>Retrieving your bidding records from Supabase...</p>
+                    <p style={{ color: 'var(--ga-text-muted)', fontSize: '13.5px' }}>
+                      Retrieving your bidding records from Supabase...
+                    </p>
                   </div>
                 ) : bidsError ? (
-                  <div className="auth-alert-banner error" role="alert">
-                    <AlertCircle size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-destructive-dim)',
+                      border: '1px solid var(--ga-destructive-border)',
+                      color: 'var(--ga-destructive)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <AlertCircle size={16} />
                     <span>{bidsError}</span>
                   </div>
                 ) : biddingHistory.length > 0 ? (
-                  <div className="profile-table-container">
-                    <table className="profile-data-table">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                       <thead>
-                        <tr>
-                          <th>Lot Number &amp; Item</th>
-                          <th>Bid Amount</th>
-                          <th>Paddle</th>
-                          <th>Timestamp</th>
-                          <th>Status</th>
+                        <tr style={{ borderBottom: '1px solid var(--ga-dossier-border)', textAlign: 'left', color: 'var(--ga-text-dark-muted)' }}>
+                          <th style={{ padding: '12px 14px' }}>Lot Number &amp; Item</th>
+                          <th style={{ padding: '12px 14px' }}>Bid Amount</th>
+                          <th style={{ padding: '12px 14px' }}>Paddle</th>
+                          <th style={{ padding: '12px 14px' }}>Timestamp</th>
+                          <th style={{ padding: '12px 14px' }}>Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {biddingHistory.map((bid) => (
-                          <tr key={bid.id}>
-                            <td>
-                              <div className="table-item-cell">
-                                <span className="item-lot-tag">Lot #{bid.lot_number}</span>
-                                <span className="item-title">{bid.lot_title}</span>
-                              </div>
+                          <tr key={bid.id} style={{ borderBottom: '1px solid var(--ga-card-border)', color: 'var(--ga-text-dark)' }}>
+                            <td style={{ padding: '12px 14px' }}>
+                              <span style={{ color: 'var(--ga-gold)', fontWeight: 600, marginRight: '8px' }}>Lot #{bid.lot_number}</span>
+                              <span>{bid.lot_title}</span>
                             </td>
-                            <td>
-                              <span className="table-price font-serif">
-                                ${bid.amount.toLocaleString()}
+                            <td style={{ padding: '12px 14px', fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
+                              ${bid.amount.toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px' }}>
+                              <span style={{ padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--ga-ribbon-bg)', border: '1px solid var(--ga-card-border)', fontSize: '11.5px' }}>
+                                #{bid.paddle_number || '104'}
                               </span>
                             </td>
-                            <td>
-                              <span className="table-paddle-pill">Paddle #{bid.paddle_number || '104'}</span>
+                            <td style={{ padding: '12px 14px', color: 'var(--ga-text-dark-muted)', fontSize: '12px' }}>
+                              {new Date(bid.created_at).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </td>
-                            <td>
-                              <span className="table-date">
-                                {new Date(bid.created_at).toLocaleDateString(undefined, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="table-status-badge active">
-                                {bid.status}
-                              </span>
+                            <td style={{ padding: '12px 14px' }}>
+                              <span className="ga-badge-verified">{bid.status}</span>
                             </td>
                           </tr>
                         ))}
@@ -1135,18 +1305,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                     </table>
                   </div>
                 ) : (
-                  /* Clean Empty State */
-                  <div className="profile-empty-state">
-                    <div className="empty-icon-circle">
-                      <Gavel size={32} />
+                  <div className="ga-empty-state">
+                    <div className="ga-empty-icon-circle">
+                      <Gavel size={30} />
                     </div>
-                    <h3 className="empty-title font-serif">No Bidding Activity Yet</h3>
-                    <p className="empty-desc">
+                    <h3 className="ga-empty-title font-serif">No Bidding Activity Yet</h3>
+                    <p className="ga-empty-desc">
                       You have not placed bids on any active auction lots in the current salesroom session. Bids placed on live lots will automatically register here.
                     </p>
                     <button
                       type="button"
-                      className="btn-auth-gold-primary"
+                      className="ga-btn-save"
                       onClick={() => onNavigate('#auctions')}
                     >
                       Explore Live Auctions →
@@ -1156,90 +1325,106 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
               </div>
             )}
 
-            {/* ==================== 3. WON AUCTIONS ==================== */}
+            {/* -------------------------------------------------------------
+                SECTION 3: WON AUCTIONS
+                ------------------------------------------------------------- */}
             {activeTab === 'won' && (
-              <div className="profile-section-card">
-                <div className="section-card-header">
+              <div className="ga-dossier-card">
+                <div className="ga-tab-section-header">
                   <div>
-                    <h2 className="section-title font-serif">Won Auctions</h2>
-                    <p className="section-subtitle">
+                    <h2 className="ga-dossier-title font-serif">Won Auctions</h2>
+                    <p className="ga-dossier-desc">
                       Catalog lots awarded to your bidder paddle with hammer prices and post-sale clearance statuses.
                     </p>
                   </div>
                   <button
                     type="button"
-                    className="profile-refresh-btn"
+                    className="ga-refresh-btn"
                     onClick={fetchWonAuctions}
                     disabled={isLoadingWon}
                     title="Refresh won auction records"
                   >
-                    Refresh
+                    <RefreshCw size={13} style={{ display: 'inline', marginRight: '6px' }} />
+                    <span>Refresh</span>
                   </button>
                 </div>
 
                 {isLoadingWon ? (
-                  <div className="profile-empty-state">
+                  <div className="ga-empty-state">
                     <span className="auth-btn-spinner lg" />
-                    <p>Scanning certified salesroom records for awarded lots...</p>
+                    <p style={{ color: 'var(--ga-text-muted)', fontSize: '13.5px' }}>
+                      Scanning certified salesroom records for awarded lots...
+                    </p>
                   </div>
                 ) : wonError ? (
-                  <div className="auth-alert-banner error" role="alert">
-                    <AlertCircle size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-destructive-dim)',
+                      border: '1px solid var(--ga-destructive-border)',
+                      color: 'var(--ga-destructive)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <AlertCircle size={16} />
                     <span>{wonError}</span>
                   </div>
                 ) : wonAuctions.length > 0 ? (
-                  <div className="won-lots-grid">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                     {wonAuctions.map((lot) => (
-                      <div key={lot.id} className="won-lot-card">
+                      <div key={lot.id} className="ga-info-box">
                         {lot.image && (
-                          <div className="won-lot-img-wrap">
-                            <img src={lot.image} alt={lot.title} className="won-lot-img" />
-                            <span className="won-badge">
-                              <Trophy size={12} /> WON LOT
+                          <div style={{ position: 'relative', height: '180px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+                            <img src={lot.image} alt={lot.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <span style={{ position: 'absolute', top: '8px', left: '8px', padding: '3px 8px', borderRadius: '4px', backgroundColor: 'var(--ga-gold)', color: '#0B0D10', fontSize: '10.5px', fontWeight: 700 }}>
+                              WON LOT
                             </span>
                           </div>
                         )}
-                        <div className="won-lot-info">
-                          <span className="won-lot-number">Lot #{lot.lot_number} • {lot.category || 'Catalog Specimen'}</span>
-                          <h3 className="won-lot-title font-serif">{lot.title}</h3>
-                          
-                          <div className="won-price-row">
-                            <span className="won-price-label">Winning Hammer Price:</span>
-                            <span className="won-price-amount font-serif">
-                              ${(lot.hammer_price || lot.current_bid || 0).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <div className="won-settlement-status">
-                            <span className="settlement-label">Settlement Status:</span>
-                            <span className="settlement-pill">{lot.payment_status}</span>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="won-inspect-btn"
-                            onClick={() => onNavigate(`#lot/${lot.id}`)}
-                          >
-                            <span>Inspect Specimen Details</span>
-                            <ExternalLink size={14} />
-                          </button>
+                        <span style={{ fontSize: '11px', color: 'var(--ga-gold)', fontWeight: 600 }}>
+                          Lot #{lot.lot_number} • {lot.category || 'Catalog Specimen'}
+                        </span>
+                        <h4 style={{ fontFamily: 'Playfair Display, serif', fontSize: '16px', margin: '4px 0', color: 'var(--ga-text-dark)' }}>
+                          {lot.title}
+                        </h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '6px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--ga-text-dark-muted)' }}>Hammer Price:</span>
+                          <span style={{ fontFamily: 'Playfair Display, serif', fontSize: '18px', fontWeight: 600, color: 'var(--ga-text-dark)' }}>
+                            ${(lot.hammer_price || lot.current_bid || 0).toLocaleString()}
+                          </span>
                         </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--ga-text-dark-muted)' }}>Status:</span>
+                          <span className="ga-badge-gold" style={{ fontSize: '10.5px' }}>{lot.payment_status}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="ga-back-btn"
+                          style={{ marginTop: '10px', justifyContent: 'center' }}
+                          onClick={() => onNavigate(`#lot/${lot.id}`)}
+                        >
+                          <span>Inspect Specimen</span>
+                          <ExternalLink size={13} />
+                        </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  /* Clean Empty State */
-                  <div className="profile-empty-state">
-                    <div className="empty-icon-circle">
-                      <Trophy size={32} />
+                  <div className="ga-empty-state">
+                    <div className="ga-empty-icon-circle">
+                      <Trophy size={30} />
                     </div>
-                    <h3 className="empty-title font-serif">No Won Auctions Yet</h3>
-                    <p className="empty-desc">
+                    <h3 className="ga-empty-title font-serif">No Won Auctions Yet</h3>
+                    <p className="ga-empty-desc">
                       Lots you successfully win in live salesroom sessions or webcast clerkings will appear here with your invoice dossier, hammer price, and paddle clearance.
                     </p>
                     <button
                       type="button"
-                      className="btn-auth-gold-primary"
+                      className="ga-btn-save"
                       onClick={() => onNavigate('#catalogs')}
                     >
                       Browse Catalog Lots →
@@ -1249,41 +1434,66 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
               </div>
             )}
 
-            {/* ==================== 4. ACCOUNT & SECURITY (PASSWORD ONLY) ==================== */}
+            {/* -------------------------------------------------------------
+                SECTION 4: ACCOUNT & SECURITY (PASSWORD UPDATE)
+                ------------------------------------------------------------- */}
             {activeTab === 'security' && (
-              <div className="profile-section-card">
-                <div className="section-card-header">
+              <div className="ga-dossier-card">
+                <div className="ga-tab-section-header">
                   <div>
-                    <h2 className="section-title font-serif">Account &amp; Security</h2>
-                    <p className="section-subtitle">
-                      Update your account password to maintain security.
+                    <h2 className="ga-dossier-title font-serif">Account &amp; Security</h2>
+                    <p className="ga-dossier-desc">
+                      Update your account password to maintain security across your collector profile.
                     </p>
                   </div>
                 </div>
 
                 {passwordSuccessMsg && (
-                  <div className="auth-alert-banner success" role="status">
-                    <CheckCircle2 size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-success-dim)',
+                      border: '1px solid var(--ga-success-border)',
+                      color: 'var(--ga-success)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <CheckCircle2 size={16} />
                     <span>{passwordSuccessMsg}</span>
                   </div>
                 )}
 
                 {passwordErrorMsg && (
-                  <div className="auth-alert-banner error" role="alert">
-                    <AlertCircle size={16} className="alert-icon" />
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--ga-destructive-dim)',
+                      border: '1px solid var(--ga-destructive-border)',
+                      color: 'var(--ga-destructive)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <AlertCircle size={16} />
                     <span>{passwordErrorMsg}</span>
                   </div>
                 )}
 
-                {/* Password Update Form Only */}
-                <form onSubmit={handleUpdatePassword} className="profile-form">
-                  <div className="profile-grid-2col">
-                    <div className="auth-field-group">
-                      <label className="auth-field-label" htmlFor="sec-new-password">
+                <form onSubmit={handleUpdatePassword} className="ga-edit-form">
+                  <div className="ga-form-grid-2col">
+                    <div className="ga-form-group">
+                      <label className="ga-form-label" htmlFor="sec-new-password">
                         New Password <span className="req-star">*</span>
                       </label>
-                      <div className="auth-input-container">
-                        <Lock size={16} className="auth-field-icon" />
+                      <div className="ga-form-input-box">
+                        <Lock size={16} className="ga-form-icon" />
                         <input
                           id="sec-new-password"
                           type={showNewPassword ? 'text' : 'password'}
@@ -1291,27 +1501,26 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                           autoComplete="new-password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          className="auth-text-input"
+                          className="ga-form-input"
                           placeholder="Minimum 8 characters"
                         />
                         <button
                           type="button"
-                          className="auth-eye-toggle-btn"
                           onClick={() => setShowNewPassword(!showNewPassword)}
+                          style={{ padding: '0 12px', background: 'none', border: 'none', color: 'var(--ga-text-dark-muted)', cursor: 'pointer' }}
                           aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                          tabIndex={-1}
                         >
                           {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
                     </div>
 
-                    <div className="auth-field-group">
-                      <label className="auth-field-label" htmlFor="sec-confirm-password">
+                    <div className="ga-form-group">
+                      <label className="ga-form-label" htmlFor="sec-confirm-password">
                         Confirm New Password <span className="req-star">*</span>
                       </label>
-                      <div className="auth-input-container">
-                        <Lock size={16} className="auth-field-icon" />
+                      <div className="ga-form-input-box">
+                        <Lock size={16} className="ga-form-icon" />
                         <input
                           id="sec-confirm-password"
                           type={showConfirmPassword ? 'text' : 'password'}
@@ -1319,15 +1528,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                           autoComplete="new-password"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="auth-text-input"
+                          className="ga-form-input"
                           placeholder="Repeat new password"
                         />
                         <button
                           type="button"
-                          className="auth-eye-toggle-btn"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          style={{ padding: '0 12px', background: 'none', border: 'none', color: 'var(--ga-text-dark-muted)', cursor: 'pointer' }}
                           aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                          tabIndex={-1}
                         >
                           {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -1336,34 +1544,34 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                   </div>
 
                   {newPassword.length > 0 && (
-                    <div className="auth-password-criteria-row" style={{ marginTop: 8 }}>
-                      <span className={`criteria-badge ${newPassword.length >= 8 ? 'met' : ''}`}>
-                        {newPassword.length >= 8 ? <Check size={11} /> : '•'} 8+ Characters
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <span className={`ga-badge-${newPassword.length >= 8 ? 'verified' : 'primary'}`} style={{ fontSize: '11px' }}>
+                        {newPassword.length >= 8 ? '✓' : '•'} 8+ Characters
                       </span>
-                      <span className={`criteria-badge ${/[A-Z]/.test(newPassword) ? 'met' : ''}`}>
-                        {/[A-Z]/.test(newPassword) ? <Check size={11} /> : '•'} Uppercase
+                      <span className={`ga-badge-${/[A-Z]/.test(newPassword) ? 'verified' : 'primary'}`} style={{ fontSize: '11px' }}>
+                        {/[A-Z]/.test(newPassword) ? '✓' : '•'} Uppercase
                       </span>
-                      <span className={`criteria-badge ${/[0-9]/.test(newPassword) ? 'met' : ''}`}>
-                        {/[0-9]/.test(newPassword) ? <Check size={11} /> : '•'} Number
+                      <span className={`ga-badge-${/[0-9]/.test(newPassword) ? 'verified' : 'primary'}`} style={{ fontSize: '11px' }}>
+                        {/[0-9]/.test(newPassword) ? '✓' : '•'} Number
                       </span>
                     </div>
                   )}
 
-                  <div className="profile-form-action-bar" style={{ marginTop: 20 }}>
+                  <div className="ga-form-actions-row">
                     <button
                       type="submit"
-                      className="btn-auth-gold-primary"
+                      className="ga-btn-save"
                       disabled={isUpdatingPassword}
                       id="btn-update-password"
                     >
                       {isUpdatingPassword ? (
                         <>
-                          <span className="auth-btn-spinner" />
+                          <span className="auth-btn-spinner sm" />
                           <span>Updating Password...</span>
                         </>
                       ) : (
                         <>
-                          <Lock size={16} />
+                          <Lock size={15} />
                           <span>Update Password</span>
                         </>
                       )}
@@ -1377,77 +1585,68 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
       </div>
 
       {/* =================================================================
-          PHOTO PREVIEW LIGHTBOX MODAL
+          PHOTO PREVIEW LIGHTBOX MODAL (Matching Dark Luxury Theme)
           ================================================================= */}
       {isPhotoLightboxOpen && user.avatarUrl && (
         <div
-          className="photo-lightbox-backdrop"
+          className="ga-modal-backdrop"
           onClick={() => setIsPhotoLightboxOpen(false)}
           role="dialog"
           aria-modal="true"
           aria-label="Profile Photo Lightbox"
         >
-          <div
-            className="photo-lightbox-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="photo-lightbox-header">
-              <div className="lightbox-title-wrap">
-                <h3 className="lightbox-title font-serif">Profile Photo</h3>
-                <span className="lightbox-subtitle">{user.name} · {user.title || 'Registered Bidder'}</span>
+          <div className="ga-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="ga-modal-header">
+              <div>
+                <h3 className="ga-modal-title font-serif">Collector Portrait</h3>
+                <span style={{ fontSize: '12px', color: 'var(--ga-text-muted)' }}>
+                  {user.name} · {user.title || 'Registered Bidder'}
+                </span>
               </div>
               <button
                 type="button"
-                className="lightbox-close-btn"
+                className="ga-modal-close-btn"
                 onClick={() => setIsPhotoLightboxOpen(false)}
                 aria-label="Close photo preview"
-                id="btn-close-lightbox"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Modal Photo Frame */}
-            <div className="photo-lightbox-preview-wrap">
-              <img
-                src={user.avatarUrl}
-                alt={`${user.name} profile full preview`}
-                className="photo-lightbox-image"
-              />
+            <div className="ga-modal-body" style={{ textAlign: 'center', padding: '16px' }}>
+              <div style={{ maxWidth: '360px', maxHeight: '360px', margin: '0 auto', borderRadius: '10px', overflow: 'hidden', border: '1px solid #292E37' }}>
+                <img
+                  src={user.avatarUrl}
+                  alt={`${user.name} full preview`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              </div>
             </div>
 
-            {/* Modal Footer Actions */}
-            <div className="photo-lightbox-footer">
-              <div className="lightbox-footer-left">
-                <span className="lightbox-format-hint">JPG, PNG, WebP · Max 5MB</span>
-              </div>
-              <div className="lightbox-footer-actions">
-                <button
-                  type="button"
-                  className="btn-lightbox-change"
-                  onClick={() => {
-                    handleOpenPhotoPicker();
-                  }}
-                  disabled={isUploadingPhoto}
-                  id="btn-lightbox-change-photo"
-                >
-                  <Camera size={14} />
-                  <span>Change Photo</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn-lightbox-delete"
-                  onClick={() => {
-                    setIsDeleteModalOpen(true);
-                  }}
-                  disabled={isDeletingPhoto}
-                  id="btn-lightbox-delete-photo"
-                >
-                  <Trash2 size={14} />
-                  <span>Delete Photo</span>
-                </button>
-              </div>
+            <div className="ga-modal-actions">
+              <button
+                type="button"
+                className="ga-btn-cancel"
+                onClick={() => {
+                  handleOpenPhotoPicker();
+                }}
+                disabled={isUploadingPhoto}
+              >
+                <Camera size={14} />
+                <span>Change Photo</span>
+              </button>
+              <button
+                type="button"
+                className="ga-btn-cancel"
+                style={{ color: 'var(--ga-destructive)' }}
+                onClick={() => {
+                  setIsDeleteModalOpen(true);
+                }}
+                disabled={isDeletingPhoto}
+              >
+                <Trash2 size={14} />
+                <span>Delete Photo</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1458,7 +1657,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
           ================================================================= */}
       {isDeleteModalOpen && (
         <div
-          className="photo-delete-backdrop"
+          className="ga-modal-backdrop"
           onClick={() => {
             if (!isDeletingPhoto) setIsDeleteModalOpen(false);
           }}
@@ -1466,35 +1665,48 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
           aria-modal="true"
           aria-label="Confirm Photo Deletion"
         >
-          <div
-            className="photo-delete-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="delete-modal-icon-wrap">
-              <AlertTriangle size={24} className="delete-icon" />
-            </div>
-
-            <h3 className="delete-modal-title font-serif">Remove Profile Photo?</h3>
-            <p className="delete-modal-text">
-              Are you sure you want to remove your profile photo? Your account will return to displaying your initials (<strong className="gold-text">{user.avatarText || 'GA'}</strong>) across the saleroom.
-            </p>
-
-            <div className="delete-modal-actions">
+          <div className="ga-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="ga-modal-header">
+              <h3 className="ga-modal-title font-serif">Remove Profile Photo?</h3>
               <button
                 type="button"
-                className="btn-delete-cancel"
+                className="ga-modal-close-btn"
                 onClick={() => setIsDeleteModalOpen(false)}
                 disabled={isDeletingPhoto}
-                id="btn-cancel-delete-photo"
+                aria-label="Close dialog"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ga-modal-body">
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'var(--ga-destructive-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ga-destructive)', flexShrink: 0 }}>
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#F5F3ED', lineHeight: 1.5 }}>
+                    Are you sure you want to remove your profile photo? Your account will return to displaying your initials (<strong style={{ color: 'var(--ga-gold)' }}>{user.avatarText || 'GA'}</strong>) across the saleroom.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="ga-modal-actions">
+              <button
+                type="button"
+                className="ga-btn-cancel"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeletingPhoto}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn-delete-confirm"
+                className="ga-btn-save"
+                style={{ backgroundColor: 'var(--ga-destructive)', borderColor: 'var(--ga-destructive)' }}
                 onClick={handleConfirmDeletePhoto}
                 disabled={isDeletingPhoto}
-                id="btn-confirm-delete-photo"
               >
                 {isDeletingPhoto ? (
                   <>

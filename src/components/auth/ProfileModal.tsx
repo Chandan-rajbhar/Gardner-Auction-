@@ -98,7 +98,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       // 1. Update Profile Information (Name & Phone)
       const profileResult = await updateProfile({
         name: cleanName,
-        phone: phone.trim()
+        phone: phone.trim(),
+        title: user?.title || 'Registered Bidder'
       });
 
       if (!profileResult.success) {

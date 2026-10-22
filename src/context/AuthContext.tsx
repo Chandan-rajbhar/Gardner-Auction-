@@ -34,6 +34,8 @@ interface AuthContextType {
     name?: string;
     phone?: string;
     title?: string;
+    avatarUrl?: string;
+    avatar_url?: string;
   }) => Promise<{ success: boolean; message?: string; error?: string }>;
   uploadAvatar: (file: File) => Promise<{ success: boolean; avatarUrl?: string; error?: string }>;
   deleteAvatar: () => Promise<{ success: boolean; error?: string }>;
@@ -90,13 +92,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : 'user';
 
     const avatarUrl = profile?.avatar_url || sbUser.user_metadata?.avatar_url || undefined;
+    const title = profile?.title || sbUser.user_metadata?.title || getRoleTitle(assignedRole);
 
     return {
       id: sbUser.id,
       name: fullName,
       email: sbUser.email || '',
       role: assignedRole,
-      title: getRoleTitle(assignedRole),
+      title: title,
       avatarText: getInitials(fullName),
       avatarUrl: avatarUrl || undefined,
       phone: profile?.phone || sbUser.phone,
@@ -164,18 +167,116 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data) {
+        // Self-heal: If public.users record has no avatar_url but Auth metadata has one, sync it dynamically!
+        if (!data.avatar_url && sbUser.user_metadata?.avatar_url) {
+          data.avatar_url = sbUser.user_metadata.avatar_url;
+          updateUserInDatabase(sbUser.id, sbUser.email, {
+            avatar_url: sbUser.user_metadata.avatar_url
+          }).catch(() => {});
+        }
+
+        // Self-heal: If public.users record has no title, dynamically persist the saleroom role title!
+        const resolvedTitle = data.title || sbUser.user_metadata?.title || getRoleTitle(data.role || sbUser.user_metadata?.role || 'user');
+        if (!data.title && resolvedTitle) {
+          data.title = resolvedTitle;
+          updateUserInDatabase(sbUser.id, sbUser.email, {
+            title: resolvedTitle
+          }).catch(() => {});
+        }
+
         return mapSupabaseUser(sbUser, data);
       }
       
       // Fallback: neutral 'user' role (never incorrectly assign an admin role)
+      const fallbackTitle = sbUser.user_metadata?.title || getRoleTitle('user');
       return mapSupabaseUser(sbUser, {
         full_name: sbUser.user_metadata?.full_name,
         role: 'user',
+        title: fallbackTitle,
         avatar_url: sbUser.user_metadata?.avatar_url
       });
     } catch {
       return mapSupabaseUser(sbUser, { role: 'user' });
     }
+  };
+
+  // Helper to reliably update a user record in public.users table in Supabase
+  const updateUserInDatabase = async (
+    userId: string,
+    email: string | undefined,
+    fields: {
+      full_name?: string;
+      avatar_url?: string | null;
+      phone?: string | null;
+      title?: string | null;
+      updated_at?: string;
+    }
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) return false;
+    const payload = {
+      ...fields,
+      updated_at: fields.updated_at || new Date().toISOString()
+    };
+    const cleanEmail = email?.trim().toLowerCase();
+
+    // 1. Administrative client executes with service privileges, bypassing any RLS restrictions
+    if (supabaseAdmin) {
+      try {
+        const { data, error } = await supabaseAdmin
+          .from('users')
+          .update(payload)
+          .eq('id', userId)
+          .select();
+
+        if (!error && data && data.length > 0) {
+          return true;
+        }
+
+        // If no rows matched by ID, try matching by clean email
+        if (cleanEmail) {
+          const { data: emailData, error: emailErr } = await supabaseAdmin
+            .from('users')
+            .update(payload)
+            .eq('email', cleanEmail)
+            .select();
+
+          if (!emailErr && emailData && emailData.length > 0) {
+            return true;
+          }
+        }
+      } catch (adminErr) {
+        console.warn('supabaseAdmin updateUserInDatabase notice:', adminErr);
+      }
+    }
+
+    // 2. Standard authenticated client update as fallback/parallel
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(payload)
+        .eq('id', userId)
+        .select();
+
+      if (!error && data && data.length > 0) {
+        return true;
+      }
+
+      if (cleanEmail) {
+        const { data: emailData, error: emailErr } = await supabase
+          .from('users')
+          .update(payload)
+          .eq('email', cleanEmail)
+          .select();
+
+        if (!emailErr && emailData && emailData.length > 0) {
+          return true;
+        }
+      }
+    } catch (clientErr) {
+      console.warn('Standard client updateUserInDatabase notice:', clientErr);
+    }
+
+    return false;
   };
 
   // Helper to safely sync or create user profile in public.users
@@ -184,34 +285,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fullName: string;
     email: string;
     role: AuthUser['role'];
+    avatarUrl?: string;
+    title?: string;
   }) => {
     if (!isSupabaseConfigured) return;
     try {
       const cleanEmail = profileData.email.trim().toLowerCase();
+      const client = supabaseAdmin || supabase;
       // Check if row already exists
-      const { data: existing } = await supabase
+      const { data: existing } = await client
         .from('users')
-        .select('id, email, role')
+        .select('id, email, role, avatar_url, title')
         .or(`id.eq.${profileData.id},email.eq.${cleanEmail}`)
         .maybeSingle();
 
+      const resolvedTitle = profileData.title || getRoleTitle(profileData.role || 'user');
+
       if (existing) {
-        await supabase
-          .from('users')
-          .update({
-            full_name: profileData.fullName,
-            updated_at: new Date().toISOString()
-            // Preserve existing database role; never overwrite it
-          })
-          .eq('id', existing.id);
+        const updatePayload: any = {
+          full_name: profileData.fullName,
+          updated_at: new Date().toISOString()
+        };
+        if (profileData.avatarUrl && !existing.avatar_url) {
+          updatePayload.avatar_url = profileData.avatarUrl;
+        }
+        if (!existing.title && resolvedTitle) {
+          updatePayload.title = resolvedTitle;
+        }
+        await updateUserInDatabase(existing.id, cleanEmail, updatePayload);
       } else {
-        await supabase
+        await client
           .from('users')
           .insert({
             id: profileData.id,
             full_name: profileData.fullName,
             email: cleanEmail,
             role: 'user', // New accounts default to neutral 'user'
+            title: resolvedTitle,
+            avatar_url: profileData.avatarUrl || null,
             created_at: new Date().toISOString()
           });
       }
@@ -353,7 +464,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: data.user.id,
           fullName: profile.name,
           email: cleanEmail,
-          role: profile.role
+          role: profile.role,
+          avatarUrl: profile.avatarUrl,
+          title: profile.title
         });
 
         setUser(profile);
@@ -456,7 +569,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: userId,
         fullName: cleanName,
         email: cleanEmail,
-        role: 'super_admin'
+        role: 'super_admin',
+        title: getRoleTitle('super_admin')
       });
 
       // Check whether Supabase requires email confirmation before login
@@ -582,6 +696,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name?: string;
     phone?: string;
     title?: string;
+    avatarUrl?: string;
+    avatar_url?: string;
   }): Promise<{ success: boolean; message?: string; error?: string }> => {
     if (!user) {
       return { success: false, error: 'No authenticated user session found.' };
@@ -591,33 +707,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const trimmedName = profileData.name ? profileData.name.trim() : user.name;
       const trimmedPhone = profileData.phone !== undefined ? profileData.phone.trim() : user.phone;
-      const customTitle = profileData.title ? profileData.title.trim() : user.title;
+      const customTitle = profileData.title ? profileData.title.trim() : (user.title || getRoleTitle(user.role));
+      const effectiveAvatarUrl = profileData.avatarUrl !== undefined
+        ? profileData.avatarUrl
+        : (profileData.avatar_url !== undefined ? profileData.avatar_url : user.avatarUrl);
 
       // 1. Update Supabase Auth user metadata
       if (isSupabaseConfigured) {
         try {
+          const authUpdatePayload: any = {
+            full_name: trimmedName,
+            title: customTitle
+          };
+          if (trimmedPhone !== undefined) authUpdatePayload.phone = trimmedPhone;
+          if (effectiveAvatarUrl !== undefined) authUpdatePayload.avatar_url = effectiveAvatarUrl;
+
           await supabase.auth.updateUser({
-            data: {
-              full_name: trimmedName,
-              phone: trimmedPhone
-            }
+            data: authUpdatePayload
           });
         } catch (authMetaErr) {
           console.warn('Supabase auth metadata update notice:', authMetaErr);
         }
 
-        // 2. Update public.users database table
-        try {
-          await supabase
-            .from('users')
-            .update({
-              full_name: trimmedName,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        } catch (dbErr) {
-          console.warn('Supabase public.users update notice:', dbErr);
-        }
+        // 2. Dynamically persist to public.users table in Supabase
+        const dbUpdatePayload: any = {
+          full_name: trimmedName,
+          title: customTitle
+        };
+        if (trimmedPhone !== undefined) dbUpdatePayload.phone = trimmedPhone;
+        if (effectiveAvatarUrl !== undefined) dbUpdatePayload.avatar_url = effectiveAvatarUrl;
+
+        await updateUserInDatabase(user.id, user.email, dbUpdatePayload);
       }
 
       // 3. Update local user state
@@ -628,7 +748,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: trimmedName,
           avatarText: getInitials(trimmedName),
           phone: trimmedPhone,
-          title: customTitle
+          title: customTitle,
+          avatarUrl: effectiveAvatarUrl !== undefined ? effectiveAvatarUrl : prev.avatarUrl
         };
       });
 
@@ -748,37 +869,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 4. Persist to public.users table in Supabase for the authenticated user ID
-      try {
-        const { error: dbErr } = await supabase
-          .from('users')
-          .update({
-            avatar_url: publicUrl,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-
-        if (dbErr && supabaseAdmin) {
-          await supabaseAdmin
-            .from('users')
-            .update({
-              avatar_url: publicUrl,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        }
-      } catch (dbErr) {
-        if (supabaseAdmin) {
-          try {
-            await supabaseAdmin
-              .from('users')
-              .update({
-                avatar_url: publicUrl,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-          } catch (_) {}
-        }
-      }
+      const userTitle = user.title || getRoleTitle(user.role);
+      await updateUserInDatabase(user.id, user.email, {
+        avatar_url: publicUrl,
+        title: userTitle
+      });
 
       // 5. Update local AuthUser state
       setUser(prev => {
@@ -842,37 +937,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 3. Clear avatar_url from public.users table in Supabase for the authenticated user ID
-      try {
-        const { error: dbErr } = await supabase
-          .from('users')
-          .update({
-            avatar_url: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-
-        if (dbErr && supabaseAdmin) {
-          await supabaseAdmin
-            .from('users')
-            .update({
-              avatar_url: null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        }
-      } catch (dbErr) {
-        if (supabaseAdmin) {
-          try {
-            await supabaseAdmin
-              .from('users')
-              .update({
-                avatar_url: null,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-          } catch (_) {}
-        }
-      }
+      await updateUserInDatabase(user.id, user.email, {
+        avatar_url: null
+      });
 
       // 4. Update local AuthUser state to restore default initials avatar
       setUser(prev => {

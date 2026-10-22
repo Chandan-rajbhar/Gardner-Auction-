@@ -1,0 +1,2208 @@
+/* ==========================================================================
+   GARDNER AUCTION — PROFILE PAGE THEME TOKENS & STYLES
+   Source of Truth: Stitch AI Redesign Reference (Night Mode & Reusable Theme System)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Theme Tokens Definition
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="night"],
+.theme-night {
+  /* Page & Base Backgrounds */
+  --ga-bg-page: #0B0D10;
+  --ga-bg-main: #0B0D10;
+  --ga-header-bg: rgba(11, 13, 16, 0.95);
+  --ga-header-border: #292E37;
+
+  /* Dark Charcoal Surfaces */
+  --ga-surface-dark: #171B22;
+  --ga-surface-dark-hover: #20252E;
+  --ga-surface-darker: #11141A;
+  --ga-border-dark: #292E37;
+  --ga-border-dark-subtle: rgba(41, 46, 55, 0.7);
+
+  /* Contrast Warm Off-White & Ivory Surfaces (Stitch Spec) */
+  --ga-hero-bg: #F4F0E7;
+  --ga-hero-border: #D8D0C0;
+  --ga-ribbon-bg: #EAE5D9;
+  --ga-ribbon-border: #D8D0C0;
+  --ga-dossier-bg: #F4F0E7;
+  --ga-dossier-border: #D8D0C0;
+  --ga-card-white: #FFFFFF;
+  --ga-card-border: #D8D0C0;
+  --ga-card-hover-border: #C5A04A;
+
+  /* Typography & Text */
+  --ga-text-light: #F5F3ED;
+  --ga-text-muted: #A6ACB8;
+  --ga-text-dark: #0B0D10;
+  --ga-text-dark-muted: rgba(11, 13, 16, 0.7);
+  --ga-text-dark-subtle: rgba(11, 13, 16, 0.5);
+
+  /* Heritage Gold Accents */
+  --ga-gold: #C5A04A;
+  --ga-gold-light: #E9C168;
+  --ga-gold-dim: rgba(197, 160, 74, 0.15);
+  --ga-gold-border: rgba(197, 160, 74, 0.4);
+  --ga-gold-glow: rgba(197, 160, 74, 0.25);
+
+  /* Status Badges */
+  --ga-success: #35B889;
+  --ga-success-dim: rgba(53, 184, 137, 0.12);
+  --ga-success-border: rgba(53, 184, 137, 0.35);
+  --ga-destructive: #D96868;
+  --ga-destructive-dim: rgba(217, 104, 104, 0.12);
+  --ga-destructive-border: rgba(217, 104, 104, 0.35);
+
+  /* Shadows */
+  --ga-shadow-hero: 0 8px 32px rgba(0, 0, 0, 0.28);
+  --ga-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --ga-shadow-dropdown: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   DAY MODE TOKENS
+   Source of Truth: Stitch AI Day Mode Reference (screen.png, code.html, DESIGN.md)
+   Heritage Auction House — Editorial Minimalist Luxury
+   ========================================================================== */
+[data-theme="day"],
+.theme-day {
+  /* Canvas Base & Page Background */
+  --ga-bg-page: #F7FAF3;
+  --ga-bg-main: #F7FAF3;
+  --ga-header-bg: #0B0D12;
+  --ga-header-border: #292E37;
+
+  /* Surfaces */
+  --ga-surface-dark: #FFFFFF;
+  --ga-surface-dark-hover: #F1F5ED;
+  --ga-surface-darker: rgba(241, 245, 237, 0.5);
+  --ga-border-dark: rgba(196, 199, 195, 0.5);
+  --ga-border-dark-subtle: rgba(196, 199, 195, 0.3);
+
+  /* Hero & Dossier Cards */
+  --ga-hero-bg: #FFFFFF;
+  --ga-hero-border: rgba(196, 199, 195, 0.5);
+  --ga-ribbon-bg: rgba(241, 245, 237, 0.6);
+  --ga-ribbon-border: rgba(196, 199, 195, 0.4);
+  --ga-dossier-bg: #FFFFFF;
+  --ga-dossier-border: rgba(196, 199, 195, 0.5);
+  --ga-card-white: rgba(241, 245, 237, 0.6);
+  --ga-card-border: rgba(196, 199, 195, 0.4);
+  --ga-card-hover-border: rgba(120, 89, 13, 0.4);
+
+  /* Typography & Text */
+  --ga-text-light: #191D18;
+  --ga-text-muted: #444845;
+  --ga-text-dark: #191D18;
+  --ga-text-dark-muted: #444845;
+  --ga-text-dark-subtle: #747875;
+
+  /* Heritage Gold */
+  --ga-gold: #78590D;
+  --ga-gold-light: #B99445;
+  --ga-gold-dim: rgba(255, 222, 161, 0.4);
+  --ga-gold-border: rgba(120, 89, 13, 0.4);
+  --ga-gold-glow: rgba(185, 148, 69, 0.2);
+
+  /* Status Badges */
+  --ga-success: #065F46;
+  --ga-success-dim: rgba(209, 250, 229, 0.6);
+  --ga-success-border: rgba(5, 150, 105, 0.3);
+  --ga-destructive: #BA1A1A;
+  --ga-destructive-dim: rgba(255, 218, 214, 0.2);
+  --ga-destructive-border: rgba(255, 218, 214, 0.6);
+
+  /* Shadows */
+  --ga-shadow-hero: 0 4px 20px -2px rgba(32, 35, 33, 0.04), 0 2px 6px -1px rgba(32, 35, 33, 0.02);
+  --ga-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --ga-shadow-dropdown: 0 16px 36px -4px rgba(23, 27, 25, 0.08);
+}
+
+/* --------------------------------------------------------------------------
+   2. Page Container & Layout
+   -------------------------------------------------------------------------- */
+.ga-profile-root {
+  width: 100%;
+  min-height: calc(100vh - 74px);
+  background-color: var(--ga-bg-main);
+  color: var(--ga-text-light);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  padding-bottom: 80px;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.ga-profile-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 20px 48px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+@media (min-width: 768px) {
+  .ga-profile-container {
+    padding: 32px 32px 60px 32px;
+    gap: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ga-profile-container {
+    padding: 36px 48px 72px 48px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. Breadcrumb & Back to Auctions Navigation Bar
+   -------------------------------------------------------------------------- */
+.ga-profile-nav-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ga-border-dark);
+}
+
+@media (min-width: 640px) {
+  .ga-profile-nav-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.ga-breadcrumbs-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ga-text-muted);
+}
+
+.ga-breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ga-text-muted);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ga-breadcrumb-link:hover {
+  color: var(--ga-text-light);
+}
+
+.ga-breadcrumb-sep {
+  color: var(--ga-border-dark);
+  font-weight: 300;
+  user-select: none;
+}
+
+.ga-breadcrumb-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ga-gold);
+  font-weight: 600;
+}
+
+.ga-breadcrumb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ga-gold);
+  box-shadow: 0 0 8px var(--ga-gold);
+  display: inline-block;
+}
+
+.ga-back-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--ga-surface-dark);
+  color: var(--ga-text-light);
+  border: 1px solid var(--ga-border-dark);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+@media (min-width: 640px) {
+  .ga-back-btn {
+    align-self: auto;
+  }
+}
+
+.ga-back-btn:hover {
+  background-color: var(--ga-surface-dark-hover);
+  border-color: var(--ga-gold-border);
+  color: #FFFFFF;
+}
+
+.ga-back-btn:hover .ga-back-icon {
+  transform: translateX(-2px);
+}
+
+.ga-back-icon {
+  color: var(--ga-gold);
+  transition: transform 0.2s ease;
+}
+
+/* --------------------------------------------------------------------------
+   4. Redesigned Profile Overview Hero Card (Stitch Spec)
+   -------------------------------------------------------------------------- */
+.ga-hero-card {
+  position: relative;
+  background-color: var(--ga-hero-bg);
+  border-radius: 14px;
+  border: 1px solid var(--ga-hero-border);
+  box-shadow: var(--ga-shadow-hero);
+  overflow: hidden;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.ga-hero-gold-accent-stripe {
+  height: 2px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent 0%, var(--ga-gold) 50%, transparent 100%);
+}
+
+.ga-hero-body {
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 640px) {
+  .ga-hero-body {
+    padding: 28px 28px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ga-hero-body {
+    padding: 32px 36px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.ga-hero-profile-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+@media (min-width: 640px) {
+  .ga-hero-profile-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+  }
+}
+
+/* Avatar Photo Frame */
+.ga-avatar-frame-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ga-avatar-circle-ring {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  padding: 4px;
+  border: 2px solid var(--ga-gold);
+  background-color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .ga-avatar-circle-ring {
+    width: 112px;
+    height: 112px;
+  }
+}
+
+.ga-avatar-circle-ring:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 20px rgba(197, 160, 74, 0.35);
+}
+
+.ga-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.ga-avatar-initials-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #cba135 0%, #906c14 100%);
+  color: #0c0d12;
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ga-avatar-camera-btn {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--ga-gold);
+  color: #0B0D10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--ga-hero-bg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.ga-avatar-camera-btn:hover {
+  background-color: var(--ga-gold-light);
+  transform: scale(1.08);
+}
+
+/* User Identity Details */
+.ga-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ga-hero-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.ga-hero-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .ga-hero-name {
+    font-size: 34px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ga-hero-name {
+    font-size: 38px;
+  }
+}
+
+.ga-registered-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--ga-gold-border);
+  color: var(--ga-gold);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.ga-hero-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ga-text-dark-muted);
+}
+
+.ga-hero-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ga-hero-meta-item .meta-bold {
+  color: var(--ga-text-dark);
+  font-weight: 600;
+}
+
+.ga-meta-divider {
+  display: none;
+  color: var(--ga-hero-border);
+}
+
+@media (min-width: 640px) {
+  .ga-meta-divider {
+    display: inline;
+  }
+}
+
+.ga-license-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ga-success);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ga-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--ga-success);
+  box-shadow: 0 0 8px var(--ga-success);
+  animation: pulseGreen 2s infinite ease-in-out;
+}
+
+@keyframes pulseGreen {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.15);
+  }
+}
+
+/* Hero Action Buttons (View, Change, Delete) */
+.ga-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-self: stretch;
+  border-top: 1px solid var(--ga-hero-border);
+  padding-top: 16px;
+}
+
+@media (min-width: 640px) {
+  .ga-hero-actions {
+    align-self: flex-start;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ga-hero-actions {
+    align-self: center;
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.ga-hero-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  color: var(--ga-text-dark);
+  border: 1px solid var(--ga-hero-border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .ga-hero-btn {
+    flex: none;
+  }
+}
+
+.ga-hero-btn:hover {
+  background-color: var(--ga-ribbon-bg);
+  border-color: var(--ga-gold-border);
+}
+
+.ga-hero-btn.btn-delete {
+  color: var(--ga-destructive);
+}
+
+.ga-hero-btn.btn-delete:hover {
+  background-color: var(--ga-destructive-dim);
+  border-color: var(--ga-destructive-border);
+}
+
+.ga-hero-btn-icon-gold {
+  color: var(--ga-gold);
+}
+
+/* Hero Section Icon-Only Theme Switcher Button */
+.ga-hero-theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  color: var(--ga-gold);
+  border: 1px solid var(--ga-hero-border);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ga-hero-theme-toggle-btn:hover {
+  background-color: var(--ga-ribbon-bg);
+  border-color: var(--ga-gold);
+  color: var(--ga-text-dark);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(197, 160, 74, 0.2);
+}
+
+.ga-hero-theme-toggle-btn:focus-visible {
+  outline: 2px solid var(--ga-gold);
+  outline-offset: 2px;
+}
+
+.ga-hero-theme-icon {
+  transition: transform 0.25s ease;
+}
+
+.ga-hero-theme-toggle-btn:hover .ga-hero-theme-icon {
+  transform: rotate(15deg);
+}
+
+/* 4-Stat Ribbon at bottom of Hero Card */
+.ga-hero-ribbon {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-top: 1px solid var(--ga-ribbon-border);
+  background-color: var(--ga-ribbon-bg);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+@media (min-width: 768px) {
+  .ga-hero-ribbon {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.ga-ribbon-stat-item {
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--ga-ribbon-border);
+  border-right: 1px solid var(--ga-ribbon-border);
+}
+
+@media (min-width: 640px) {
+  .ga-ribbon-stat-item {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+@media (min-width: 768px) {
+  .ga-ribbon-stat-item {
+    border-bottom: none;
+  }
+}
+
+.ga-ribbon-stat-item:last-child {
+  border-right: none;
+}
+
+.ga-ribbon-stat-val {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  line-height: 1;
+}
+
+.ga-ribbon-stat-val.gold {
+  color: var(--ga-gold);
+  letter-spacing: 0.04em;
+}
+
+.ga-ribbon-stat-val.green {
+  color: var(--ga-success);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ga-ribbon-stat-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ga-text-dark-muted);
+}
+
+/* --------------------------------------------------------------------------
+   5. Two-Column Dossier Master Layout
+   -------------------------------------------------------------------------- */
+.ga-dossier-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .ga-dossier-layout {
+    grid-template-columns: 340px 1fr;
+    gap: 32px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. Collector Ledger Side Navigation
+   -------------------------------------------------------------------------- */
+.ga-sidebar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: var(--ga-surface-dark);
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--ga-border-dark);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.ga-sidebar-header {
+  padding: 8px 12px 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ga-sidebar-eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ga-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.ga-sidebar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ga-gold);
+  opacity: 0.7;
+}
+
+.ga-sidebar-tab-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background-color: rgba(17, 20, 26, 0.5);
+  color: var(--ga-text-muted);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ga-sidebar-tab-btn:hover {
+  background-color: var(--ga-surface-darker);
+  border-color: var(--ga-border-dark);
+  color: var(--ga-text-light);
+}
+
+.ga-sidebar-tab-btn:hover .ga-tab-icon-box {
+  color: var(--ga-gold);
+  border-color: var(--ga-gold-border);
+}
+
+/* ACTIVE TAB STYLE MATCHING STITCH SPEC:
+   Warm off-white surface, dark text, left gold border 4px, dark icon box */
+.ga-sidebar-tab-btn.active {
+  background-color: var(--ga-ribbon-bg);
+  color: #0B0D10;
+  border-left: 4px solid var(--ga-gold);
+  border-color: var(--ga-ribbon-border) var(--ga-ribbon-border) var(--ga-ribbon-border) var(--ga-gold);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.ga-sidebar-tab-btn.active .ga-tab-icon-box {
+  background-color: #0B0D10;
+  color: var(--ga-gold);
+  border-color: #0B0D10;
+}
+
+.ga-sidebar-tab-btn.active .ga-tab-title {
+  color: #0B0D10;
+  font-weight: 700;
+}
+
+.ga-sidebar-tab-btn.active .ga-tab-subtitle {
+  color: rgba(11, 13, 16, 0.7);
+  font-weight: 500;
+}
+
+.ga-sidebar-tab-btn.active .ga-tab-chevron {
+  color: #0B0D10;
+}
+
+.ga-tab-content-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ga-tab-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background-color: var(--ga-surface-dark);
+  border: 1px solid var(--ga-border-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ga-text-muted);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.ga-tab-text-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ga-tab-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ga-text-light);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.ga-tab-subtitle {
+  font-size: 11px;
+  color: var(--ga-text-muted);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ga-tab-chevron {
+  color: var(--ga-text-muted);
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.ga-sidebar-tab-btn:hover .ga-tab-chevron {
+  color: var(--ga-gold);
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Advisory Concierge Card */
+.ga-sidebar-concierge-card {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background-color: var(--ga-surface-darker);
+  border: 1px solid var(--ga-border-dark);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--ga-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ga-concierge-icon {
+  color: var(--ga-gold);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ga-concierge-phone {
+  display: block;
+  margin-top: 3px;
+  color: var(--ga-text-light);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   7. Main Content Dossier Panel (Personal Information)
+   -------------------------------------------------------------------------- */
+.ga-dossier-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ga-dossier-card {
+  background-color: var(--ga-dossier-bg);
+  border-radius: 14px;
+  border: 1px solid var(--ga-dossier-border);
+  padding: 24px 20px;
+  box-shadow: var(--ga-shadow-hero);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+@media (min-width: 640px) {
+  .ga-dossier-card {
+    padding: 30px 28px;
+    gap: 28px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ga-dossier-card {
+    padding: 32px 34px;
+  }
+}
+
+/* Header of Dossier Section */
+.ga-dossier-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ga-dossier-border);
+}
+
+@media (min-width: 640px) {
+  .ga-dossier-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.ga-dossier-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ga-dossier-eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ga-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.ga-dossier-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .ga-dossier-title {
+    font-size: 30px;
+  }
+}
+
+.ga-dossier-desc {
+  font-size: 13.5px;
+  color: var(--ga-text-dark-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ga-edit-profile-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  background-color: #0B0D10;
+  color: #F5F3ED;
+  border: 1px solid #0B0D10;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .ga-edit-profile-btn {
+    align-self: center;
+  }
+}
+
+.ga-edit-profile-btn:hover {
+  background-color: var(--ga-gold);
+  color: #0B0D10;
+  border-color: var(--ga-gold);
+}
+
+.ga-edit-profile-btn:hover .ga-edit-icon {
+  color: #0B0D10;
+  transform: rotate(12deg);
+}
+
+.ga-edit-icon {
+  color: var(--ga-gold);
+  transition: all 0.2s ease;
+}
+
+/* 4-Item Information Grid */
+.ga-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .ga-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+}
+
+.ga-info-box {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid var(--ga-card-border);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: var(--ga-shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ga-info-box:hover {
+  border-color: var(--ga-card-hover-border);
+  box-shadow: 0 4px 12px rgba(197, 160, 74, 0.12);
+}
+
+.ga-info-box.full-width {
+  grid-column: 1 / -1;
+}
+
+.ga-info-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ga-info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ga-text-dark-muted);
+}
+
+.ga-info-icon-gold {
+  color: var(--ga-gold);
+}
+
+.ga-info-status-icon {
+  color: var(--ga-text-dark-subtle);
+}
+
+.ga-info-box-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ga-info-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.ga-info-value.serif-date {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.ga-info-value.muted-italic {
+  font-style: italic;
+  color: var(--ga-text-dark-muted);
+}
+
+/* Badges on Info Cards */
+.ga-badge-verified {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ga-success);
+  background-color: var(--ga-success-dim);
+  border: 1px solid var(--ga-success-border);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ga-badge-primary {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ga-text-dark-muted);
+  background-color: var(--ga-ribbon-bg);
+  border: 1px solid var(--ga-card-border);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ga-badge-gold {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ga-gold);
+  background-color: var(--ga-gold-dim);
+  border: 1px solid var(--ga-gold-border);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ga-action-link-gold {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ga-gold);
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ga-action-link-gold:hover {
+  color: var(--ga-text-dark);
+}
+
+/* Member Since 2-Col Card Details */
+.ga-member-tenure-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--ga-text-dark-muted);
+}
+
+@media (min-width: 640px) {
+  .ga-member-tenure-wrap {
+    align-items: flex-end;
+  }
+}
+
+.ga-tenure-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+}
+
+.ga-hash-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ga-text-dark-muted);
+}
+
+/* Feature Banner: Certified PA Saleroom Participant */
+.ga-pass-banner {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid var(--ga-gold-border);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--ga-shadow-card);
+}
+
+@media (min-width: 768px) {
+  .ga-pass-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.ga-pass-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ga-pass-seal-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--ga-hero-bg);
+  border: 1px solid var(--ga-gold);
+  color: var(--ga-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px var(--ga-gold-glow);
+}
+
+.ga-pass-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ga-pass-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .ga-pass-title {
+    font-size: 20px;
+  }
+}
+
+.ga-pass-desc {
+  font-size: 13px;
+  color: var(--ga-text-dark-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ga-pass-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  background-color: #0B0D10;
+  color: #F5F3ED;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid #0B0D10;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ga-pass-download-btn:hover {
+  background-color: var(--ga-gold);
+  color: #0B0D10;
+  border-color: var(--ga-gold);
+}
+
+/* --------------------------------------------------------------------------
+   8. Edit Profile Form View inside Dossier Card
+   -------------------------------------------------------------------------- */
+.ga-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ga-form-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .ga-form-grid-2col {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+}
+
+.ga-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ga-form-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ga-text-dark);
+}
+
+.ga-form-label .req-star {
+  color: var(--ga-gold);
+}
+
+.ga-form-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #FFFFFF;
+  border: 1px solid var(--ga-card-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ga-form-input-box:focus-within {
+  border-color: var(--ga-gold);
+  box-shadow: 0 0 0 3px var(--ga-gold-dim);
+}
+
+.ga-form-input-box.disabled {
+  background-color: var(--ga-ribbon-bg);
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.ga-form-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--ga-gold);
+  pointer-events: none;
+}
+
+.ga-form-input {
+  width: 100%;
+  padding: 12px 14px 12px 42px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ga-text-dark);
+  outline: none;
+}
+
+.ga-form-input:disabled {
+  cursor: not-allowed;
+  color: var(--ga-text-dark-muted);
+}
+
+.ga-form-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ga-dossier-border);
+}
+
+.ga-btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  color: var(--ga-text-dark);
+  border: 1px solid var(--ga-card-border);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ga-btn-cancel:hover {
+  background-color: var(--ga-ribbon-bg);
+  border-color: var(--ga-border-dark);
+}
+
+.ga-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: 8px;
+  background-color: #0B0D10;
+  color: #F5F3ED;
+  border: 1px solid #0B0D10;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ga-btn-save:hover:not(:disabled) {
+  background-color: var(--ga-gold);
+  color: #0B0D10;
+  border-color: var(--ga-gold);
+}
+
+.ga-btn-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   9. Dark Header Theme Switcher Pill Component
+   -------------------------------------------------------------------------- */
+.header-theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 9999px;
+  background-color: #171B22;
+  border: 1px solid #292E37;
+  color: #F5F3ED;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.header-theme-switcher:hover {
+  border-color: rgba(197, 160, 74, 0.5);
+  box-shadow: 0 0 12px rgba(197, 160, 74, 0.15);
+}
+
+.header-theme-switcher:focus-visible {
+  outline: 2px solid var(--ga-gold);
+  outline-offset: 2px;
+}
+
+.theme-switcher-icon-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #11141A;
+  border: 1px solid rgba(197, 160, 74, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ga-gold);
+  transition: all 0.2s ease;
+}
+
+.header-theme-switcher:hover .theme-switcher-icon-circle {
+  border-color: var(--ga-gold);
+  background-color: rgba(197, 160, 74, 0.15);
+}
+
+.theme-switcher-text {
+  font-size: 11px;
+  color: #EAE5D9;
+}
+
+/* Mobile Theme Row inside Drawer */
+.mobile-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: rgba(23, 27, 34, 0.6);
+  border: 1px solid #292E37;
+  border-radius: 8px;
+  margin: 6px 0;
+}
+
+.mobile-theme-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ga-text-muted);
+}
+
+.mobile-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background-color: #11141A;
+  border: 1px solid rgba(197, 160, 74, 0.4);
+  color: var(--ga-gold);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   10. Other Tabs: Bidding History, Won Auctions, Security
+   -------------------------------------------------------------------------- */
+.ga-tab-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ga-dossier-border);
+}
+
+@media (min-width: 640px) {
+  .ga-tab-section-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.ga-refresh-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background-color: #0B0D10;
+  color: #F5F3ED;
+  border: 1px solid #0B0D10;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ga-refresh-btn:hover:not(:disabled) {
+  background-color: var(--ga-gold);
+  color: #0B0D10;
+  border-color: var(--ga-gold);
+}
+
+/* Clean Empty State */
+.ga-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.ga-empty-icon-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: rgba(197, 160, 74, 0.1);
+  border: 1px solid var(--ga-gold-border);
+  color: var(--ga-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.ga-empty-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ga-text-dark);
+  margin: 0;
+}
+
+.ga-empty-desc {
+  max-width: 480px;
+  font-size: 13.5px;
+  color: var(--ga-text-dark-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Lightbox & Delete Modals (matching dark luxury theme) */
+.ga-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(11, 13, 16, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+.ga-modal-card {
+  width: 100%;
+  max-width: 480px;
+  background-color: #171B22;
+  border: 1px solid #292E37;
+  border-radius: 14px;
+  box-shadow: var(--ga-shadow-dropdown);
+  overflow: hidden;
+  color: #F5F3ED;
+}
+
+.ga-modal-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid #292E37;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ga-modal-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #F5F3ED;
+  margin: 0;
+}
+
+.ga-modal-close-btn {
+  background: none;
+  border: none;
+  color: var(--ga-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+}
+
+.ga-modal-close-btn:hover {
+  color: #F5F3ED;
+}
+
+.ga-modal-body {
+  padding: 24px 22px;
+}
+
+.ga-modal-actions {
+  padding: 16px 22px;
+  border-top: 1px solid #292E37;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  background-color: #11141A;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   DAY MODE COMPONENT OVERRIDES
+   Source of Truth: Stitch AI Day Mode Reference (screen.png, code.html, DESIGN.md)
+   ========================================================================== */
+
+/* 1. Hero Card Overrides */
+[data-theme="day"] .ga-hero-gold-accent-stripe {
+  display: none;
+}
+
+[data-theme="day"] .ga-hero-corner-accent {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16rem;
+  height: 16rem;
+  background: linear-gradient(to bottom left, rgba(255, 212, 126, 0.2), rgba(241, 245, 237, 0.4), transparent);
+  pointer-events: none;
+}
+
+[data-theme="day"] .ga-avatar-circle-ring {
+  border: 1px solid rgba(120, 89, 13, 0.6);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="day"] .ga-avatar-camera-btn {
+  background-color: #0A0D0B;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="day"] .ga-avatar-camera-btn:hover {
+  background-color: #202321;
+}
+
+[data-theme="day"] .ga-registered-badge {
+  background-color: rgba(255, 222, 161, 0.3);
+  border-color: rgba(120, 89, 13, 0.4);
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-registered-badge .ga-hero-btn-icon-gold {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-license-active-pill {
+  color: #065F46;
+}
+
+[data-theme="day"] .ga-pulse-dot {
+  background-color: #059669;
+  box-shadow: 0 0 6px #059669;
+}
+
+/* Hero Action Controls */
+[data-theme="day"] .ga-hero-btn {
+  background-color: #F1F5ED;
+  color: #191D18;
+  border-color: rgba(196, 199, 195, 0.4);
+}
+
+[data-theme="day"] .ga-hero-btn:hover {
+  background-color: #ECEFE7;
+  border-color: rgba(120, 89, 13, 0.4);
+}
+
+[data-theme="day"] .ga-hero-btn-icon-gold {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-hero-btn.btn-delete {
+  background-color: rgba(255, 218, 214, 0.2);
+  color: #BA1A1A;
+  border-color: rgba(255, 218, 214, 0.6);
+}
+
+[data-theme="day"] .ga-hero-btn.btn-delete:hover {
+  background-color: rgba(255, 218, 214, 0.4);
+}
+
+[data-theme="day"] .ga-hero-theme-toggle-btn {
+  background-color: #F1F5ED;
+  color: #78590D;
+  border-color: rgba(196, 199, 195, 0.4);
+}
+
+[data-theme="day"] .ga-hero-theme-toggle-btn:hover {
+  background-color: #ECEFE7;
+  border-color: rgba(120, 89, 13, 0.4);
+  color: #0A0D0B;
+}
+
+/* 4-Stat Ribbon in Day Mode */
+[data-theme="day"] .ga-hero-ribbon {
+  background-color: rgba(241, 245, 237, 0.6);
+  border-top-color: rgba(196, 199, 195, 0.4);
+}
+
+[data-theme="day"] .ga-ribbon-stat-item {
+  border-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-ribbon-stat-val {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-ribbon-stat-val.gold {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-ribbon-stat-val.green {
+  color: #065F46;
+}
+
+[data-theme="day"] .ga-ribbon-stat-lbl {
+  color: #444845;
+}
+
+/* 2. Breadcrumbs & Return Bar */
+[data-theme="day"] .ga-profile-nav-bar {
+  border-bottom-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-breadcrumbs-list {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-breadcrumb-link {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-breadcrumb-link:hover {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-breadcrumb-sep {
+  color: #747875;
+}
+
+[data-theme="day"] .ga-breadcrumb-current {
+  color: #0A0D0B;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-breadcrumb-dot {
+  background-color: #78590D;
+  box-shadow: none;
+}
+
+[data-theme="day"] .ga-back-btn {
+  background-color: #FFFFFF;
+  color: #191D18;
+  border-color: rgba(196, 199, 195, 0.5);
+}
+
+[data-theme="day"] .ga-back-btn:hover {
+  background-color: #F1F5ED;
+  border-color: rgba(196, 199, 195, 0.8);
+}
+
+[data-theme="day"] .ga-back-icon {
+  color: #444845;
+}
+
+/* 3. Collector Ledger Navigation in Day Mode */
+[data-theme="day"] .ga-sidebar-card {
+  background-color: #FFFFFF;
+  border-color: rgba(196, 199, 195, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="day"] .ga-sidebar-eyebrow {
+  color: rgba(68, 72, 69, 0.8);
+}
+
+[data-theme="day"] .ga-sidebar-dot {
+  display: none;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn.active {
+  background-color: rgba(241, 245, 237, 0.8);
+  border-left-color: #78590D;
+  border-color: transparent transparent transparent #78590D;
+  color: #191D18;
+  box-shadow: none;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn.active .ga-tab-icon-box {
+  background-color: rgba(255, 222, 161, 0.5);
+  color: #78590D;
+  border-color: transparent;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn.active .ga-tab-title {
+  color: #191D18;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn.active .ga-tab-subtitle {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn.active .ga-tab-chevron {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn {
+  background-color: transparent;
+  border-color: transparent;
+  color: #444845;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn:hover {
+  background-color: #F1F5ED;
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn .ga-tab-icon-box {
+  background-color: #ECEFE7;
+  border-color: transparent;
+  color: #444845;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn:hover .ga-tab-icon-box {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn .ga-tab-title {
+  color: #444845;
+  font-weight: 500;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn:hover .ga-tab-title {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn .ga-tab-subtitle {
+  color: rgba(68, 72, 69, 0.8);
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn .ga-tab-chevron {
+  color: #747875;
+}
+
+[data-theme="day"] .ga-sidebar-tab-btn:hover .ga-tab-chevron {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-sidebar-concierge-card {
+  background-color: rgba(241, 245, 237, 0.5);
+  border-color: rgba(196, 199, 195, 0.3);
+  color: #444845;
+}
+
+[data-theme="day"] .ga-concierge-icon {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-concierge-phone {
+  color: #191D18;
+}
+
+/* 4. Personal Information Dossier Card in Day Mode */
+[data-theme="day"] .ga-dossier-card {
+  background-color: #FFFFFF;
+  border-color: rgba(196, 199, 195, 0.5);
+  box-shadow: 0 4px 20px -2px rgba(32, 35, 33, 0.04);
+}
+
+[data-theme="day"] .ga-dossier-header {
+  border-bottom-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-dossier-eyebrow {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-dossier-title {
+  color: #0A0D0B;
+  font-weight: 700;
+}
+
+[data-theme="day"] .ga-dossier-desc {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-edit-profile-btn {
+  background-color: #0A0D0B;
+  color: #FFFFFF;
+  border-color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-edit-profile-btn:hover {
+  background-color: #202321;
+}
+
+[data-theme="day"] .ga-edit-icon {
+  color: #FFDEA1;
+}
+
+/* Field Cards in Day Mode */
+[data-theme="day"] .ga-info-box {
+  background-color: rgba(241, 245, 237, 0.6);
+  border-color: rgba(196, 199, 195, 0.4);
+  box-shadow: none;
+}
+
+[data-theme="day"] .ga-info-box:hover {
+  border-color: rgba(120, 89, 13, 0.4);
+}
+
+[data-theme="day"] .ga-info-label {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-info-icon-gold {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-info-status-icon {
+  color: #747875;
+}
+
+[data-theme="day"] .ga-info-value {
+  color: #0A0D0B;
+  font-weight: 700;
+}
+
+[data-theme="day"] .ga-info-value.serif-date {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-badge-verified {
+  background-color: rgba(209, 250, 229, 0.6);
+  color: #065F46;
+  border: none;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-badge-primary {
+  background-color: transparent;
+  color: #444845;
+  border: none;
+  font-weight: 600;
+  padding: 0;
+}
+
+[data-theme="day"] .ga-badge-gold {
+  background-color: rgba(255, 222, 161, 0.4);
+  color: #78590D;
+  border: none;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-action-link-gold {
+  color: #78590D;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-action-link-gold:hover {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-member-tenure-wrap .ga-tenure-label {
+  color: #0A0D0B;
+  font-weight: 500;
+}
+
+[data-theme="day"] .ga-hash-code {
+  color: rgba(68, 72, 69, 0.8);
+}
+
+/* Feature Banner: Certified PA Saleroom Participant */
+[data-theme="day"] .ga-pass-banner {
+  background-color: #ECEFE7;
+  border-color: rgba(120, 89, 13, 0.3);
+  box-shadow: none;
+}
+
+[data-theme="day"] .ga-pass-seal-badge {
+  background-color: #78590D;
+  color: #FFFFFF;
+  border: none;
+  box-shadow: none;
+}
+
+[data-theme="day"] .ga-pass-title {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-pass-desc {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-pass-download-btn {
+  background-color: #FFFFFF;
+  color: #0A0D0B;
+  border: 1px solid rgba(196, 199, 195, 0.6);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+[data-theme="day"] .ga-pass-download-btn:hover {
+  background-color: #F7FAF3;
+  border-color: #78590D;
+  color: #0A0D0B;
+}
+
+/* 5. Edit Form in Day Mode */
+[data-theme="day"] .ga-form-label {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-form-label .req-star {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-form-input-box {
+  background-color: #FFFFFF;
+  border-color: rgba(196, 199, 195, 0.5);
+}
+
+[data-theme="day"] .ga-form-input-box:focus-within {
+  border-color: #78590D;
+  box-shadow: 0 0 0 3px rgba(255, 222, 161, 0.3);
+}
+
+[data-theme="day"] .ga-form-input-box.disabled {
+  background-color: #F1F5ED;
+  opacity: 0.85;
+}
+
+[data-theme="day"] .ga-form-icon {
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-form-input {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-form-input:disabled {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-form-actions-row {
+  border-top-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-btn-cancel {
+  background-color: #FFFFFF;
+  color: #0A0D0B;
+  border-color: rgba(196, 199, 195, 0.5);
+}
+
+[data-theme="day"] .ga-btn-cancel:hover {
+  background-color: #F1F5ED;
+}
+
+[data-theme="day"] .ga-btn-save {
+  background-color: #0A0D0B;
+  color: #FFFFFF;
+  border-color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-btn-save:hover:not(:disabled) {
+  background-color: #78590D;
+  color: #FFFFFF;
+  border-color: #78590D;
+}
+
+/* 6. Other Tabs in Day Mode (Bidding, Won, Security) */
+[data-theme="day"] .ga-tab-section-header {
+  border-bottom-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-refresh-btn {
+  background-color: #0A0D0B;
+  color: #FFFFFF;
+  border-color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-refresh-btn:hover:not(:disabled) {
+  background-color: #78590D;
+  color: #FFFFFF;
+  border-color: #78590D;
+}
+
+[data-theme="day"] .ga-empty-icon-circle {
+  background-color: rgba(255, 222, 161, 0.3);
+  border-color: rgba(120, 89, 13, 0.3);
+  color: #78590D;
+}
+
+[data-theme="day"] .ga-empty-title {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-empty-desc {
+  color: #444845;
+}
+
+/* 7. Photo Modals in Day Mode */
+[data-theme="day"] .ga-modal-backdrop {
+  background-color: rgba(10, 13, 11, 0.6);
+}
+
+[data-theme="day"] .ga-modal-card {
+  background-color: #FFFFFF;
+  border-color: rgba(196, 199, 195, 0.6);
+  color: #0A0D0B;
+  box-shadow: 0 16px 36px -4px rgba(23, 27, 25, 0.12);
+}
+
+[data-theme="day"] .ga-modal-header {
+  border-bottom-color: rgba(196, 199, 195, 0.3);
+}
+
+[data-theme="day"] .ga-modal-title {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-modal-close-btn {
+  color: #444845;
+}
+
+[data-theme="day"] .ga-modal-close-btn:hover {
+  color: #0A0D0B;
+}
+
+[data-theme="day"] .ga-modal-actions {
+  background-color: #F1F5ED;
+  border-top-color: rgba(196, 199, 195, 0.3);
+}
