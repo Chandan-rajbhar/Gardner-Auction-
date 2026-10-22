@@ -269,23 +269,26 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     return activeAuctions.find((a) => a.id === selectedAuctionId) || activeAuctions[0];
   }, [activeAuctions, selectedAuctionId]);
 
-  // 1. Fetch dynamic auctions from Supabase
+  // 1. Fetch dynamic auctions from Supabase with live counts and realtime updates
   useEffect(() => {
     let isMounted = true;
     async function loadSupabaseAuctions() {
       try {
-        const { data, error } = await supabase
-          .from('auctions')
-          .select('*')
-          .order('start_date', { ascending: false });
+        const [{ data: auctionsData, error: errA }, { data: allLotsData }] = await Promise.all([
+          supabase.from('auctions').select('*').order('start_date', { ascending: false }),
+          supabase.from('lots').select('id, auction_id, image')
+        ]);
 
-        if (!error && data && data.length > 0 && isMounted) {
-          const mappedFromDb: ActiveAuctionCardItem[] = data.map((row: any) => {
-            const lotCount = row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0) || 12;
+        if (!errA && auctionsData && auctionsData.length > 0 && isMounted) {
+          const mappedFromDb: ActiveAuctionCardItem[] = auctionsData.map((row: any) => {
+            const matchingLots = allLotsData?.filter((l: any) => l.auction_id === row.id) || [];
+            const lotCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0);
             const status = row.status === 'In Progress' ? 'Live Webcast Auction' : row.status === 'Open' ? 'Catalog Open' : 'Closing Today';
             const badge = row.status === 'In Progress' ? 'LIVE WEBCAST' : row.status === 'Open' ? 'CATALOG OPEN' : 'CLOSING TODAY';
             const badgeType = row.status === 'In Progress' ? 'red' : row.status === 'Open' ? 'green' : 'gold';
-            const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url) ? row.featured_images[0].url : '/images/hero_coin.jpg';
+            const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url)
+              ? row.featured_images[0].url
+              : (matchingLots[0]?.image || '/assets/gold-coin.jpg');
 
             return {
               id: row.id,
@@ -317,7 +320,22 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     }
 
     loadSupabaseAuctions();
-    return () => { isMounted = false; };
+
+    // Supabase Realtime channel: auto-update on dashboard auctions or lots changes
+    const realtimeChannel = supabase
+      .channel('realtime-auctions-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, () => {
+        loadSupabaseAuctions();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lots' }, () => {
+        loadSupabaseAuctions();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(realtimeChannel);
+    };
   }, []);
 
   // 2. Fetch dynamic lots from Supabase when an auction is selected
@@ -333,35 +351,44 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
           .eq('auction_id', selectedAuctionId)
           .order('lot_number', { ascending: true });
 
-        if (!error && data && data.length > 0 && isMounted) {
-          const converted: CatalogLot[] = data.map((d: any) => ({
-            id: d.id,
-            lotNumber: `LOT ${d.lot_number}`,
-            categoryTag: (d.category || 'Coins & Currency').toUpperCase(),
-            categoryKey: mapCategoryToKey(d.category),
-            title: d.title,
-            description: d.condition_report || d.title,
-            currentBid: Number(d.current_bid) || Number(d.starting_bid) || 100,
-            bidsCount: Number(d.bids_count) || 0,
-            buttonVariant: 'gold',
-            isEndingSoon: d.status === 'upcoming',
-            isFeatured: true,
-            artType: 'gold-slab',
-            image: d.image || '/images/hero_coin.jpg',
-            estimate: `$${Number(d.estimate_low || 1000).toLocaleString()} – $${Number(d.estimate_high || 2000).toLocaleString()}`,
-            presets: [100, 250, 500],
-            recentBids: [],
-            sellerName: d.seller_name || d.seller || 'Estate Consignor #101',
-            quantity: Number(d.quantity) || 1
-          }));
-          setLots(converted);
-          return;
+        if (!error && data && isMounted) {
+          if (data.length > 0) {
+            const converted: CatalogLot[] = data.map((d: any) => ({
+              id: d.id,
+              lotNumber: `LOT ${d.lot_number}`,
+              categoryTag: (d.category || 'Coins & Currency').toUpperCase(),
+              categoryKey: mapCategoryToKey(d.category),
+              title: d.title,
+              description: d.description || d.condition_report || d.title,
+              currentBid: Number(d.current_bid) || Number(d.starting_bid) || 100,
+              bidsCount: Number(d.bids_count) || 0,
+              buttonVariant: 'gold',
+              isEndingSoon: d.status === 'upcoming' || d.status === 'on_block',
+              isFeatured: true,
+              artType: 'gold-slab',
+              image: d.image || '/assets/gold-coin.jpg',
+              estimate: `$${Number(d.estimate_low || 1000).toLocaleString()} – $${Number(d.estimate_high || 2000).toLocaleString()}`,
+              presets: [100, 250, 500],
+              recentBids: [],
+              sellerName: d.consignor_name || d.seller_name || d.seller || 'Estate Consignor',
+              quantity: Number(d.quantity) || 1
+            }));
+            setLots(converted);
+            return;
+          } else {
+            // If it's a dynamic auction created in Dashboard that has 0 lots
+            const isDbAuction = activeAuctions.some((a) => a.id === selectedAuctionId && (a.code?.startsWith('AUC') || a.id.startsWith('auc-')));
+            if (isDbAuction) {
+              setLots([]);
+              return;
+            }
+          }
         }
       } catch (e) {
         console.warn('[CurrentAuctionPage] Supabase lots fetch notice:', e);
       }
 
-      // Fallback to local lots if not found in Supabase
+      // Fallback to local lots if mock auction
       const found = activeAuctions.find((a) => a.id === selectedAuctionId);
       if (found && found.lots && found.lots.length > 0) {
         setLots(found.lots);
@@ -371,7 +398,19 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
     }
 
     loadAuctionLots();
-    return () => { isMounted = false; };
+
+    // Realtime channel for live lot changes when inside this auction catalog
+    const lotsChannel = supabase
+      .channel(`realtime-lots-${selectedAuctionId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lots', filter: `auction_id=eq.${selectedAuctionId}` }, () => {
+        loadAuctionLots();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(lotsChannel);
+    };
   }, [selectedAuctionId, activeAuctions]);
 
   // Filtered active auctions for the Multi-Auction view
