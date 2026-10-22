@@ -68,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
     { id: 'live_clerking', label: 'Auction Day', icon: Gavel, badge: 'LIVE', isLive: true },
     { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
-    { id: 'lots', label: 'Catalog Lots', icon: Layers, badge: liveLotsCount },
+    // { id: 'lots', label: 'Catalog Lots', icon: Layers, badge: liveLotsCount },
     { id: 'users', label: 'Bidders & Consignors', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
   ];
 

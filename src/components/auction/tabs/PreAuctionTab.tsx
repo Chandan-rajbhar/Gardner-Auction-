@@ -41,7 +41,14 @@ import {
   Copy,
   Download,
   Save,
-  RotateCcw
+  RotateCcw,
+  Share2,
+  MapPin,
+  Radio,
+  Coins,
+  Truck,
+  BookOpen,
+  Info
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
@@ -1893,73 +1900,354 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     )}
 
       {/* =========================================================================
-          SUB-TAB 3: PREVIEW (Read-only public preview)
+          SUB-TAB 3: PREVIEW (Exact match to Public Catalog Event Card)
           ========================================================================= */}
-      {currentTab === 'preview' && (
-        <div className="syndication-card" style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span className="badge badge-live">PUBLIC SIMULCAST PREVIEW</span>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>• {auction.code}</span>
-            </div>
-            <h2 className="font-serif" style={{ fontSize: 26, color: 'var(--text-main)', margin: '0 0 8px' }}>
-              {auction.name}
-            </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontSize: 13, color: 'var(--text-dim)' }}>
-              <span>📅 {formatDate(auction.startDate)} – {formatDate(auction.endDate)}</span>
-              <span>📍 {auction.address1}, {auction.city}, {auction.state} {auction.zip}</span>
-              <span>⚖ {auction.shortBpExplanation}</span>
-            </div>
-          </div>
+      {currentTab === 'preview' && (() => {
+        const previewImage = auction.featuredImages?.[0]?.url || 
+          (filteredAuctionLots?.[0]?.images?.[0] || filteredAuctionLots?.[0]?.image) || 
+          (lots?.[0]?.images?.[0] || lots?.[0]?.image) || 
+          auction.image || 
+          'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800&auto=format&fit=crop&q=80';
+        
+        const catalogedCount = filteredAuctionLots.length || lots.length || 1;
+        const fullAddress = `${auction.address1 || '119 Jewel Basin Ct, Suite 100'} ${auction.city || 'Bigfork'} ${auction.state || 'MT'} ${auction.zip || '59911'}`.trim();
 
-          {/* Featured Images Carousel / Grid */}
-          <div style={{ marginBottom: 24 }}>
-            <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: 12 }}>
-              Catalog Highlights & Featured Coin Offerings
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-              {auction.featuredImages.map(img => (
-                <div key={img.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden', background: '#fcfbf9' }}>
-                  <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', padding: 8 }}>
-                    <img src={img.url} alt={img.title} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                  </div>
-                  <div style={{ padding: '8px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text-main)' }}>
-                    {img.title}
+        return (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px 16px 40px',
+            width: '100%'
+          }}>
+            {/* Top Badge & Header */}
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                color: '#475569',
+                fontSize: 11.5,
+                fontWeight: 700,
+                padding: '4px 12px',
+                borderRadius: 20,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                marginBottom: 6
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                <span>Public Catalog Listing Preview</span>
+              </div>
+              <h2 style={{
+                fontFamily: 'var(--font-serif, "Cinzel", Georgia, serif)',
+                fontSize: 20,
+                fontWeight: 700,
+                color: '#0f172a',
+                margin: '4px 0 2px'
+              }}>
+                {auction.name || 'Test gold'}
+              </h2>
+              <p style={{ fontSize: 12.5, color: '#64748b', margin: 0 }}>
+                This is the live preview of how this auction card appears to buyers and bidders across HiBid.
+              </p>
+            </div>
+
+            {/* Exact Reference Card matching User Screenshot */}
+            <div style={{
+              width: 390,
+              maxWidth: '100%',
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {/* Card Header Bar */}
+              <div style={{
+                background: '#121722',
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '2.5px solid #cba135'
+              }}>
+                <div style={{
+                  fontFamily: 'var(--font-serif, "Cinzel", Georgia, serif)',
+                  fontSize: 15.5,
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 240
+                }}>
+                  {auction.name || 'Test gold'}
+                </div>
+                <div style={{
+                  background: '#1b2333',
+                  border: '1px solid #2d3748',
+                  borderRadius: 14,
+                  padding: '3px 10px',
+                  fontSize: 11,
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <span>Code:</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>{auction.code || 'sss44'}</span>
+                </div>
+              </div>
+
+              {/* Card Content Body */}
+              <div style={{ padding: '14px', display: 'flex', flexDirection: 'column' }}>
+                {/* Featured Image with LIVE WEBCAST badge */}
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: 220,
+                  background: '#0b0f17',
+                  borderRadius: 6,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid #1e293b'
+                }}>
+                  <img
+                    src={previewImage}
+                    alt={auction.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                  {/* LIVE WEBCAST badge */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    left: 10,
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                  }}>
+                    <span style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      display: 'inline-block'
+                    }} />
+                    <span>LIVE WEBCAST</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Description & Notices */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: 6 }}>
-                Auction Information & Store Notice
-              </h4>
-              <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                {auction.description}
-              </p>
-            </div>
+                {/* Share Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.href);
+                    }
+                    showToast('success', 'Link Copied', 'Auction preview link copied to clipboard.');
+                  }}
+                  style={{
+                    width: '100%',
+                    height: 34,
+                    marginTop: 10,
+                    marginBottom: 12,
+                    background: '#151922',
+                    color: '#ffffff',
+                    border: '1px solid #1e293b',
+                    borderRadius: 6,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#232a3b'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#151922'}
+                >
+                  <Share2 size={13} />
+                  <span>Share</span>
+                </button>
 
-            {auction.uploadSettings?.biddingNotice && (
-              <div style={{ background: '#fefce8', border: '1px solid #fef08a', padding: 14, borderRadius: 8 }}>
-                <strong style={{ fontSize: 12.5, color: '#854d0e', display: 'block', marginBottom: 4 }}>Bidding Notice:</strong>
-                <p style={{ fontSize: 12.5, color: '#713f12', margin: 0 }}>{auction.uploadSettings.biddingNotice}</p>
+                {/* Address & Map */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  fontSize: 11.5,
+                  color: '#64748b',
+                  marginBottom: 10
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>{auction.address1 || '119 Jewel Basin Ct, Suite 100'}</span>
+                    <span style={{ color: '#cbd5e1' }}>•</span>
+                    <span>{auction.city || 'Bigfork'} {auction.state || 'MT'} {auction.zip || '59911'}</span>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 3,
+                      color: '#b48316',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      fontSize: 11.5
+                    }}
+                  >
+                    <MapPin size={12} color="#b48316" />
+                    <span>Map</span>
+                  </a>
+                </div>
+
+                {/* Date & Schedule Highlight Box with Gold Vertical Line */}
+                <div style={{
+                  borderLeft: '3px solid #cba135',
+                  paddingLeft: 10,
+                  margin: '0 0 12px 0'
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                    {formatDate(auction.startDate)} – {formatDate(auction.endDate)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                    Live Rostrum Simulcast & Internet Bidding Now Active
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div style={{
+                  fontSize: 12,
+                  color: '#475569',
+                  lineHeight: 1.5,
+                  marginBottom: 14
+                }}>
+                  {auction.description || 'test des'}
+                </div>
+
+                {/* Bullets List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <Radio size={13} color="#ef4444" />
+                    <span style={{ color: '#64748b' }}>Status:</span>
+                    <strong style={{ color: '#0f172a' }}>Live Webcast Auction</strong>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <Coins size={13} color="#cba135" />
+                    <strong style={{ color: '#0f172a' }}>HiBid</strong>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <Truck size={13} color="#f59e0b" />
+                    <span style={{ color: '#475569', fontWeight: 500 }}>
+                      {auction.shippingAccount || 'Shipping Offered On All Lots'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Lots Cataloged Cream Pill */}
+                <div style={{
+                  background: '#fefce8',
+                  border: '1px solid #fef08a',
+                  borderRadius: 6,
+                  padding: '7px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 12,
+                  color: '#854d0e',
+                  marginBottom: 14
+                }}>
+                  <BookOpen size={13} color="#854d0e" />
+                  <span><strong>{catalogedCount}</strong> Lots Cataloged</span>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('details')}
+                    style={{
+                      flex: 1,
+                      height: 38,
+                      background: '#0f172a',
+                      color: '#ffffff',
+                      border: '1px solid #1e293b',
+                      borderRadius: 6,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#1e293b'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#0f172a'}
+                  >
+                    <Info size={14} />
+                    <span>Auction Details</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('lots')}
+                    style={{
+                      flex: 1,
+                      height: 38,
+                      background: 'linear-gradient(135deg, #cba135 0%, #b48316 100%)',
+                      color: '#ffffff',
+                      border: '1px solid #b48316',
+                      borderRadius: 6,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(203, 161, 53, 0.25)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 3px 10px rgba(203, 161, 53, 0.4)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 2px 6px rgba(203, 161, 53, 0.25)';
+                      e.currentTarget.style.transform = 'none';
+                    }}
+                  >
+                    <BookOpen size={14} />
+                    <span>View Catalog ({catalogedCount} Lots)</span>
+                  </button>
+                </div>
               </div>
-            )}
-
-            <div>
-              <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: 6 }}>
-                Terms & Conditions
-              </h4>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-line' }}>
-                {auction.terms}
-              </p>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* =========================================================================
           SUB-TAB 4: LOTS (Custom Auction Lots Table matching reference)
