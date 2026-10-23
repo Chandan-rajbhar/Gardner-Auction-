@@ -394,6 +394,7 @@ export const AdminUsersView: React.FC = () => {
 
       // Also update matching profile in public.users if present
       try {
+        const client = supabaseAdmin || supabase;
         await client
           .from('users')
           .update({

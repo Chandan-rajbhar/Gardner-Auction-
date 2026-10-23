@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'live_clerking', label: 'Auction Day', icon: Gavel, badge: 'LIVE', isLive: true },
     { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
     { id: 'users', label: 'Customers', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
-    { id: 'admins', label: 'Admins', icon: ShieldCheck },
+    // { id: 'admins', label: 'Admins', icon: ShieldCheck },
   ];
 
   const financeNav: Array<{

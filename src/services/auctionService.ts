@@ -1,8 +1,7 @@
 import { AuctionDetail, SettlementCustomer, SettlementCharge, AuctionExpense } from '../types/auctionDetail';
-import { MOCK_AUCTIONS_DETAIL } from '../data/mockAuctionDetailData';
 import { supabaseAdmin, supabase } from '../lib/supabase';
 
-const STORAGE_KEY = 'gardner_auctions_detail_v1';
+const STORAGE_KEY = 'gardner_auctions_detail_v2';
 
 export function createEmptyAuctionDetail(data?: Partial<AuctionDetail>): AuctionDetail {
   const generatedId = `auc-${Date.now()}`;
@@ -28,7 +27,7 @@ export function createEmptyAuctionDetail(data?: Partial<AuctionDetail>): Auction
     zip: '',
     country: '',
     useConsolidatedInvoicing: false,
-    shippingAvailability: '',
+    shippingAvailability: (data?.shippingAvailability as any) || 'No Shipping',
     shippingAccount: '',
     addHandlingCharge: false,
     handlingChargeType: 'Fixed',
@@ -102,62 +101,24 @@ class AuctionService {
 
   private initData() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      // Purge deprecated v1 cache which may contain hardcoded mock auctions
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem('gardner_auctions_detail_v1');
+      }
+      const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
       if (stored) {
         const parsed: AuctionDetail[] = JSON.parse(stored);
-        // Clean any dynamically created auctions that previously inherited mock data
-        this.auctions = parsed.map(a => {
-          if (a.id !== 'auc-001') {
-            if (a.address1 === '119 Jewel Basin Ct') a.address1 = '';
-            if (a.address2 === 'Suite 100') a.address2 = '';
-            if (a.city === 'Bigfork') a.city = '';
-            if (a.state === 'MT') a.state = '';
-            if (a.zip === '59911') a.zip = '';
-            if (a.shippingAccount === 'shipping & handling') a.shippingAccount = '';
-            if (a.handlingAmount === 4.5 || a.handlingAmount === 4.50) {
-              a.handlingAmount = 0;
-              a.addHandlingCharge = false;
-            }
-            if (a.useConsolidatedInvoicing && (a.address1 === '' || !a.address1)) {
-              a.useConsolidatedInvoicing = false;
-            }
-            if (a.terms && a.terms.includes('HGS Terms & Conditions')) {
-              a.terms = '';
-            }
-            if (a.paymentInfo && a.paymentInfo.includes('3% processing fee applied')) {
-              a.paymentInfo = '';
-            }
-            if (a.shortBpExplanation && a.shortBpExplanation.includes("15% Buyer's Premium")) {
-              a.shortBpExplanation = '';
-            }
-            if (a.uploadSettings && a.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
-              a.uploadSettings = createEmptyAuctionDetail().uploadSettings;
-            }
-            if (a.lotDefaults) {
-              if (a.lotDefaults.commission?.includes('CSS_52F3ABA3')) a.lotDefaults.commission = '';
-              if (a.lotDefaults.buyerTax?.includes('BTAX_0%')) a.lotDefaults.buyerTax = '';
-              if (a.lotDefaults.buyerPremium?.includes('BP_15')) a.lotDefaults.buyerPremium = '';
-            }
-            if (a.featuredImages && a.featuredImages.length === 4 && a.featuredImages[0]?.title?.includes('Morgan')) {
-              a.featuredImages = [];
-            }
-            if (a.auctionLinks && a.auctionLinks.length === 2 && a.auctionLinks[0]?.url?.includes('highlandcrggoldandsilver')) {
-              a.auctionLinks = [];
-            }
-            if (a.expenses && a.expenses.length > 0 && a.expenses[0]?.amount === 1200) {
-              a.expenses = [];
-            }
-          }
-          return a;
-        });
-        this.persist();
+        if (Array.isArray(parsed)) {
+          this.auctions = parsed;
+        } else {
+          this.auctions = [];
+        }
       } else {
-        this.auctions = MOCK_AUCTIONS_DETAIL;
-        this.persist();
+        this.auctions = [];
       }
     } catch (e) {
-      console.warn('[AuctionService] Failed to load from localStorage, using mock data:', e);
-      this.auctions = MOCK_AUCTIONS_DETAIL;
+      console.warn('[AuctionService] Failed to load from localStorage:', e);
+      this.auctions = [];
     }
   }
 
@@ -170,123 +131,138 @@ class AuctionService {
   }
 
   public async getAuctions(): Promise<AuctionDetail[]> {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('auctions')
-        .select('*')
-        .order('start_date', { ascending: false });
+    const client = supabaseAdmin || supabase;
+    const { data, error } = await client
+      .from('auctions')
+      .select('*')
+      .order('start_date', { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        const fromDb: AuctionDetail[] = data.map((row: any) => {
-          const isMockAuction = row.id === 'auc-001';
-          const existing = this.auctions.find(a => a.id === row.id);
-          const base = isMockAuction
-            ? (existing || MOCK_AUCTIONS_DETAIL[0])
-            : (existing || createEmptyAuctionDetail({ id: row.id }));
-
-          // Sanitize any residual mock defaults for newly created/custom auctions
-          if (!isMockAuction) {
-            if (base.address1 === '119 Jewel Basin Ct') base.address1 = '';
-            if (base.address2 === 'Suite 100') base.address2 = '';
-            if (base.city === 'Bigfork') base.city = '';
-            if (base.state === 'MT') base.state = '';
-            if (base.zip === '59911') base.zip = '';
-            if (base.shippingAccount === 'shipping & handling') base.shippingAccount = '';
-            if (base.handlingAmount === 4.5 || base.handlingAmount === 4.50) {
-              base.handlingAmount = 0;
-              base.addHandlingCharge = false;
-            }
-            if (base.shortBpExplanation === "15% Buyer's Premium") base.shortBpExplanation = '';
-            if (base.terms && base.terms.includes('HGS Terms & Conditions')) base.terms = '';
-            if (base.paymentInfo && base.paymentInfo.includes('3% processing fee applied')) base.paymentInfo = '';
-            if (base.uploadSettings && base.uploadSettings.previewDateTimes?.includes('119 Jewel Basin')) {
-              base.uploadSettings = createEmptyAuctionDetail().uploadSettings;
-            }
-          }
-
-          return {
-            ...JSON.parse(JSON.stringify(base)),
-            id: row.id,
-            code: row.code || `AUC-${row.id.toString().slice(-4)}`,
-            name: row.name || '',
-            description: row.description || '',
-            status: row.status || 'Open',
-            startDate: row.start_date || new Date().toISOString().split('T')[0],
-            endDate: row.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-            auctionType: row.auction_type || 'HiBid',
-            currency: row.currency || 'USD',
-            taxExemptAll: row.tax_exempt_all !== undefined ? Boolean(row.tax_exempt_all) : (isMockAuction ? base.taxExemptAll : false),
-            liveStartingBidCard: row.live_starting_bid_card !== undefined ? Number(row.live_starting_bid_card) : (isMockAuction ? base.liveStartingBidCard : 1),
-            paymentInfo: row.payment_info ?? (isMockAuction ? base.paymentInfo : ''),
-            terms: row.terms ?? (isMockAuction ? base.terms : ''),
-            shortBpExplanation: row.short_bp_explanation ?? (isMockAuction ? base.shortBpExplanation : ''),
-            address1: row.address1 ?? (isMockAuction ? base.address1 : ''),
-            address2: row.address2 ?? (isMockAuction ? base.address2 : ''),
-            city: row.city ?? (isMockAuction ? base.city : ''),
-            state: row.state ?? (isMockAuction ? base.state : ''),
-            zip: row.zip ?? (isMockAuction ? base.zip : ''),
-            country: row.country ?? (isMockAuction ? base.country : ''),
-            useConsolidatedInvoicing: row.use_consolidated_invoicing !== undefined ? Boolean(row.use_consolidated_invoicing) : false,
-            shippingAvailability: row.shipping_availability ?? (isMockAuction ? base.shippingAvailability : ''),
-            shippingAccount: row.shipping_account ?? (isMockAuction ? base.shippingAccount : ''),
-            addHandlingCharge: row.add_handling_charge !== undefined ? Boolean(row.add_handling_charge) : false,
-            handlingChargeType: row.handling_charge_type || (isMockAuction ? base.handlingChargeType : 'Fixed'),
-            handlingAmount: row.handling_amount !== undefined ? Number(row.handling_amount) : (isMockAuction ? base.handlingAmount : 0),
-            featuredImages: Array.isArray(row.featured_images) ? row.featured_images : (isMockAuction ? base.featuredImages : []),
-            auctionLinks: Array.isArray(row.auction_links) ? row.auction_links : (isMockAuction ? base.auctionLinks : []),
-            uploadSettings: {
-              ...(isMockAuction ? base.uploadSettings : createEmptyAuctionDetail().uploadSettings),
-              ...(row.upload_settings || {})
-            },
-            lotDefaults: {
-              ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
-              ...(row.lot_defaults || {})
-            },
-            expenses: isMockAuction ? base.expenses : (base.expenses || []),
-            dayStats: (row.day_stats && Object.keys(row.day_stats).length > 0)
-              ? { ...base.dayStats, ...row.day_stats }
-              : base.dayStats
-          };
-        });
-
-        const dbIds = new Set(fromDb.map(a => a.id));
-        const merged = [...fromDb, ...this.auctions.filter(a => !dbIds.has(a.id))];
-        this.auctions = merged;
-        this.persist();
-        return merged;
-      }
-    } catch (err) {
-      console.warn('[AuctionService] Failed to fetch auctions from Supabase, using local fallback:', err);
+    if (error) {
+      console.error('[AuctionService] Failed to fetch auctions from Supabase:', error.message);
+      throw new Error(`Failed to load auctions: ${error.message}`);
     }
-    return [...this.auctions];
+
+    if (!data || data.length === 0) {
+      this.auctions = [];
+      this.persist();
+      return [];
+    }
+
+    // Fetch real lot counts from Supabase lots table
+    let lotCountsByAuction: Record<string, number> = {};
+    try {
+      const { data: lotsData } = await client
+        .from('lots')
+        .select('auction_id');
+      if (lotsData && Array.isArray(lotsData)) {
+        lotsData.forEach((l: any) => {
+          if (l.auction_id) {
+            lotCountsByAuction[l.auction_id] = (lotCountsByAuction[l.auction_id] || 0) + 1;
+          }
+        });
+      }
+    } catch (lotsErr) {
+      console.warn('[AuctionService] Could not calculate lot counts:', lotsErr);
+    }
+
+    const fromDb: AuctionDetail[] = data.map((row: any) => {
+      const emptyBase = createEmptyAuctionDetail({ id: row.id });
+
+      const dayStats = {
+        ...(emptyBase.dayStats || {}),
+        ...(row.day_stats || {}),
+        lotCount: lotCountsByAuction[row.id] !== undefined
+          ? lotCountsByAuction[row.id]
+          : (row.day_stats?.lotCount || 0)
+      };
+
+      return {
+        ...emptyBase,
+        id: row.id,
+        code: row.code || `AUC-${row.id.toString().slice(-4)}`,
+        name: row.name || 'Untitled Auction',
+        description: row.description || '',
+        status: row.status || 'Open',
+        startDate: row.start_date || new Date().toISOString().split('T')[0],
+        endDate: row.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+        auctionType: row.auction_type || 'HiBid',
+        currency: row.currency || 'USD',
+        taxExemptAll: row.tax_exempt_all !== undefined ? Boolean(row.tax_exempt_all) : false,
+        liveStartingBidCard: row.live_starting_bid_card !== undefined ? Number(row.live_starting_bid_card) : 1,
+        paymentInfo: row.payment_info || '',
+        terms: row.terms || '',
+        shortBpExplanation: row.short_bp_explanation || '',
+        address1: row.address1 ?? '',
+        address2: row.address2 ?? '',
+        city: row.city ?? '',
+        state: row.state ?? '',
+        zip: row.zip ?? '',
+        country: row.country ?? 'United States',
+        useConsolidatedInvoicing: row.use_consolidated_invoicing !== undefined ? Boolean(row.use_consolidated_invoicing) : false,
+        shippingAvailability: (row.shipping_availability as any) || 'No Shipping',
+        shippingAccount: row.shipping_account ?? '',
+        addHandlingCharge: row.add_handling_charge !== undefined ? Boolean(row.add_handling_charge) : false,
+        handlingChargeType: row.handling_charge_type || 'Fixed',
+        handlingAmount: row.handling_amount !== undefined ? Number(row.handling_amount) : 0,
+        featuredImages: Array.isArray(row.featured_images) ? row.featured_images : [],
+        auctionLinks: Array.isArray(row.auction_links) ? row.auction_links : [],
+        uploadSettings: {
+          ...emptyBase.uploadSettings,
+          ...(row.upload_settings || {})
+        },
+        lotDefaults: {
+          ...emptyBase.lotDefaults,
+          ...(row.lot_defaults || {})
+        },
+        expenses: Array.isArray(row.expenses) ? row.expenses : [],
+        settlements: Array.isArray(row.settlements) ? row.settlements : [],
+        dayStats
+      };
+    });
+
+    this.auctions = fromDb;
+    this.persist();
+    return fromDb;
   }
 
   public async getAuctionById(id: string): Promise<AuctionDetail | null> {
-    const isMockAuction = id === 'auc-001';
+    const client = supabaseAdmin || supabase;
 
     // 1. Fetch fresh record directly from Supabase
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await client
         .from('auctions')
         .select('*')
         .eq('id', id)
         .maybeSingle();
 
       if (!error && data) {
-        const base = isMockAuction ? MOCK_AUCTIONS_DETAIL[0] : createEmptyAuctionDetail({ id: data.id });
+        // Fetch accurate real-time lot count for this auction
+        let lotCount = data.day_stats?.lotCount || 0;
+        try {
+          const { count } = await client
+            .from('lots')
+            .select('*', { count: 'exact', head: true })
+            .eq('auction_id', id);
+          if (typeof count === 'number') {
+            lotCount = count;
+          }
+        } catch (_) {}
+
+        const emptyBase = createEmptyAuctionDetail({ id: data.id });
         const loaded: AuctionDetail = {
-          ...JSON.parse(JSON.stringify(base)),
+          ...emptyBase,
           id: data.id,
           code: data.code || `AUC-${data.id.toString().slice(-4)}`,
-          name: data.name || '',
+          name: data.name || 'Untitled Auction',
           description: data.description || '',
           status: data.status || 'Open',
           startDate: data.start_date || new Date().toISOString().split('T')[0],
           endDate: data.end_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
           auctionType: data.auction_type || 'HiBid',
           currency: data.currency || 'USD',
-          taxExemptAll: data.tax_exempt_all !== undefined ? Boolean(data.tax_exempt_all) : (isMockAuction ? base.taxExemptAll : false),
-          liveStartingBidCard: data.live_starting_bid_card !== undefined ? Number(data.live_starting_bid_card) : (isMockAuction ? base.liveStartingBidCard : 1),
+          taxExemptAll: data.tax_exempt_all !== undefined ? Boolean(data.tax_exempt_all) : false,
+          liveStartingBidCard: data.live_starting_bid_card !== undefined ? Number(data.live_starting_bid_card) : 1,
           paymentInfo: data.payment_info || '',
           terms: data.terms || '',
           shortBpExplanation: data.short_bp_explanation || '',
@@ -295,27 +271,30 @@ class AuctionService {
           city: data.city ?? '',
           state: data.state ?? '',
           zip: data.zip ?? '',
-          country: data.country ?? '',
+          country: data.country ?? 'United States',
           useConsolidatedInvoicing: data.use_consolidated_invoicing !== undefined ? Boolean(data.use_consolidated_invoicing) : false,
-          shippingAvailability: data.shipping_availability ?? '',
+          shippingAvailability: (data.shipping_availability as any) || 'No Shipping',
           shippingAccount: data.shipping_account ?? '',
           addHandlingCharge: data.add_handling_charge !== undefined ? Boolean(data.add_handling_charge) : false,
           handlingChargeType: data.handling_charge_type || 'Fixed',
           handlingAmount: data.handling_amount !== undefined ? Number(data.handling_amount) : 0,
-          featuredImages: Array.isArray(data.featured_images) ? data.featured_images : (isMockAuction ? base.featuredImages : []),
-          auctionLinks: Array.isArray(data.auction_links) ? data.auction_links : (isMockAuction ? base.auctionLinks : []),
+          featuredImages: Array.isArray(data.featured_images) ? data.featured_images : [],
+          auctionLinks: Array.isArray(data.auction_links) ? data.auction_links : [],
           uploadSettings: {
-            ...(isMockAuction ? base.uploadSettings : createEmptyAuctionDetail().uploadSettings),
+            ...emptyBase.uploadSettings,
             ...(data.upload_settings || {})
           },
           lotDefaults: {
-            ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
+            ...emptyBase.lotDefaults,
             ...(data.lot_defaults || {})
           },
-          expenses: isMockAuction ? base.expenses : [],
-          dayStats: (data.day_stats && Object.keys(data.day_stats).length > 0)
-            ? { ...base.dayStats, ...data.day_stats }
-            : base.dayStats
+          expenses: Array.isArray(data.expenses) ? data.expenses : [],
+          settlements: Array.isArray(data.settlements) ? data.settlements : [],
+          dayStats: {
+            ...(emptyBase.dayStats || {}),
+            ...(data.day_stats || {}),
+            lotCount: typeof lotCount === 'number' ? lotCount : (data.day_stats?.lotCount || 0)
+          }
         };
 
         const idx = this.auctions.findIndex(a => a.id === id);
@@ -325,13 +304,13 @@ class AuctionService {
           this.auctions.unshift(loaded);
         }
         this.persist();
-        return JSON.parse(JSON.stringify(loaded));
+        return loaded;
       }
     } catch (err) {
       console.warn('[AuctionService] getAuctionById Supabase error:', err);
     }
 
-    // 2. Fallback to local cache if offline or not in Supabase
+    // 2. Fallback to local cache if already fetched and present
     const found = this.auctions.find(a => a.id === id);
     if (found) {
       return JSON.parse(JSON.stringify(found));
