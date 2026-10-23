@@ -23,16 +23,42 @@ import {
   AlertTriangle,
   Upload,
   Info,
-  Download,
   Award,
   RefreshCw,
   Moon,
-  Sun
+  Sun,
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
 import './ProfilePage.css';
+
+const COUNTRIES_LIST: string[] = [
+  'United States',
+  'Canada',
+  'United Kingdom',
+  'Australia',
+  'Germany',
+  'France',
+  'Italy',
+  'Spain',
+  'Switzerland',
+  'Netherlands',
+  'Japan',
+  'Singapore',
+  'New Zealand',
+  'Austria',
+  'Belgium',
+  'Ireland',
+  'Sweden',
+  'Norway',
+  'Denmark',
+  'Mexico',
+  'Brazil',
+  'India',
+  'South Africa'
+];
 
 interface ProfilePageProps {
   onNavigate: (path: string) => void;
@@ -91,6 +117,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
 
+  // Address & Seller Form States
+  const [isSeller, setIsSeller] = useState<boolean>(user?.isSeller || false);
+  const [address1, setAddress1] = useState<string>(user?.address1 || '');
+  const [address2, setAddress2] = useState<string>(user?.address2 || '');
+  const [city, setCity] = useState<string>(user?.city || '');
+  const [state, setState] = useState<string>(user?.state || '');
+  const [zip, setZip] = useState<string>(user?.zip || '');
+  const [country, setCountry] = useState<string>(user?.country || 'United States');
+
   // Password Form States
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -114,6 +149,36 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     if (user) {
       setFullName(user.name || '');
       setPhone(user.phone || '');
+      setIsSeller(Boolean(user.isSeller));
+      setAddress1(user.address1 || '');
+      setAddress2(user.address2 || '');
+      setCity(user.city || '');
+      setState(user.state || '');
+      setZip(user.zip || '');
+      setCountry(user.country || 'United States');
+
+      // Fetch fresh values from database table directly as single source of truth
+      async function loadFreshAddress() {
+        if (!user) return;
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('is_seller, address_1, address_2, city, state, zip, country')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (!error && data) {
+            if (data.is_seller !== undefined && data.is_seller !== null) setIsSeller(Boolean(data.is_seller));
+            if (data.address_1 !== undefined && data.address_1 !== null) setAddress1(data.address_1 || '');
+            if (data.address_2 !== undefined && data.address_2 !== null) setAddress2(data.address_2 || '');
+            if (data.city !== undefined && data.city !== null) setCity(data.city || '');
+            if (data.state !== undefined && data.state !== null) setState(data.state || '');
+            if (data.zip !== undefined && data.zip !== null) setZip(data.zip || '');
+            if (data.country !== undefined && data.country !== null) setCountry(data.country || 'United States');
+          }
+        } catch (_) { }
+      }
+      loadFreshAddress();
     }
   }, [user]);
 
@@ -239,14 +304,21 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
       const result = await updateProfile({
         name: cleanName,
         phone: phone.trim(),
-        title: user?.title || 'Registered Bidder'
+        title: user?.title || 'Registered Bidder',
+        isSeller,
+        address1: address1.trim(),
+        address2: address2.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        zip: zip.trim(),
+        country: country.trim() || 'United States'
       });
 
       if (result.success) {
-        setProfileSuccessMsg('Profile information updated successfully.');
+        setProfileSuccessMsg('Profile and address information updated successfully.');
         setIsEditingProfile(false);
         if (onShowToast) {
-          onShowToast('success', 'Profile Updated', 'Your profile records have been saved.');
+          onShowToast('success', 'Profile Updated', 'Your profile and address details have been saved.');
         }
       } else {
         setProfileErrorMsg(result.error || 'Failed to update profile records.');
@@ -263,6 +335,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
     if (user) {
       setFullName(user.name || '');
       setPhone(user.phone || '');
+      setIsSeller(Boolean(user.isSeller));
+      setAddress1(user.address1 || '');
+      setAddress2(user.address2 || '');
+      setCity(user.city || '');
+      setState(user.state || '');
+      setZip(user.zip || '');
+      setCountry(user.country || 'United States');
     }
     setProfileErrorMsg(null);
     setIsEditingProfile(false);
@@ -448,16 +527,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
       });
     } finally {
       setIsDeletingPhoto(false);
-    }
-  };
-
-  const handleDownloadBidderPass = () => {
-    if (onShowToast) {
-      onShowToast(
-        'success',
-        'Bidder Pass Dispatched',
-        'Official Pennsylvania Board of Auctioneer Examiners Bidder Pass #AY-002004 has been generated.'
-      );
     }
   };
 
@@ -916,6 +985,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                       onClick={() => {
                         setFullName(user.name || '');
                         setPhone(user.phone || '');
+                        setIsSeller(Boolean(user.isSeller));
+                        setAddress1(user.address1 || '');
+                        setAddress2(user.address2 || '');
+                        setCity(user.city || '');
+                        setState(user.state || '');
+                        setZip(user.zip || '');
+                        setCountry(user.country || 'United States');
                         setProfileErrorMsg(null);
                         setProfileSuccessMsg(null);
                         setIsEditingProfile(true);
@@ -1066,28 +1142,63 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                       </div>
                     </div>
 
-                    {/* Certified PA Saleroom Participant Feature Card */}
-                    <div className="ga-pass-banner">
-                      <div className="ga-pass-banner-left">
-                        <div className="ga-pass-seal-badge">
-                          <Award size={24} />
+                    {/* Address & Seller Information (Replacing Certified PA Saleroom Participant) */}
+                    <div className="ga-address-display-card">
+                      <div className="ga-address-card-header">
+                        <div className="ga-address-card-header-left">
+                          <div className="ga-address-seal-badge">
+                            <MapPin size={22} />
+                          </div>
+                          <div className="ga-address-title-wrap">
+                            <h3 className="ga-address-card-title font-serif">Address &amp; Seller Information</h3>
+                            <p className="ga-address-card-subtitle">
+                              Primary delivery address and consignment seller status registered with Gardner Auction.
+                            </p>
+                          </div>
                         </div>
-                        <div className="ga-pass-text-wrap">
-                          <h3 className="ga-pass-title font-serif">Certified PA Saleroom Participant</h3>
-                          <p className="ga-pass-desc">
-                            Your collector status adheres to Pennsylvania Board of Auctioneer Examiners regulatory requirements.
-                          </p>
+
+                      </div>
+
+                      <div className="ga-address-read-grid">
+                        <div className="ga-address-read-item">
+                          <span className="ga-address-read-label">Seller Status</span>
+                          <span className="ga-address-read-val">
+                            {isSeller ? (
+                              <span className="ga-badge-gold">Registered Seller</span>
+                            ) : (
+                              <span className="ga-badge-neutral">Standard Bidder (Non-Seller)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="ga-address-read-item">
+                          <span className="ga-address-read-label">Street Address</span>
+                          <span className={`ga-address-read-val ${!address1 ? 'muted-italic' : ''}`}>
+                            {address1 ? (
+                              <>
+                                <span>{address1}</span>
+                                {address2 && <><br /><span>{address2}</span></>}
+                              </>
+                            ) : (
+                              'No address provided'
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="ga-address-read-item">
+                          <span className="ga-address-read-label">City, State, Zip</span>
+                          <span className={`ga-address-read-val ${!city && !state && !zip ? 'muted-italic' : ''}`}>
+                            {[city, state, zip].filter(Boolean).join(', ') || 'Not provided'}
+                          </span>
+                        </div>
+
+                        <div className="ga-address-read-item">
+                          <span className="ga-address-read-label">Country</span>
+                          <span className="ga-address-read-val">
+                            {country || 'United States'}
+                          </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="ga-pass-download-btn"
-                        onClick={handleDownloadBidderPass}
-                        id="btn-download-bidder-pass"
-                      >
-                        <Download size={16} />
-                        <span>Download Bidder Pass</span>
-                      </button>
                     </div>
                   </>
                 ) : (
@@ -1161,6 +1272,103 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onShowToas
                             value={user.title || 'Registered Bidder'}
                             className="ga-form-input"
                           />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Address & Seller Settings (Arranged matching reference screenshot) */}
+                    <div className="ga-address-edit-section">
+                      {/* Checkbox: Seller */}
+
+
+                      {/* Address 1 */}
+                      <div className="ga-ref-form-row">
+                        <label className="ga-ref-label-col" htmlFor="prof-address1">
+                          Address 1
+                        </label>
+                        <div className="ga-ref-input-col">
+                          <input
+                            id="prof-address1"
+                            type="text"
+                            value={address1}
+                            onChange={(e) => setAddress1(e.target.value)}
+                            placeholder="Address1"
+                            className="ga-ref-input"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Address 2 */}
+                      <div className="ga-ref-form-row">
+                        <label className="ga-ref-label-col" htmlFor="prof-address2">
+                          Address 2
+                        </label>
+                        <div className="ga-ref-input-col">
+                          <input
+                            id="prof-address2"
+                            type="text"
+                            value={address2}
+                            onChange={(e) => setAddress2(e.target.value)}
+                            placeholder="Address2"
+                            className="ga-ref-input"
+                          />
+                        </div>
+                      </div>
+
+                      {/* City, State, Zip */}
+                      <div className="ga-ref-form-row">
+                        <label className="ga-ref-label-col">
+                          City, State, Zip
+                        </label>
+                        <div className="ga-ref-input-col ga-ref-city-state-zip-col">
+                          <div className="ga-ref-city-state-line">
+                            <input
+                              id="prof-city"
+                              type="text"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              placeholder="City"
+                              className="ga-ref-input ga-ref-input-city"
+                            />
+                            <input
+                              id="prof-state"
+                              type="text"
+                              value={state}
+                              onChange={(e) => setState(e.target.value)}
+                              placeholder="State"
+                              className="ga-ref-input ga-ref-input-state"
+                            />
+                          </div>
+                          <div className="ga-ref-zip-line">
+                            <input
+                              id="prof-zip"
+                              type="text"
+                              value={zip}
+                              onChange={(e) => setZip(e.target.value)}
+                              placeholder="Zip"
+                              className="ga-ref-input ga-ref-input-zip"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Country */}
+                      <div className="ga-ref-form-row">
+                        <label className="ga-ref-label-col" htmlFor="prof-country">
+                          Country
+                        </label>
+                        <div className="ga-ref-input-col">
+                          <select
+                            id="prof-country"
+                            value={country}
+                            onChange={(e) => setCountry(e.target.value)}
+                            className="ga-ref-select"
+                          >
+                            <option value="">Select country</option>
+                            {COUNTRIES_LIST.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>

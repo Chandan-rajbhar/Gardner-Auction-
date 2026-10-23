@@ -44,7 +44,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               />
               <div>
                 <span className="footer-brand-name">GARDNER AUCTION</span>
-                <span className="footer-brand-tag">APPRAISERS &amp; AUCTIONEERS · SINCE 1960</span>
+                <span className="footer-brand-tag">APPRAISERS &amp; AUCTIONEERS</span>
               </div>
             </div>
             <p className="footer-summary">

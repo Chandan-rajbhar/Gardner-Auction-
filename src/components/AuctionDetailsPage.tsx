@@ -13,7 +13,12 @@ import {
   FileText,
   Info,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  ChevronRight,
+  Sparkles,
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -359,26 +364,25 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
     }
   };
 
-  // Back Navigation
+  // Back Navigation directly to Current Auctions
   const handleBack = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else if (onNavigate) {
-      onNavigate('#current-auction');
+    const targetPath = '#current-auction?tab=auctions';
+    if (onNavigate) {
+      onNavigate(targetPath);
     } else {
-      window.location.hash = '#current-auction';
+      window.location.hash = targetPath;
     }
   };
 
   // Loading State
   if (loading) {
     return (
-      <main className="ad-page-root" role="main" aria-label="Loading Auction Dossier">
-        <div className="ad-ambient-glow" aria-hidden="true" />
-        <div className="ad-container">
-          <div className="ad-loading-wrap">
-            <div className="ad-loading-spinner" />
-            <p>Loading certified saleroom dossier from database...</p>
+      <main className="g-dossier-page-root" role="main" aria-label="Loading Auction Dossier">
+        <div className="g-dossier-loading-container">
+          <div className="g-dossier-spinner-ring" />
+          <div className="g-dossier-loading-text">
+            <span className="g-dossier-loading-title">GARDNER AUCTION ARCHIVE</span>
+            <span className="g-dossier-loading-sub">Accessing verified saleroom ledger...</span>
           </div>
         </div>
       </main>
@@ -388,18 +392,20 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
   // Not Found State
   if (!auction) {
     return (
-      <main className="ad-page-root" role="main" aria-label="Auction Not Found">
-        <div className="ad-ambient-glow" aria-hidden="true" />
-        <div className="ad-container">
-          <div className="ad-not-found-card">
-            <AlertCircle size={48} style={{ color: '#ef4444' }} />
-            <h1 className="ad-not-found-title">Auction Dossier Not Found</h1>
-            <p className="ad-not-found-desc">
-              The requested auction record for identifier "{auctionId}" does not exist in the database.
+      <main className="g-dossier-page-root" role="main" aria-label="Auction Not Found">
+        <div className="g-dossier-container">
+          <div className="g-dossier-not-found-panel">
+            <div className="g-not-found-icon-wrap">
+              <AlertCircle size={40} />
+            </div>
+            <span className="g-not-found-eyebrow">AUCTION DOSSIER UNRESOLVED</span>
+            <h1 className="g-not-found-heading">Auction Record Not Found</h1>
+            <p className="g-not-found-desc">
+              The requested auction ledger identifier <strong>"{auctionId}"</strong> could not be located in the current database repository.
             </p>
-            <button type="button" className="ad-btn-back" onClick={handleBack}>
+            <button type="button" className="g-btn-back-link" onClick={handleBack} id="btn-ad-notfound-back">
               <ArrowLeft size={16} />
-              <span>Back to Current Auctions</span>
+              <span>Return to Current Auctions</span>
             </button>
           </div>
         </div>
@@ -408,1029 +414,525 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
   }
 
   return (
-    <main className="ad-page-root" role="main" aria-label={`Auction Details - ${title || 'Saleroom Dossier'}`}>
-      {/* Embedded Saleroom Dossier Stylesheet */}
-      <style>{`
-        .ad-page-root {
-          background-color: #101216 !important;
-          color: #f5f3ed !important;
-          min-height: 100vh !important;
-          padding: 24px 0 64px !important;
-          font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-          position: relative !important;
-        }
-        .ad-page-root .ad-ambient-glow {
-          position: absolute;
-          top: 0;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 100%;
-          max-width: 1280px;
-          height: 400px;
-          background: radial-gradient(circle at 50% 0%, rgba(197, 160, 74, 0.08) 0%, transparent 70%);
-          pointer-events: none;
-          z-index: 0;
-        }
-        .ad-page-root .ad-container {
-          max-width: 1280px !important;
-          margin: 0 auto !important;
-          padding: 0 24px !important;
-          position: relative !important;
-          z-index: 1 !important;
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 32px !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-btn-back {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 10px !important;
-          padding: 8px 18px !important;
-          border-radius: 8px !important;
-          background: #161920 !important;
-          border: 1px solid #2b303b !important;
-          font-size: 12px !important;
-          font-weight: 600 !important;
-          letter-spacing: 0.5px !important;
-          color: #d5d9e2 !important;
-          cursor: pointer !important;
-          transition: all 0.2s ease !important;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
-          text-decoration: none !important;
-        }
-        .ad-page-root .ad-btn-back svg {
-          color: #c5a04a !important;
-          stroke: #c5a04a !important;
-          transition: transform 0.2s ease !important;
-        }
-        .ad-page-root .ad-hero-card {
-          border-radius: 16px !important;
-          overflow: hidden !important;
-          background: #f4f0e7 !important;
-          border: 1px solid #2b303c !important;
-          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45), 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
-        }
-        .ad-page-root .ad-hero-header-strip {
-          background: #15181f !important;
-          padding: 14px 28px !important;
-          border-bottom: 1px solid #2a2e3a !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-          gap: 16px !important;
-        }
-        .ad-page-root .ad-header-eyebrow {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 12px !important;
-        }
-        .ad-page-root .ad-pulse-dot-gold {
-          width: 8px !important;
-          height: 8px !important;
-          border-radius: 50% !important;
-          background: #c5a04a !important;
-          box-shadow: 0 0 10px #c5a04a !important;
-        }
-        .ad-page-root .ad-header-eyebrow h2 {
-          font-family: 'Cinzel', serif !important;
-          font-size: 12px !important;
-          font-weight: 600 !important;
-          letter-spacing: 2.2px !important;
-          text-transform: uppercase !important;
-          color: #e5e9f0 !important;
-          margin: 0 !important;
-        }
-        .ad-page-root .ad-header-code-pill {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 6px !important;
-          padding: 4px 10px !important;
-          border-radius: 4px !important;
-          background: #1f232d !important;
-          border: 1px solid #353b4a !important;
-          font-family: monospace !important;
-          font-size: 12px !important;
-          color: #d4af37 !important;
-        }
-        .ad-page-root .ad-hero-body {
-          background: #f4f0e7 !important;
-          color: #1e201b !important;
-          padding: 36px 40px !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-hero-body-grid {
-          display: grid !important;
-          grid-template-columns: 5fr 7fr !important;
-          gap: 40px !important;
-          align-items: start !important;
-        }
-        .ad-page-root .ad-img-frame {
-          position: relative !important;
-          border-radius: 12px !important;
-          overflow: hidden !important;
-          border: 1px solid #d9d3c5 !important;
-          background: #0e1015 !important;
-          aspect-ratio: 1 / 1 !important;
-          width: 100% !important;
-          max-height: 460px !important;
-          min-height: 320px !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
-        }
-        .ad-page-root .ad-main-img {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: contain !important;
-          padding: 16px !important;
-          display: block !important;
-        }
-        .ad-page-root .ad-live-badge-wrapper {
-          position: absolute !important;
-          top: 14px !important;
-          left: 14px !important;
-          z-index: 5 !important;
-        }
-        .ad-page-root .ad-live-badge {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 6px !important;
-          padding: 4px 12px !important;
-          border-radius: 6px !important;
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-        }
-        .ad-page-root .ad-live-badge.red { background: #dc2626 !important; color: #ffffff !important; }
-        .ad-page-root .ad-live-badge.green { background: #15803d !important; color: #ffffff !important; }
-        .ad-page-root .ad-live-badge.gold { background: #c5a04a !important; color: #101216 !important; }
-        .ad-page-root .ad-thumbnails-strip {
-          display: flex !important;
-          align-items: center !important;
-          gap: 12px !important;
-          flex-wrap: wrap !important;
-          margin-top: 16px !important;
-        }
-        .ad-page-root .ad-thumb-btn {
-          width: 76px !important;
-          height: 76px !important;
-          border-radius: 8px !important;
-          overflow: hidden !important;
-          background: #111317 !important;
-          padding: 3px !important;
-          border: 1px solid #d1cab8 !important;
-          cursor: pointer !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-thumb-btn img {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-          border-radius: 5px !important;
-          display: block !important;
-        }
-        .ad-page-root .ad-thumb-btn.active {
-          border: 2px solid #c5a04a !important;
-          box-shadow: 0 4px 12px rgba(197, 160, 74, 0.3) !important;
-        }
-        .ad-page-root .ad-info-col {
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 20px !important;
-        }
-        .ad-page-root .ad-sync-meta-row {
-          display: flex !important;
-          flex-wrap: wrap !important;
-          align-items: center !important;
-          gap: 10px !important;
-          font-size: 11.5px !important;
-          font-weight: 600 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #7e8379 !important;
-        }
-        .ad-page-root .ad-main-title {
-          font-family: 'Playfair Display', Georgia, serif !important;
-          font-size: 40px !important;
-          font-weight: 700 !important;
-          color: #1f201b !important;
-          line-height: 1.18 !important;
-          margin: 0 0 4px 0 !important;
-          letter-spacing: -0.5px !important;
-        }
-        .ad-page-root .ad-lead-desc {
-          font-size: 15px !important;
-          color: #575b53 !important;
-          line-height: 1.6 !important;
-          margin: 0 !important;
-        }
-        .ad-page-root .ad-metadata-cards-grid {
-          display: grid !important;
-          grid-template-columns: repeat(2, 1fr) !important;
-          gap: 14px !important;
-          padding-top: 4px !important;
-        }
-        .ad-page-root .ad-meta-card {
-          background: #ffffff !important;
-          padding: 14px 18px !important;
-          border-radius: 12px !important;
-          border: 1px solid #dedacd !important;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03) !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: center !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-meta-card.span-2 {
-          grid-column: span 2 !important;
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-        }
-        .ad-page-root .ad-meta-card-label {
-          font-size: 10px !important;
-          font-weight: 700 !important;
-          letter-spacing: 1.4px !important;
-          text-transform: uppercase !important;
-          color: #7d8177 !important;
-        }
-        .ad-page-root .ad-meta-card-val {
-          margin-top: 4px !important;
-          font-size: 14px !important;
-          font-weight: 700 !important;
-          color: #1e201b !important;
-        }
-        .ad-page-root .ad-meta-card-val.red { color: #992222 !important; text-transform: uppercase !important; }
-        .ad-page-root .ad-meta-card-val.green { color: #15803d !important; text-transform: uppercase !important; }
-        .ad-page-root .ad-meta-card-val.gold { color: #8c6d1f !important; }
-        .ad-page-root .ad-meta-card-code-badge {
-          font-family: monospace !important;
-          font-size: 13.5px !important;
-          font-weight: 700 !important;
-          color: #8c6d1f !important;
-          background: #faf6ed !important;
-          padding: 3px 14px !important;
-          border-radius: 6px !important;
-          border: 1px solid #eadbbd !important;
-        }
-        .ad-page-root .ad-hero-actions-row {
-          display: flex !important;
-          align-items: center !important;
-          gap: 14px !important;
-          padding-top: 8px !important;
-          flex-wrap: wrap !important;
-        }
-        .ad-page-root .ad-btn-catalog-gold {
-          flex: 1 !important;
-          min-width: 200px !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          gap: 10px !important;
-          padding: 14px 24px !important;
-          border-radius: 12px !important;
-          background: #c5a04a !important;
-          color: #16181d !important;
-          font-size: 13.5px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.4px !important;
-          text-decoration: none !important;
-          border: none !important;
-          cursor: pointer !important;
-          box-shadow: 0 4px 14px rgba(197, 160, 74, 0.35) !important;
-        }
-        .ad-page-root .ad-btn-catalog-gold:hover { background: #d8b45b !important; transform: translateY(-1px) !important; }
-        .ad-page-root .ad-btn-catalog-gold svg { color: #16181d !important; stroke: #16181d !important; }
-        .ad-page-root .ad-btn-share-secondary {
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          gap: 8px !important;
-          padding: 14px 22px !important;
-          border-radius: 12px !important;
-          background: transparent !important;
-          color: #242621 !important;
-          font-size: 13.5px !important;
-          font-weight: 600 !important;
-          border: 1px solid #c6beaa !important;
-          cursor: pointer !important;
-        }
-        .ad-page-root .ad-btn-share-secondary:hover { background: #e8e2d2 !important; border-color: #a39b85 !important; }
-        .ad-page-root .ad-two-col-grid {
-          display: grid !important;
-          grid-template-columns: repeat(2, 1fr) !important;
-          gap: 32px !important;
-        }
-        .ad-page-root .ad-two-col-grid.single-col {
-          grid-template-columns: 1fr !important;
-        }
-        .ad-page-root .ad-info-section-card {
-          background: #f4f0e7 !important;
-          color: #1e201b !important;
-          border-radius: 16px !important;
-          padding: 26px 30px !important;
-          border: 1px solid #d9d3c5 !important;
-          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45) !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
-          gap: 16px !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-section-header {
-          display: flex !important;
-          align-items: center !important;
-          gap: 12px !important;
-          padding-bottom: 16px !important;
-          border-bottom: 1px solid #e0d9c8 !important;
-        }
-        .ad-page-root .ad-icon-box-gold {
-          width: 36px !important;
-          height: 36px !important;
-          border-radius: 8px !important;
-          background: #faf7f0 !important;
-          border: 1px solid #d5cdbd !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          color: #a6802b !important;
-          flex-shrink: 0 !important;
-        }
-        .ad-page-root .ad-icon-box-gold svg {
-          color: #a6802b !important;
-          stroke: #a6802b !important;
-          display: block !important;
-        }
-        .ad-page-root .ad-section-title {
-          font-family: 'Playfair Display', Georgia, serif !important;
-          font-size: 19px !important;
-          font-weight: 700 !important;
-          color: #1e201b !important;
-          margin: 0 !important;
-          letter-spacing: -0.3px !important;
-        }
-        .ad-page-root .ad-kv-list { display: flex !important; flex-direction: column !important; }
-        .ad-page-root .ad-kv-row {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-          gap: 16px !important;
-          padding: 12px 0 !important;
-          border-bottom: 1px solid #e6e0d2 !important;
-          font-size: 14px !important;
-        }
-        .ad-page-root .ad-kv-row:last-child { border-bottom: none !important; }
-        .ad-page-root .ad-kv-label { color: #686d62 !important; font-weight: 500 !important; flex-shrink: 0 !important; }
-        .ad-page-root .ad-kv-val { color: #1e201b !important; font-weight: 600 !important; text-align: right !important; }
-        .ad-page-root .ad-kv-val.gold { color: #8c6d1f !important; font-weight: 700 !important; }
-        .ad-page-root .ad-venue-link-wrap { padding-top: 14px !important; }
-        .ad-page-root .ad-venue-map-link {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 8px !important;
-          font-size: 12px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #8c6d1f !important;
-          text-decoration: none !important;
-        }
-        .ad-page-root .ad-venue-map-link:hover { color: #5b4510 !important; }
-        .ad-page-root .ad-venue-map-link svg { color: #8c6d1f !important; stroke: #8c6d1f !important; }
-        .ad-page-root .ad-notices-full-card {
-          background: #f4f0e7 !important;
-          color: #1e201b !important;
-          border-radius: 16px !important;
-          padding: 28px 32px !important;
-          border: 1px solid #d9d3c5 !important;
-          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45) !important;
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 20px !important;
-          box-sizing: border-box !important;
-        }
-        .ad-page-root .ad-bidding-notice-box {
-          background: #fff8f8 !important;
-          border: 1px solid #f3c7c7 !important;
-          border-radius: 12px !important;
-          padding: 16px 20px !important;
-          display: flex !important;
-          align-items: flex-start !important;
-          gap: 14px !important;
-        }
-        .ad-page-root .ad-notice-badge-red {
-          width: 26px !important;
-          height: 26px !important;
-          border-radius: 50% !important;
-          background: #fee2e2 !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          color: #dc2626 !important;
-          flex-shrink: 0 !important;
-          margin-top: 2px !important;
-        }
-        .ad-page-root .ad-notice-badge-red svg { color: #dc2626 !important; stroke: #dc2626 !important; }
-        .ad-page-root .ad-bidding-notice-title {
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #991b1b !important;
-          margin: 0 !important;
-        }
-        .ad-page-root .ad-bidding-notice-text {
-          margin-top: 4px !important;
-          font-size: 14px !important;
-          font-weight: 700 !important;
-          color: #7f1d1d !important;
-          line-height: 1.5 !important;
-          margin-bottom: 0 !important;
-        }
-        .ad-page-root .ad-auction-notice-box {
-          background: #ffffff !important;
-          border: 1px solid #dfd8c7 !important;
-          border-radius: 12px !important;
-          padding: 16px 20px !important;
-          display: flex !important;
-          align-items: flex-start !important;
-          gap: 14px !important;
-        }
-        .ad-page-root .ad-notice-badge-gold {
-          width: 26px !important;
-          height: 26px !important;
-          border-radius: 50% !important;
-          background: #faf5e6 !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          color: #a6802b !important;
-          flex-shrink: 0 !important;
-          margin-top: 2px !important;
-        }
-        .ad-page-root .ad-notice-badge-gold svg { color: #a6802b !important; stroke: #a6802b !important; }
-        .ad-page-root .ad-auction-notice-title {
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #8c6d1f !important;
-          margin: 0 !important;
-        }
-        .ad-page-root .ad-auction-notice-text {
-          margin-top: 4px !important;
-          font-size: 14px !important;
-          font-weight: 500 !important;
-          color: #4e524a !important;
-          line-height: 1.5 !important;
-          margin-bottom: 0 !important;
-        }
-        .ad-page-root .ad-terms-block { padding-top: 4px !important; }
-        .ad-page-root .ad-terms-title {
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #686d62 !important;
-          margin: 0 0 6px 0 !important;
-        }
-        .ad-page-root .ad-terms-text {
-          font-size: 14px !important;
-          font-weight: 500 !important;
-          color: #252822 !important;
-          line-height: 1.6 !important;
-          margin: 0 !important;
-        }
-        .ad-page-root .ad-accepted-cards-section {
-          padding-top: 14px !important;
-          margin-top: 4px !important;
-          border-top: 1px solid #e6e0d2 !important;
-        }
-        .ad-page-root .ad-cards-label {
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.8px !important;
-          text-transform: uppercase !important;
-          color: #7a7f74 !important;
-          display: block !important;
-          margin-bottom: 8px !important;
-        }
-        .ad-page-root .ad-cards-chips-row {
-          display: flex !important;
-          flex-wrap: wrap !important;
-          align-items: center !important;
-          gap: 8px !important;
-        }
-        .ad-page-root .ad-card-chip {
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 6px !important;
-          padding: 6px 12px !important;
-          border-radius: 6px !important;
-          background: #ffffff !important;
-          border: 1px solid #d5cfbe !important;
-          font-size: 11.5px !important;
-          font-weight: 700 !important;
-          color: #2a2d25 !important;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
-        }
-        .ad-page-root .ad-page-bottom-actions {
-          padding: 12px 0 32px !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-          gap: 16px !important;
-          flex-wrap: wrap !important;
-        }
-        @media (max-width: 1024px) {
-          .ad-page-root .ad-hero-body-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
-          .ad-page-root .ad-two-col-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
-          .ad-page-root .ad-main-title { font-size: 32px !important; }
-        }
-        @media (max-width: 640px) {
-          .ad-page-root .ad-hero-body { padding: 24px 20px !important; }
-          .ad-page-root .ad-main-title { font-size: 26px !important; }
-          .ad-page-root .ad-metadata-cards-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
-          .ad-page-root .ad-meta-card.span-2 { grid-column: span 1 !important; flex-direction: column !important; align-items: flex-start !important; gap: 6px !important; }
-          .ad-page-root .ad-hero-actions-row { flex-direction: column !important; width: 100% !important; }
-          .ad-page-root .ad-btn-catalog-gold, .ad-page-root .ad-btn-share-secondary { width: 100% !important; }
-          .ad-page-root .ad-info-section-card, .ad-page-root .ad-notices-full-card { padding: 22px 18px !important; }
-          .ad-page-root .ad-page-bottom-actions { flex-direction: column !important; width: 100% !important; }
-          .ad-page-root .ad-page-bottom-actions .ad-btn-back, .ad-page-root .ad-page-bottom-actions .ad-btn-catalog-gold { width: 100% !important; }
-        }
-      `}</style>
-      <div className="ad-ambient-glow" aria-hidden="true" />
+    <main className="g-dossier-page-root" role="main" aria-label={`Auction Details - ${title || 'Saleroom Dossier'}`}>
+      {/* Fixed Back Navigation Button (Positioned at marked location, fixed while scrolling) */}
+      <div className="g-dossier-fixed-back-wrap">
+        <button
+          type="button"
+          className="g-bar-btn-return"
+          onClick={handleBack}
+          title="Return to Current Auctions"
+          id="btn-ad-back"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Current Auctions</span>
+        </button>
+      </div>
 
-      <div className="ad-container">
-        {/* 1. Top Breadcrumb / Back Navigation Action */}
-        <div className="ad-top-nav-bar">
-          <button
-            type="button"
-            className="ad-btn-back"
-            onClick={handleBack}
-            title="Return to Current Auctions"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Current Auctions</span>
-          </button>
-        </div>
+      {/* Main Content Area — Expansive Responsive Layout */}
+      <div className="g-dossier-layout-wrapper">
+        <div className="g-dossier-container">
 
-        {/* 2. Active Saleroom Dossier Hero Card */}
-        <section className="ad-hero-card" aria-label="Active Saleroom Dossier">
-          {/* Dossier Header Strip */}
-          <div className="ad-hero-header-strip">
-            <div className="ad-header-eyebrow">
-              <span className="ad-pulse-dot-gold" />
-              <h2>Active Saleroom Dossier</h2>
-            </div>
-            {code && (
-              <div className="ad-header-code-pill">
-                <span className="ad-code-label">Code:</span>
-                <span className="ad-code-val">{code}</span>
-              </div>
-            )}
-          </div>
+          {/* 2. Panoramic Auction Showcase Hero (Two-Column Asymmetrical Stage) */}
+          <section className="g-showcase-hero-stage" aria-label="Auction Overview and Media Showcase">
+            {/* Left Media Stage: Museum Gallery Display */}
+            <div className="g-gallery-column">
+              <div className="g-gallery-frame">
+                {/* Floating Status Pill */}
+                {statusBadgeInfo && (
+                  <div className={`g-gallery-floating-badge ${statusBadgeInfo.color}`}>
+                    {statusBadgeInfo.isPulse && <span className="g-gallery-pulse-dot" />}
+                    <span>{statusBadgeInfo.text}</span>
+                  </div>
+                )}
 
-          {/* Main Dossier Body — Warm Ivory Aesthetic Surface */}
-          <div className="ad-hero-body">
-            <div className="ad-hero-body-grid">
-              {/* Left Column: Auction Image & Thumbnail Gallery Strip */}
-              <div className="ad-media-col">
-                <div className="ad-img-frame">
-                  {/* Status Badge */}
-                  {statusBadgeInfo && (
-                    <div className="ad-live-badge-wrapper">
-                      <span className={`ad-live-badge ${statusBadgeInfo.color}`}>
-                        {statusBadgeInfo.isPulse && <span className="ad-pulse-ping" />}
-                        <span>{statusBadgeInfo.text}</span>
-                      </span>
+                {/* Main Visual Display */}
+                {activeImage ? (
+                  <img
+                    src={activeImage}
+                    alt={title || 'Auction'}
+                    className="g-gallery-primary-image"
+                  />
+                ) : (
+                  <div className="g-gallery-placeholder">
+                    <div className="g-placeholder-emblem">
+                      <Sparkles size={32} />
                     </div>
-                  )}
+                    <span className="g-placeholder-title">GARDNER AUCTION</span>
+                    <span className="g-placeholder-sub">{code || 'CERTIFIED SALEROOM DOSSIER'}</span>
+                  </div>
+                )}
 
-                  {activeImage ? (
-                    <img
-                      src={activeImage}
-                      alt={title || 'Auction'}
-                      className="ad-main-img"
-                    />
-                  ) : (
-                    <div className="ad-img-placeholder">
-                      <BookOpen size={48} />
-                      {code && <span>{code}</span>}
-                    </div>
-                  )}
-                </div>
-
-                {/* Thumbnail Reel */}
-                {images.length > 1 && (
-                  <div className="ad-thumbnails-strip" aria-label="Auction Cover Gallery">
-                    {images.map((imgUrl, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        className={`ad-thumb-btn ${activeImgIndex === idx ? 'active' : ''}`}
-                        onClick={() => setActiveImgIndex(idx)}
-                        title={`View image ${idx + 1}`}
-                      >
-                        <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
-                      </button>
-                    ))}
+                {/* Photo Count Tag */}
+                {images.length > 0 && (
+                  <div className="g-gallery-counter-pill">
+                    <span>Photo {activeImgIndex + 1} of {images.length}</span>
                   </div>
                 )}
               </div>
 
-              {/* Right Column: Title, Metadata Grid & Action Buttons */}
-              <div className="ad-info-col">
-                <div>
-                  {/* Micro Sync Meta */}
-                  {(auctionType || currency) && (
-                    <div className="ad-sync-meta-row">
-                      {auctionType && (
-                        <span className="meta-item">
-                          <Globe size={14} />
-                          <span>{auctionType}</span>
-                        </span>
-                      )}
-                      {auctionType && currency && <span className="meta-bullet">•</span>}
-                      {currency && (
-                        <span className="meta-item">
-                          <span style={{ color: '#8c763e', fontWeight: 700 }}>$</span>
-                          <span>Settlement: {currency}</span>
-                        </span>
-                      )}
-                    </div>
-                  )}
+              {/* Horizontal Filmstrip Thumbnail Ribbon */}
+              {images.length > 1 && (
+                <div className="g-gallery-filmstrip" aria-label="Auction Images Gallery">
+                  {images.map((imgUrl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`g-gallery-thumb-cell ${activeImgIndex === idx ? 'active' : ''}`}
+                      onClick={() => setActiveImgIndex(idx)}
+                      title={`View Photo ${idx + 1}`}
+                      aria-label={`Photo ${idx + 1}`}
+                    >
+                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
+                      {activeImgIndex === idx && <span className="g-thumb-active-indicator" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                  {/* Primary Lot Title */}
-                  {title && <h1 className="ad-main-title">{title}</h1>}
+            {/* Right Information & Command Center */}
+            <div className="g-masthead-column">
+              {/* Category & Identification Badges */}
+              <div className="g-masthead-identity-row">
+                <span className="g-badge-category">
+                  <Globe size={13} />
+                  <span>{auctionType || 'CERTIFIED AUCTION'}</span>
+                </span>
 
-                  {/* Verbatim Description */}
-                  {description && (
-                    <p className="ad-lead-desc">{description}</p>
-                  )}
+                {code && (
+                  <span className="g-badge-code">
+                    <span className="g-badge-code-label">CODE:</span>
+                    <span className="g-badge-code-val">{code}</span>
+                  </span>
+                )}
+
+                {currency && (
+                  <span className="g-badge-currency">
+                    <span>SETTLEMENT: {currency}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Primary Auction Title */}
+              <h1 className="g-masthead-title">{title || 'Official Saleroom Auction'}</h1>
+
+              {/* Official Run Dates Banner */}
+              {dateRange && (
+                <div className="g-masthead-dates-ribbon">
+                  <Calendar size={17} className="g-dates-icon" />
+                  <div className="g-dates-meta">
+                    <span className="g-dates-label">SESSION TIMEFRAME</span>
+                    <span className="g-dates-val">{dateRange}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Verbatim Description */}
+              {description && (
+                <p className="g-masthead-description">{description}</p>
+              )}
+
+              {/* Key Metrics Highlight Dashboard */}
+              <div className="g-metrics-ribbon">
+                <div className="g-metric-box">
+                  <span className="g-metric-title">TOTAL CATALOGED</span>
+                  <div className="g-metric-value-wrap">
+                    <Layers size={16} className="g-metric-icon" />
+                    <span className="g-metric-val">{lotCount} Lots</span>
+                  </div>
                 </div>
 
-                {/* Crisp White Metadata Spec Box Cards */}
-                <div className="ad-metadata-cards-grid">
-                  {/* Status Card */}
-                  {statusBadgeInfo && (
-                    <div className="ad-meta-card">
-                      <span className="ad-meta-card-label">STATUS</span>
-                      <span className={`ad-meta-card-val ${statusBadgeInfo.color}`}>
-                        {statusBadgeInfo.text}
+                {aggregateEstimate && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">ESTIMATE RANGE</span>
+                    <div className="g-metric-value-wrap">
+                      <span className="g-metric-icon-curr">$</span>
+                      <span className="g-metric-val gold">{aggregateEstimate}</span>
+                    </div>
+                  </div>
+                )}
+
+                {Boolean(softCloseSeconds) && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">SOFT CLOSE</span>
+                    <div className="g-metric-value-wrap">
+                      <Clock size={16} className="g-metric-icon" />
+                      <span className="g-metric-val">{softCloseSeconds}s Window</span>
+                    </div>
+                  </div>
+                )}
+
+                {shippingPolicy && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">LOGISTICS</span>
+                    <div className="g-metric-value-wrap">
+                      <Truck size={16} className="g-metric-icon" />
+                      <span className="g-metric-val truncate" title={shippingPolicy}>
+                        {shippingPolicy.length > 24 ? `${shippingPolicy.slice(0, 24)}…` : shippingPolicy}
                       </span>
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
 
-                  {/* Total Lots Card */}
-                  {lotCount > 0 && (
-                    <div className="ad-meta-card">
-                      <span className="ad-meta-card-label">TOTAL LOTS</span>
-                      <span className="ad-meta-card-val">{lotCount} Cataloged Lots</span>
-                    </div>
-                  )}
+              {/* Primary Conversion & Action Hub */}
+              <div className="g-masthead-action-deck">
+                <button
+                  type="button"
+                  className="g-btn-gold-master"
+                  onClick={handleOpenCatalog}
+                  title={`Browse Catalog Lots (${lotCount})`}
+                  id="btn-ad-browse-catalog"
+                >
+                  <BookOpen size={18} />
+                  <span>Browse Catalog Lots ({lotCount})</span>
+                  <ChevronRight size={18} className="g-btn-arrow" />
+                </button>
 
-                  {/* Logistics Card (if present) */}
-                  {shippingPolicy && (
-                    <div className="ad-meta-card">
-                      <span className="ad-meta-card-label">LOGISTICS</span>
-                      <span className="ad-meta-card-val">{shippingPolicy}</span>
-                    </div>
-                  )}
+                <button
+                  type="button"
+                  className="g-btn-secondary-share"
+                  onClick={handleShare}
+                  title="Share Auction Dossier"
+                  id="btn-ad-share-dossier"
+                >
+                  <Share2 size={16} />
+                  <span>Share Dossier</span>
+                </button>
+              </div>
 
-                  {/* Handling Fee Card (if present) */}
-                  {handlingText && (
-                    <div className="ad-meta-card">
-                      <span className="ad-meta-card-label">HANDLING FEE</span>
-                      <span className="ad-meta-card-val">{handlingText}</span>
-                    </div>
-                  )}
-
-                  {/* Estimate Range Card (if present) */}
-                  {aggregateEstimate && (
-                    <div className="ad-meta-card">
-                      <span className="ad-meta-card-label">ESTIMATE RANGE</span>
-                      <span className="ad-meta-card-val gold">{aggregateEstimate}</span>
-                    </div>
-                  )}
-
-                  {/* Auction Code Card */}
-                  {code && (
-                    <div className="ad-meta-card span-2">
-                      <span className="ad-meta-card-label">AUCTION CODE</span>
-                      <span className="ad-meta-card-code-badge">{code}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Primary Dossier Action Buttons */}
-                <div className="ad-hero-actions-row">
-                  <button
-                    type="button"
-                    className="ad-btn-catalog-gold"
-                    onClick={handleOpenCatalog}
-                    title={`Browse Catalog Lots ${lotCount > 0 ? `(${lotCount})` : ''}`}
-                  >
-                    <BookOpen size={16} />
-                    <span>Browse Catalog Lots {lotCount > 0 ? `(${lotCount})` : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="ad-btn-share-secondary"
-                    onClick={handleShare}
-                    title="Copy direct auction link"
-                  >
-                    <Share2 size={16} />
-                    <span>Share Dossier</span>
-                  </button>
-                </div>
+              {/* Licensure Assurance Tag */}
+              <div className="g-licensure-guarantee">
+                <ShieldCheck size={16} className="g-guarantee-icon" />
+                <span>Commonwealth of Pennsylvania Registered &amp; Bonded Auction House • License #AY-002004</span>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* 3. Schedule & Saleroom Location Grid */}
-        {(hasSchedule || hasLocation) && (
-          <div className={`ad-two-col-grid ${(!hasSchedule || !hasLocation) ? 'single-col' : ''}`}>
-            {/* Card 1: Schedule & Session Timeline */}
-            {hasSchedule && (
-              <section className="ad-info-section-card" aria-label="Schedule and Session Timeline">
-                <div>
-                  <div className="ad-section-header">
-                    <div className="ad-icon-box-gold">
+          {/* 3. Priority Saleroom Notices (Bidding & Payment Notices) */}
+          {(biddingNotice || auctionNotice) && (
+            <section className="g-notices-banner-section" aria-label="Official Saleroom Notices">
+              {biddingNotice && (
+                <div className="g-notice-card urgent" role="alert">
+                  <div className="g-notice-badge red">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div className="g-notice-body">
+                    <div className="g-notice-header-row">
+                      <span className="g-notice-eyebrow red">CRITICAL BIDDING NOTICE</span>
+                    </div>
+                    <p className="g-notice-message red">{biddingNotice}</p>
+                  </div>
+                </div>
+              )}
+
+              {auctionNotice && (
+                <div className="g-notice-card informational">
+                  <div className="g-notice-badge gold">
+                    <Info size={20} />
+                  </div>
+                  <div className="g-notice-body">
+                    <div className="g-notice-header-row">
+                      <span className="g-notice-eyebrow gold">PAYMENT &amp; AUCTION SETTLEMENT PROTOCOL</span>
+                    </div>
+                    <p className="g-notice-message">{auctionNotice}</p>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 4. Deep-Dive Asymmetric Command Grid (65% Stage / 35% Sidebar) */}
+          <div className="g-dossier-main-grid">
+
+            {/* Left Column (65%): Chronological Timeline & Terms of Sale */}
+            <div className="g-dossier-stage-column">
+
+              {/* Block A: Visual Event Milestones & Schedule Timeline */}
+              {hasSchedule && (
+                <section className="g-dossier-block-card" aria-label="Auction Schedule and Event Timeline">
+                  <div className="g-block-header">
+                    <div className="g-block-icon-wrap">
                       <Calendar size={18} />
                     </div>
-                    <h3 className="ad-section-title">Schedule &amp; Session Timeline</h3>
-                  </div>
-
-                  <div className="ad-kv-list">
-                    {dateRange && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Official Run:</span>
-                        <span className="ad-kv-val gold">{dateRange}</span>
-                      </div>
-                    )}
-
-                    {timezone && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Timezone:</span>
-                        <span className="ad-kv-val">{timezone}</span>
-                      </div>
-                    )}
-
-                    {previewTimes && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Preview &amp; Inspection:</span>
-                        <span className="ad-kv-val">{previewTimes}</span>
-                      </div>
-                    )}
-
-                    {sessionTimes && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Session Times:</span>
-                        <span className="ad-kv-val">{sessionTimes}</span>
-                      </div>
-                    )}
-
-                    {checkoutTimes && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Checkout &amp; Removal:</span>
-                        <span className="ad-kv-val">{checkoutTimes}</span>
-                      </div>
-                    )}
-
-                    {Boolean(softCloseSeconds) && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Soft-Close Window:</span>
-                        <span className="ad-kv-val">{softCloseSeconds} Seconds</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* Card 2: Saleroom & Venue Location */}
-            {hasLocation && (
-              <section className="ad-info-section-card" aria-label="Saleroom and Venue Location">
-                <div>
-                  <div className="ad-section-header">
-                    <div className="ad-icon-box-gold">
-                      <MapPin size={18} />
+                    <div>
+                      <h2 className="g-block-title">Schedule &amp; Event Milestones</h2>
+                      <p className="g-block-subtitle">Chronological progression of auction inspection, bidding, and checkout</p>
                     </div>
-                    <h3 className="ad-section-title">Saleroom &amp; Venue Location</h3>
                   </div>
 
-                  <div className="ad-kv-list">
-                    {streetAddress && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Address:</span>
-                        <span className="ad-kv-val">{streetAddress}</span>
+                  {/* Interactive Milestone Timeline */}
+                  <div className="g-timeline-flow">
+                    {/* Milestone 1: Run Period */}
+                    {dateRange && (
+                      <div className="g-timeline-node">
+                        <div className="g-timeline-marker">
+                          <span className="g-marker-dot active" />
+                          <div className="g-marker-line" />
+                        </div>
+                        <div className="g-timeline-content">
+                          <div className="g-node-header">
+                            <span className="g-node-phase">STAGE 1</span>
+                            <span className="g-node-title">Official Auction Run</span>
+                          </div>
+                          <div className="g-node-body">
+                            <span className="g-node-highlight">{dateRange}</span>
+                            {timezone && <span className="g-node-detail">Timezone: {timezone}</span>}
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    {cityStateZip && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">City, State &amp; Zip:</span>
-                        <span className="ad-kv-val">{cityStateZip}</span>
+                    {/* Milestone 2: Inspection */}
+                    {previewTimes && (
+                      <div className="g-timeline-node">
+                        <div className="g-timeline-marker">
+                          <span className="g-marker-dot" />
+                          <div className="g-marker-line" />
+                        </div>
+                        <div className="g-timeline-content">
+                          <div className="g-node-header">
+                            <span className="g-node-phase">STAGE 2</span>
+                            <span className="g-node-title">Preview &amp; In-Person Inspection</span>
+                          </div>
+                          <div className="g-node-body">
+                            <span className="g-node-text">{previewTimes}</span>
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    {auction?.country && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Country:</span>
-                        <span className="ad-kv-val">{auction.country}</span>
+                    {/* Milestone 3: Bidding & Soft Close */}
+                    {(sessionTimes || Boolean(softCloseSeconds)) && (
+                      <div className="g-timeline-node">
+                        <div className="g-timeline-marker">
+                          <span className="g-marker-dot pulse" />
+                          <div className="g-marker-line" />
+                        </div>
+                        <div className="g-timeline-content">
+                          <div className="g-node-header">
+                            <span className="g-node-phase">STAGE 3</span>
+                            <span className="g-node-title">Simulcast Bidding &amp; Closing Session</span>
+                          </div>
+                          <div className="g-node-body">
+                            {sessionTimes && <span className="g-node-text">{sessionTimes}</span>}
+                            {Boolean(softCloseSeconds) && (
+                              <div className="g-softclose-tag">
+                                <Clock size={13} />
+                                <span>Soft-Close Protection: {softCloseSeconds} Seconds Extended Bidding Window</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Milestone 4: Checkout & Removal */}
+                    {checkoutTimes && (
+                      <div className="g-timeline-node">
+                        <div className="g-timeline-marker">
+                          <span className="g-marker-dot" />
+                        </div>
+                        <div className="g-timeline-content">
+                          <div className="g-node-header">
+                            <span className="g-node-phase">STAGE 4</span>
+                            <span className="g-node-title">Checkout, Settlement &amp; Removal</span>
+                          </div>
+                          <div className="g-node-body">
+                            <span className="g-node-text">{checkoutTimes}</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
+                </section>
+              )}
 
-                {mapQuery && (
-                  <div className="ad-venue-link-wrap">
+              {/* Block B: Official Terms of Sale */}
+              {termsOfSale && (
+                <section className="g-dossier-block-card terms-block" aria-label="Official Terms of Sale">
+                  <div className="g-block-header">
+                    <div className="g-block-icon-wrap">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <h2 className="g-block-title">Official Terms of Sale</h2>
+                      <p className="g-block-subtitle">Standard legal conditions and bidder fiduciary contract</p>
+                    </div>
+                  </div>
+
+                  <div className="g-terms-parchment-box">
+                    <div className="g-terms-text-content">
+                      {termsOfSale}
+                    </div>
+                    <div className="g-terms-footer-seal">
+                      <CheckCircle2 size={14} />
+                      <span>Certified Saleroom Protocol • Gardner Auction Master Catalog</span>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+            </div>
+
+            {/* Right Sidebar Column (35%): Saleroom Venue, Payment Protocol & Governance */}
+            <div className="g-dossier-sidebar-column">
+
+              {/* Sidebar Card 1: Saleroom & Physical Inspection Venue (Dark Navy Contrast Card) */}
+              {hasLocation && (
+                <section className="g-sidebar-card navy-luxury" aria-label="Saleroom Venue Location">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap gold">
+                      <MapPin size={17} />
+                    </div>
+                    <div>
+                      <span className="g-sidebar-card-tag">PHYSICAL SALEROOM</span>
+                      <h3 className="g-sidebar-card-title">Venue &amp; Gallery</h3>
+                    </div>
+                  </div>
+
+                  <div className="g-venue-address-block">
+                    {streetAddress && <div className="g-address-line primary">{streetAddress}</div>}
+                    {cityStateZip && <div className="g-address-line secondary">{cityStateZip}</div>}
+                    {auction?.country && <div className="g-address-line country">{auction.country}</div>}
+                  </div>
+
+                  {mapQuery && (
                     <a
                       href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="ad-venue-map-link"
+                      className="g-btn-venue-maps"
+                      id="btn-ad-venue-maps"
                     >
                       <ExternalLink size={14} />
-                      <span>View Venue on Google Maps</span>
+                      <span>Locate on Google Maps</span>
                     </a>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
-        )}
+                  )}
+                </section>
+              )}
 
-        {/* 4. Notices, Terms & Settlement Protocols (Full-Width Card) */}
-        {(biddingNotice || auctionNotice || termsOfSale) && (
-          <section className="ad-notices-full-card" aria-label="Notices, Terms and Settlement Protocols">
-            <div className="ad-section-header">
-              <div className="ad-icon-box-gold">
-                <FileText size={18} />
-              </div>
-              <h3 className="ad-section-title">Notices, Terms &amp; Settlement Protocols</h3>
-            </div>
-
-            {biddingNotice && (
-              <div className="ad-bidding-notice-box">
-                <div className="ad-notice-badge-red">
-                  <AlertCircle size={15} />
-                </div>
-                <div>
-                  <h4 className="ad-bidding-notice-title">Bidding Notice:</h4>
-                  <p className="ad-bidding-notice-text">{biddingNotice}</p>
-                </div>
-              </div>
-            )}
-
-            {auctionNotice && (
-              <div className="ad-auction-notice-box">
-                <div className="ad-notice-badge-gold">
-                  <Info size={15} />
-                </div>
-                <div>
-                  <h4 className="ad-auction-notice-title">Auction &amp; Payment Notice:</h4>
-                  <p className="ad-auction-notice-text">{auctionNotice}</p>
-                </div>
-              </div>
-            )}
-
-            {termsOfSale && (
-              <div className="ad-terms-block">
-                <h4 className="ad-terms-title">Official Terms of Sale:</h4>
-                <p className="ad-terms-text">{termsOfSale}</p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* 5. Logistics & Governance Grid */}
-        {(hasLogistics || hasGovernance) && (
-          <div className={`ad-two-col-grid ${(!hasLogistics || !hasGovernance) ? 'single-col' : ''}`}>
-            {/* Card 1: Logistics & Payment Details */}
-            {hasLogistics && (
-              <section className="ad-info-section-card" aria-label="Logistics and Payment Details">
-                <div>
-                  <div className="ad-section-header">
-                    <div className="ad-icon-box-gold">
-                      <Truck size={18} />
+              {/* Sidebar Card 2: Logistics, Shipping & Payment Protocols */}
+              {hasLogistics && (
+                <section className="g-sidebar-card white-crisp" aria-label="Logistics and Payment Details">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap dark">
+                      <CreditCard size={17} />
                     </div>
-                    <h3 className="ad-section-title">Logistics &amp; Payment Details</h3>
+                    <div>
+                      <span className="g-sidebar-card-tag">SETTLEMENT PROTOCOL</span>
+                      <h3 className="g-sidebar-card-title">Logistics &amp; Payment</h3>
+                    </div>
                   </div>
 
-                  <div className="ad-kv-list">
+                  <div className="g-sidebar-kv-group">
                     {shippingPolicy && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Shipping Availability:</span>
-                        <span className="ad-kv-val">{shippingPolicy}</span>
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Shipping Availability</span>
+                        <span className="g-kv-data">{shippingPolicy}</span>
                       </div>
                     )}
 
                     {auction?.shipping_account && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Shipping Account:</span>
-                        <span className="ad-kv-val">{auction.shipping_account}</span>
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Shipping Account</span>
+                        <span className="g-kv-data">{auction.shipping_account}</span>
                       </div>
                     )}
 
                     {handlingText && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Handling Fee:</span>
-                        <span className="ad-kv-val gold">{handlingText}</span>
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Handling Charge</span>
+                        <span className="g-kv-data gold-accent">{handlingText}</span>
                       </div>
                     )}
 
                     {auction?.use_consolidated_invoicing !== undefined && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Consolidated Invoicing:</span>
-                        <span className="ad-kv-val">
-                          {auction.use_consolidated_invoicing ? 'Enabled (Single Invoice)' : 'Per-Lot Invoicing'}
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Consolidated Invoicing</span>
+                        <span className="g-kv-data">
+                          {auction.use_consolidated_invoicing ? 'Consolidated Statement' : 'Per-Lot Invoicing'}
                         </span>
                       </div>
                     )}
                   </div>
-                </div>
 
-                {acceptedCards.length > 0 && (
-                  <div className="ad-accepted-cards-section">
-                    <span className="ad-cards-label">Accepted Cards:</span>
-                    <div className="ad-cards-chips-row">
-                      {acceptedCards.map((c) => (
-                        <span key={c} className="ad-card-chip">
-                          <CreditCard size={13} style={{ color: '#6b7065' }} />
-                          <span>{c.toUpperCase()}</span>
-                        </span>
-                      ))}
+                  {/* Accepted Credit Cards Chips */}
+                  {acceptedCards.length > 0 && (
+                    <div className="g-cards-accepted-block">
+                      <span className="g-cards-title">Accepted Payment Cards:</span>
+                      <div className="g-cards-pills-wrap">
+                        {acceptedCards.map((card) => (
+                          <span key={card} className="g-card-pill">
+                            <CreditCard size={12} />
+                            <span>{card.toUpperCase()}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Sidebar Card 3: Governance, Premiums & Consignor Policy */}
+              {hasGovernance && (
+                <section className="g-sidebar-card cream-refined" aria-label="Governance and Fiduciary Policy">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap gold-border">
+                      <ShieldCheck size={17} />
+                    </div>
+                    <div>
+                      <span className="g-sidebar-card-tag">GOVERNANCE PROTOCOL</span>
+                      <h3 className="g-sidebar-card-title">Fiduciary Standards</h3>
                     </div>
                   </div>
-                )}
-              </section>
-            )}
 
-            {/* Card 2: Governance & Fiduciary Policy */}
-            {hasGovernance && (
-              <section className="ad-info-section-card" aria-label="Governance and Fiduciary Policy">
-                <div>
-                  <div className="ad-section-header">
-                    <div className="ad-icon-box-gold">
-                      <ShieldCheck size={18} />
-                    </div>
-                    <h3 className="ad-section-title">Governance &amp; Fiduciary Policy</h3>
-                  </div>
-
-                  <div className="ad-kv-list">
+                  <div className="g-sidebar-kv-group">
                     {auctionType && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Auction Protocol:</span>
-                        <span className="ad-kv-val">{auctionType}</span>
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Bidding System</span>
+                        <span className="g-kv-data">{auctionType}</span>
+                      </div>
+                    )}
+
+                    {auction?.lot_defaults?.buyerPremium && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Standard Buyer's Premium</span>
+                        <span className="g-kv-data gold-accent">{auction.lot_defaults.buyerPremium}%</span>
+                      </div>
+                    )}
+
+                    {auction?.lot_defaults?.commission && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Consignor Commission</span>
+                        <span className="g-kv-data">{auction.lot_defaults.commission}%</span>
                       </div>
                     )}
 
                     {auction?.tax_exempt_all !== undefined && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Tax Exemption:</span>
-                        <span className="ad-kv-val">
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Tax Policy</span>
+                        <span className="g-kv-data">
                           {auction.tax_exempt_all ? 'All Lots Tax Exempt' : 'Applicable Sales Tax Applied'}
                         </span>
                       </div>
                     )}
 
                     {auction?.live_starting_bid_card !== undefined && auction?.live_starting_bid_card !== null && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Starting Bid Card:</span>
-                        <span className="ad-kv-val">#{auction.live_starting_bid_card}</span>
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Starting Bid Card</span>
+                        <span className="g-kv-data">#{auction.live_starting_bid_card}</span>
                       </div>
                     )}
 
-                    {auction?.lot_defaults?.buyerPremium && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Standard Buyer Premium:</span>
-                        <span className="ad-kv-val gold">{auction.lot_defaults.buyerPremium}%</span>
-                      </div>
-                    )}
-
-                    {auction?.lot_defaults?.commission && (
-                      <div className="ad-kv-row">
-                        <span className="ad-kv-label">Consignor Commission:</span>
-                        <span className="ad-kv-val">{auction.lot_defaults.commission}%</span>
-                      </div>
-                    )}
-
-                    {/* Dynamic rendering of any newly populated database columns */}
+                    {/* Dynamically render any extra database columns */}
                     {dynamicExtraFields.map(([key, val]) => (
-                      <div key={key} className="ad-kv-row">
-                        <span className="ad-kv-label" style={{ textTransform: 'capitalize' }}>
-                          {key.replace(/_/g, ' ')}:
+                      <div key={key} className="g-sidebar-kv-item">
+                        <span className="g-kv-term" style={{ textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
                         </span>
-                        <span className="ad-kv-val">
+                        <span className="g-kv-data">
                           {typeof val === 'boolean'
                             ? val ? 'Enabled' : 'Disabled'
                             : String(val)}
@@ -1438,33 +940,15 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
                       </div>
                     ))}
                   </div>
-                </div>
-              </section>
-            )}
+                </section>
+              )}
+
+            </div>
           </div>
-        )}
 
-        {/* 6. Page Bottom Action Buttons */}
-        <div className="ad-page-bottom-actions">
-          <button
-            type="button"
-            className="ad-btn-back"
-            onClick={handleBack}
-            title="Return to Current Auctions"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Current Auctions</span>
-          </button>
+          {/* 5. Bottom Navigation & Action Terminal */}
 
-          <button
-            type="button"
-            className="ad-btn-catalog-gold"
-            onClick={handleOpenCatalog}
-            title={`Browse Catalog Lots ${lotCount > 0 ? `(${lotCount})` : ''}`}
-          >
-            <BookOpen size={16} />
-            <span>Browse Catalog Lots {lotCount > 0 ? `(${lotCount})` : ''}</span>
-          </button>
+
         </div>
       </div>
     </main>

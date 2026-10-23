@@ -13,6 +13,13 @@ export interface AuthUser {
   phone?: string;
   createdAt: string;
   lastLoginAt?: string;
+  isSeller?: boolean;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
 }
 
 interface AuthContextType {
@@ -36,6 +43,16 @@ interface AuthContextType {
     title?: string;
     avatarUrl?: string;
     avatar_url?: string;
+    isSeller?: boolean;
+    is_seller?: boolean;
+    address1?: string;
+    address_1?: string;
+    address2?: string;
+    address_2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
   }) => Promise<{ success: boolean; message?: string; error?: string }>;
   uploadAvatar: (file: File) => Promise<{ success: boolean; avatarUrl?: string; error?: string }>;
   deleteAvatar: () => Promise<{ success: boolean; error?: string }>;
@@ -104,7 +121,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatarUrl: avatarUrl || undefined,
       phone: profile?.phone || sbUser.phone,
       createdAt: profile?.created_at || sbUser.created_at || new Date().toISOString(),
-      lastLoginAt: sbUser.last_sign_in_at || new Date().toISOString()
+      lastLoginAt: sbUser.last_sign_in_at || new Date().toISOString(),
+      isSeller: Boolean(profile?.is_seller),
+      address1: profile?.address_1 || '',
+      address2: profile?.address_2 || '',
+      city: profile?.city || '',
+      state: profile?.state || '',
+      zip: profile?.zip || '',
+      country: profile?.country || 'United States'
     };
   };
 
@@ -209,6 +233,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatar_url?: string | null;
       phone?: string | null;
       title?: string | null;
+      is_seller?: boolean;
+      address_1?: string | null;
+      address_2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zip?: string | null;
+      country?: string | null;
       updated_at?: string;
     }
   ): Promise<boolean> => {
@@ -698,6 +729,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     title?: string;
     avatarUrl?: string;
     avatar_url?: string;
+    isSeller?: boolean;
+    is_seller?: boolean;
+    address1?: string;
+    address_1?: string;
+    address2?: string;
+    address_2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
   }): Promise<{ success: boolean; message?: string; error?: string }> => {
     if (!user) {
       return { success: false, error: 'No authenticated user session found.' };
@@ -736,6 +777,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         if (trimmedPhone !== undefined) dbUpdatePayload.phone = trimmedPhone;
         if (effectiveAvatarUrl !== undefined) dbUpdatePayload.avatar_url = effectiveAvatarUrl;
+        if (profileData.isSeller !== undefined) dbUpdatePayload.is_seller = Boolean(profileData.isSeller);
+        if (profileData.is_seller !== undefined) dbUpdatePayload.is_seller = Boolean(profileData.is_seller);
+        if (profileData.address1 !== undefined) dbUpdatePayload.address_1 = profileData.address1.trim();
+        if (profileData.address_1 !== undefined) dbUpdatePayload.address_1 = profileData.address_1.trim();
+        if (profileData.address2 !== undefined) dbUpdatePayload.address_2 = profileData.address2.trim();
+        if (profileData.address_2 !== undefined) dbUpdatePayload.address_2 = profileData.address_2.trim();
+        if (profileData.city !== undefined) dbUpdatePayload.city = profileData.city.trim();
+        if (profileData.state !== undefined) dbUpdatePayload.state = profileData.state.trim();
+        if (profileData.zip !== undefined) dbUpdatePayload.zip = profileData.zip.trim();
+        if (profileData.country !== undefined) dbUpdatePayload.country = profileData.country.trim();
 
         await updateUserInDatabase(user.id, user.email, dbUpdatePayload);
       }
@@ -749,7 +800,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarText: getInitials(trimmedName),
           phone: trimmedPhone,
           title: customTitle,
-          avatarUrl: effectiveAvatarUrl !== undefined ? effectiveAvatarUrl : prev.avatarUrl
+          avatarUrl: effectiveAvatarUrl !== undefined ? effectiveAvatarUrl : prev.avatarUrl,
+          isSeller: profileData.isSeller !== undefined ? Boolean(profileData.isSeller) : (profileData.is_seller !== undefined ? Boolean(profileData.is_seller) : prev.isSeller),
+          address1: profileData.address1 !== undefined ? profileData.address1 : (profileData.address_1 !== undefined ? profileData.address_1 : prev.address1),
+          address2: profileData.address2 !== undefined ? profileData.address2 : (profileData.address_2 !== undefined ? profileData.address_2 : prev.address2),
+          city: profileData.city !== undefined ? profileData.city : prev.city,
+          state: profileData.state !== undefined ? profileData.state : prev.state,
+          zip: profileData.zip !== undefined ? profileData.zip : prev.zip,
+          country: profileData.country !== undefined ? profileData.country : prev.country
         };
       });
 

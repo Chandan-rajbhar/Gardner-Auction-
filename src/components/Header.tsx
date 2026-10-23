@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
           />
           <div className="brand-text">
             <span className="brand-name">GARDNER AUCTION</span>
-            <span className="brand-sub">APPRAISERS &amp; AUCTIONEERS · SINCE 1960</span>
+            <span className="brand-sub">APPRAISERS &amp; AUCTIONEERS</span>
           </div>
         </a>
 

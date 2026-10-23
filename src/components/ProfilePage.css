@@ -1286,6 +1286,277 @@
   border-color: var(--ga-gold);
 }
 
+/* ==============================================================================
+   Address & Seller Information (Replacing Certified PA Saleroom Pass)
+   ============================================================================== */
+
+/* Read-Only Card */
+.ga-address-display-card {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid var(--ga-gold-border, rgba(203, 161, 53, 0.28));
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--ga-shadow-card, 0 4px 16px rgba(0, 0, 0, 0.04));
+  margin-top: 16px;
+}
+
+[data-theme="day"] .ga-address-display-card {
+  background-color: #ffffff;
+  border-color: #e2ddd2;
+}
+
+.ga-address-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ga-card-border, #e5e7eb);
+}
+
+.ga-address-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ga-address-seal-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--ga-hero-bg, #0b0f19);
+  border: 1px solid var(--ga-gold, #cba135);
+  color: var(--ga-gold, #cba135);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ga-address-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ga-address-card-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ga-text-dark, #111827);
+  margin: 0;
+}
+
+.ga-address-card-subtitle {
+  font-size: 12.5px;
+  color: var(--ga-text-dark-muted, #64748b);
+  margin: 0;
+}
+
+.ga-address-read-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .ga-address-read-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ga-address-read-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ga-address-read-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ga-text-dark-muted, #64748b);
+}
+
+.ga-address-read-val {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ga-text-dark, #111827);
+  line-height: 1.45;
+}
+
+.ga-badge-neutral {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+/* Edit Mode Layout (Exact match to reference screenshot) */
+.ga-address-edit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 18px;
+  margin-top: 10px;
+  border-top: 1px solid var(--ga-card-border, #e5e7eb);
+}
+
+.ga-ref-form-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.ga-ref-label-col {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.ga-ref-input-col {
+  flex: 1;
+  max-width: 540px;
+}
+
+.ga-ref-seller-row {
+  align-items: center;
+}
+
+.ga-ref-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  user-select: none;
+}
+
+.ga-ref-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid #9ca3af;
+  accent-color: #0f1422;
+  cursor: pointer;
+}
+
+.ga-ref-input {
+  width: 100%;
+  height: 38px;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ga-ref-input:focus {
+  border-color: #cba135;
+  box-shadow: 0 0 0 2px rgba(203, 161, 53, 0.2);
+}
+
+.ga-ref-input::placeholder {
+  color: #9ca3af;
+}
+
+/* City State Zip side-by-side & stacked layout */
+.ga-ref-city-state-zip-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ga-ref-city-state-line {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.ga-ref-input-city {
+  flex: 1.2;
+}
+
+.ga-ref-input-state {
+  flex: 1;
+}
+
+.ga-ref-zip-line {
+  width: 100%;
+}
+
+.ga-ref-input-zip {
+  width: calc(50% - 5px);
+  max-width: 260px;
+}
+
+/* Country select */
+.ga-ref-select {
+  width: 100%;
+  height: 38px;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #111827;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ga-ref-select:focus {
+  border-color: #cba135;
+  box-shadow: 0 0 0 2px rgba(203, 161, 53, 0.2);
+}
+
+/* Responsive field arrangement for mobile / small tablets */
+@media (max-width: 640px) {
+  .ga-ref-form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .ga-ref-label-col {
+    width: 100%;
+  }
+
+  .ga-ref-seller-row .ga-ref-label-col {
+    display: none;
+  }
+
+  .ga-ref-input-col {
+    max-width: 100%;
+  }
+
+  .ga-ref-input-zip {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 /* --------------------------------------------------------------------------
    8. Edit Profile Form View inside Dossier Card
    -------------------------------------------------------------------------- */
