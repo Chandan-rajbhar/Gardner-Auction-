@@ -2,11 +2,50 @@ import React, { useState } from 'react';
 import { Mail, CheckCircle2, ArrowRight, ShieldCheck, AlertCircle, LogIn, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useSiteContent } from '../hooks/useSiteContent';
+import type { EmailListPageContent } from '../types/siteContent';
 
 interface EmailListPageProps {
   onSubscribe?: (email: string) => void;
   onOpenAuth?: () => void;
 }
+
+const DEFAULT_EMAIL_LIST_CONTENT: EmailListPageContent = {
+  eyebrow: 'AUCTION NOTIFICATIONS',
+  heading: 'Join Our Auction Email List',
+  description: 'Receive advance catalog releases, private preview invitations, and consignment dates for upcoming gold, silver, and rare coin sales.',
+  form: {
+    placeholderAuthenticated: 'Enter email address to subscribe...',
+    placeholderGuest: 'Log in to subscribe your email...',
+    inputAriaLabel: 'Email address for auction catalog notifications',
+    submitButtonLabel: 'Join Email List',
+    submittingButtonLabel: 'Subscribing...',
+    inputIcon: 'Mail',
+    submitButtonIcon: 'ArrowRight'
+  },
+  privacyNotice: {
+    text: 'Fiduciary privacy guaranteed. Unsubscribe at any time with one click.',
+    icon: 'ShieldCheck'
+  },
+  trustBadges: [
+    { label: 'Advance Catalogs' },
+    { label: 'Private Previews' },
+    { label: 'No Spam Guaranteed' }
+  ],
+  successMessage: {
+    title: 'Thank You for Subscribing',
+    messageTemplate: 'You have been enrolled to receive advance catalog previews at {email}.',
+    subtext: 'Private collector communication protocol active.',
+    resetButtonLabel: 'Register Another Email Address',
+    icon: 'CheckCircle2',
+    subtextIcon: 'ShieldCheck'
+  },
+  authNotice: {
+    guestPrompt: 'Guest Mode · Log in to subscribe',
+    loginButtonLabel: 'Log In to Subscribe',
+    authRequiredMessage: 'Authentication required: You must be logged in to subscribe to the auction email list. Please log in first.'
+  }
+};
 
 export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpenAuth }) => {
   const { user } = useAuth();
@@ -15,6 +54,21 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
+
+  // Fetch dynamic page content from Supabase with realtime synchronization
+  const { content } = useSiteContent('email_list_page', DEFAULT_EMAIL_LIST_CONTENT);
+  const pageContent = content || DEFAULT_EMAIL_LIST_CONTENT;
+
+  const eyebrow = pageContent.eyebrow || DEFAULT_EMAIL_LIST_CONTENT.eyebrow;
+  const heading = pageContent.heading || DEFAULT_EMAIL_LIST_CONTENT.heading;
+  const description = pageContent.description || DEFAULT_EMAIL_LIST_CONTENT.description;
+  const formConfig = pageContent.form || DEFAULT_EMAIL_LIST_CONTENT.form;
+  const privacyNotice = pageContent.privacyNotice || DEFAULT_EMAIL_LIST_CONTENT.privacyNotice;
+  const trustBadges = Array.isArray(pageContent.trustBadges) && pageContent.trustBadges.length > 0
+    ? pageContent.trustBadges
+    : DEFAULT_EMAIL_LIST_CONTENT.trustBadges;
+  const successMsg = pageContent.successMessage || DEFAULT_EMAIL_LIST_CONTENT.successMessage;
+  const authNotice = pageContent.authNotice || DEFAULT_EMAIL_LIST_CONTENT.authNotice;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +88,7 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
 
     // 2. Strict Authentication Requirement: guest subscriptions prevented
     if (!user || !user.id) {
-      setError('Authentication required: You must be logged in to subscribe to the auction email list. Please log in first.');
+      setError(authNotice.authRequiredMessage || 'Authentication required: You must be logged in to subscribe to the auction email list. Please log in first.');
       return;
     }
 
@@ -111,18 +165,18 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
           {/* Eyebrow Label */}
           <div className="email-page-eyebrow-wrap">
             <span className="email-page-dash">——</span>
-            <span className="email-page-eyebrow">AUCTION NOTIFICATIONS</span>
+            <span className="email-page-eyebrow">{eyebrow}</span>
             <span className="email-page-dash">——</span>
           </div>
 
           {/* Main Heading */}
           <h1 className="email-page-heading">
-            Join Our Auction Email List
+            {heading}
           </h1>
 
           {/* Supporting Description */}
           <p className="email-page-description">
-            Receive advance catalog releases, private preview invitations, and consignment dates for upcoming gold, silver, and rare coin sales.
+            {description}
           </p>
 
           {/* Authentication Status Pill */}
@@ -136,9 +190,10 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
               <div className="auth-status-pill">
                 <span className="auth-status-dot guest" />
                 <span>
-                  Guest Mode · {onOpenAuth && (
+                  {authNotice.guestPrompt || 'Guest Mode · Log in to subscribe'}{' '}
+                  {onOpenAuth && (
                     <button type="button" onClick={onOpenAuth} className="guest-login-link">
-                      Log in to subscribe
+                      {authNotice.loginButtonLabel || 'Log in to subscribe'}
                     </button>
                   )}
                 </span>
@@ -151,21 +206,20 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
               <div className="success-icon-badge">
                 <CheckCircle2 size={28} className="success-badge-icon" />
               </div>
-              <h2 className="success-title">Thank You for Subscribing</h2>
+              <h2 className="success-title">{successMsg.title || 'Thank You for Subscribing'}</h2>
               <p className="success-text">
-                You have been enrolled to receive advance catalog previews at{' '}
-                <strong className="success-highlight-email">{submittedEmail}</strong>.
+                {(successMsg.messageTemplate || 'You have been enrolled to receive advance catalog previews at {email}.').replace('{email}', submittedEmail)}
               </p>
               <div className="success-subtext">
                 <ShieldCheck size={16} />
-                <span>Private collector communication protocol active.</span>
+                <span>{successMsg.subtext || 'Private collector communication protocol active.'}</span>
               </div>
               <button
                 type="button"
                 className="btn-subscribe-another"
                 onClick={handleReset}
               >
-                Register Another Email Address
+                {successMsg.resetButtonLabel || 'Register Another Email Address'}
               </button>
             </div>
           ) : (
@@ -182,8 +236,12 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
                       setEmail(e.target.value);
                       if (error) setError('');
                     }}
-                    placeholder={user ? "Enter email address to subscribe..." : "Log in to subscribe your email..."}
-                    aria-label="Email address for auction catalog notifications"
+                    placeholder={
+                      user
+                        ? formConfig.placeholderAuthenticated || 'Enter email address to subscribe...'
+                        : formConfig.placeholderGuest || 'Log in to subscribe your email...'
+                    }
+                    aria-label={formConfig.inputAriaLabel || 'Email address for auction catalog notifications'}
                     required
                     disabled={isSubmitting}
                     autoComplete="email"
@@ -200,11 +258,11 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
                   {isSubmitting ? (
                     <>
                       <Loader2 size={17} className="btn-arrow-icon animate-spin" />
-                      <span>Subscribing...</span>
+                      <span>{formConfig.submittingButtonLabel || 'Subscribing...'}</span>
                     </>
                   ) : (
                     <>
-                      <span>Join Email List</span>
+                      <span>{formConfig.submitButtonLabel || 'Join Email List'}</span>
                       <ArrowRight size={17} className="btn-arrow-icon" />
                     </>
                   )}
@@ -224,7 +282,7 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
                       onClick={onOpenAuth}
                     >
                       <LogIn size={14} />
-                      <span>Log In to Subscribe</span>
+                      <span>{authNotice.loginButtonLabel || 'Log In to Subscribe'}</span>
                     </button>
                   )}
                 </div>
@@ -234,7 +292,7 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
               <div className="email-page-privacy-container">
                 <ShieldCheck size={14} className="privacy-shield-icon" />
                 <p className="email-page-privacy-text">
-                  Fiduciary privacy guaranteed. Unsubscribe at any time with one click.
+                  {privacyNotice.text || 'Fiduciary privacy guaranteed. Unsubscribe at any time with one click.'}
                 </p>
               </div>
             </form>
@@ -242,18 +300,12 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
 
           {/* Subtle Trust Indicators */}
           <div className="email-page-trust-footer">
-            <div className="trust-pill">
-              <span className="trust-pill-dot"></span>
-              <span>Advance Catalogs</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-pill-dot"></span>
-              <span>Private Previews</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-pill-dot"></span>
-              <span>No Spam Guaranteed</span>
-            </div>
+            {trustBadges.map((badge, idx) => (
+              <div key={idx} className="trust-pill">
+                <span className="trust-pill-dot"></span>
+                <span>{badge.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

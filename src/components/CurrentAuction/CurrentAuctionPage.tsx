@@ -34,6 +34,28 @@ import {
   INITIAL_CATALOG_LOTS,
   CURRENT_AUCTIONS
 } from '../../data/currentAuctionData';
+import { useSiteContent } from '../../hooks/useSiteContent';
+import type { CurrentAuctionsHeroContent } from '../../types/siteContent';
+
+const DEFAULT_CURRENT_AUCTIONS_HERO: CurrentAuctionsHeroContent = {
+  eyebrow: 'LIVE & UPCOMING AUCTIONS',
+  heading: 'Current & Upcoming Auctions',
+  subtitle: 'Browse live auction sessions, explore our catalog of exceptional items, and find your next prized collection.',
+  backButton: {
+    label: 'Back to Home',
+    destination: '/',
+    title: 'Return to Homepage',
+    icon: 'ArrowLeft'
+  },
+  supportingText: {
+    quote: 'Exceptional Items.\nTrusted Expertise.\nSince 1960.',
+    lines: ['Exceptional Items.', 'Trusted Expertise.', 'Since 1960.']
+  },
+  backgroundImage: {
+    url: '/images/current_auction_hero.jpg',
+    alt: 'Current & Upcoming Auctions Gavel Hero Background'
+  }
+};
 import type {
   BidEntry,
   CategoryKey,
@@ -189,6 +211,10 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   const urlParams = parseCurrentAuctionUrlParams();
   const defaultAuctionId = initialAuctionId || urlParams.auctionId || 'all';
   const defaultTab = initialTab || urlParams.tab || (defaultAuctionId !== 'all' ? 'lots' : 'auctions');
+
+  // Dynamic Site Content for Hero Section
+  const { content: currentHeroContent } = useSiteContent('current_auctions_hero', DEFAULT_CURRENT_AUCTIONS_HERO);
+  const heroData = currentHeroContent || DEFAULT_CURRENT_AUCTIONS_HERO;
 
   // 1. Dynamic Data from Supabase (Strictly sole truth source)
   const [loading, setLoading] = useState<boolean>(true);
@@ -721,7 +747,12 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
   return (
     <div className="ref-auctions-page-root past-catalogs-page current-auctions-page">
       {/* 1. Dark Navy Hero Section with Gavel Background & Gold Accents */}
-      <section className="ref-hero-section">
+      <section
+        className="ref-hero-section"
+        style={heroData.backgroundImage?.url ? {
+          backgroundImage: `linear-gradient(90deg, rgba(8, 12, 20, 0.96) 0%, rgba(8, 12, 20, 0.88) 45%, rgba(8, 12, 20, 0.42) 75%, rgba(8, 12, 20, 0.78) 100%), url('${heroData.backgroundImage.url}')`
+        } : undefined}
+      >
         <div className="container-fluid">
           {/* Top Navigation Row: Back Button */}
           <div className="ref-hero-top-nav">
@@ -760,17 +791,18 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
               </a>
             ) : (
               <a
-                href="/"
+                href={heroData.backButton?.destination || '/'}
                 className="ref-btn-back"
-                title="Return to Homepage"
+                title={heroData.backButton?.title || 'Return to Homepage'}
                 onClick={(e) => {
                   e.preventDefault();
-                  if (onNavigate) onNavigate('/');
-                  else window.location.hash = '';
+                  const dest = heroData.backButton?.destination || '/';
+                  if (onNavigate) onNavigate(dest);
+                  else window.location.hash = dest === '/' ? '' : dest;
                 }}
               >
                 <ArrowLeft size={15} />
-                <span>Back to Home</span>
+                <span>{heroData.backButton?.label || 'Back to Home'}</span>
               </a>
             )}
           </div>
@@ -780,18 +812,36 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
             <div className="ref-hero-left">
               <div className="ref-hero-eyebrow">
                 <span className="ref-eyebrow-line" />
-                <span>LIVE &amp; UPCOMING AUCTIONS</span>
+                <span>{heroData.eyebrow || 'LIVE & UPCOMING AUCTIONS'}</span>
               </div>
-              <h1 className="ref-hero-title">Current &amp; Upcoming Auctions</h1>
+              <h1 className="ref-hero-title">{heroData.heading || 'Current & Upcoming Auctions'}</h1>
               <p className="ref-hero-subtitle">
-                Browse live auction sessions, explore our catalog of exceptional items, and find your next prized collection.
+                {heroData.subtitle || 'Browse live auction sessions, explore our catalog of exceptional items, and find your next prized collection.'}
               </p>
             </div>
 
             <div className="ref-hero-right">
               <div className="ref-hero-quote-box">
                 <span className="ref-quote-bar" />
-                <p className="ref-quote-line">Exceptional Items.<br />Trusted Expertise.<br />Since 1960.</p>
+                <p className="ref-quote-line">
+                  {Array.isArray(heroData.supportingText?.lines) && heroData.supportingText.lines.length > 0 ? (
+                    heroData.supportingText.lines.map((line, idx) => (
+                      <React.Fragment key={idx}>
+                        {line}
+                        {idx < heroData.supportingText.lines.length - 1 && <br />}
+                      </React.Fragment>
+                    ))
+                  ) : heroData.supportingText?.quote ? (
+                    heroData.supportingText.quote.split('\n').map((line, idx, arr) => (
+                      <React.Fragment key={idx}>
+                        {line}
+                        {idx < arr.length - 1 && <br />}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <>Exceptional Items.<br />Trusted Expertise.<br />Since 1960.</>
+                  )}
+                </p>
               </div>
             </div>
           </div>
