@@ -8,6 +8,8 @@ export interface ShadcnDatePickerProps {
   disabled?: boolean;
   className?: string;
   id?: string;
+  align?: 'left' | 'right';
+  showQuickYears?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -24,9 +26,11 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
   disabled = false,
   className = '',
   id,
+  align = 'left',
+  showQuickYears = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [placement, setPlacement] = useState<'top' | 'bottom'>('top');
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Parse initial view year/month from value or default to current date
@@ -163,6 +167,19 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
     setIsOpen(false);
   };
 
+  const handleSetYesterday = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    onChange(`${yyyy}-${mm}-${dd}`);
+    setViewYear(yyyy);
+    setViewMonth(d.getMonth());
+    setIsOpen(false);
+  };
+
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onChange('');
@@ -200,32 +217,35 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
       <style>{`
         .shadcn-dp-trigger {
           width: 100%;
-          height: 40px;
-          padding: 8px 12px;
+          height: 38px;
+          min-height: 38px;
+          padding: 0 12px;
           border-radius: 6px;
           border: 1px solid #cbd5e1;
-          background-color: #f8fafc;
+          background-color: #ffffff;
           color: #0f172a;
           font-size: 13px;
           display: flex;
           align-items: center;
-          justifyContent: space-between;
+          justify-content: space-between;
           cursor: pointer;
           transition: all 0.15s ease;
           box-sizing: border-box;
           outline: none;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
         }
         .shadcn-dp-trigger:hover {
           border-color: #94a3b8;
+          background-color: #fdfbf7;
         }
         .shadcn-dp-trigger:focus, .shadcn-dp-trigger.is-open {
           background-color: #ffffff;
-          border-color: #0f172a;
-          box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+          border-color: var(--ecomm-primary-gold, #c59b27);
+          box-shadow: 0 0 0 3px rgba(197, 155, 39, 0.16);
         }
         .shadcn-dp-popover {
           position: absolute;
-          z-index: 1500;
+          z-index: 99999 !important;
           width: 295px;
           background: #ffffff;
           border: 1px solid #cbd5e1;
@@ -235,15 +255,25 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
           animation: dpFadeIn 0.15s ease-out;
           user-select: none;
         }
-        .shadcn-dp-popover.place-top {
+        .shadcn-dp-popover.place-top.align-right {
           bottom: calc(100% + 6px);
           right: 0;
           left: auto;
         }
-        .shadcn-dp-popover.place-bottom {
+        .shadcn-dp-popover.place-bottom.align-right {
           top: calc(100% + 6px);
           right: 0;
           left: auto;
+        }
+        .shadcn-dp-popover.place-top.align-left {
+          bottom: calc(100% + 6px);
+          left: 0;
+          right: auto;
+        }
+        .shadcn-dp-popover.place-bottom.align-left {
+          top: calc(100% + 6px);
+          left: 0;
+          right: auto;
         }
         @keyframes dpFadeIn {
           from { opacity: 0; transform: translateY(4px); }
@@ -358,7 +388,7 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
       {/* Popover Calendar Dropdown (Opens Above/Below Smartly, Never Cut Off) */}
       {isOpen && (
         <div 
-          className={`shadcn-dp-popover place-${placement}`} 
+          className={`shadcn-dp-popover place-${placement} align-${align}`} 
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header with Month/Year Navigation */}
@@ -500,50 +530,73 @@ export const ShadcnDatePicker: React.FC<ShadcnDatePickerProps> = ({
             flexWrap: 'wrap',
             gap: 5
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Jump:</span>
-              <button
-                type="button"
-                className="shadcn-dp-quick-chip"
-                onClick={(e) => handleQuickAddYears(1, e)}
-                title="Expires in 1 year"
-              >
-                +1 Yr
-              </button>
-              <button
-                type="button"
-                className="shadcn-dp-quick-chip"
-                onClick={(e) => handleQuickAddYears(2, e)}
-                title="Expires in 2 years"
-              >
-                +2 Yrs
-              </button>
-              <button
-                type="button"
-                className="shadcn-dp-quick-chip"
-                onClick={(e) => handleQuickAddYears(3, e)}
-                title="Expires in 3 years"
-              >
-                +3 Yrs
-              </button>
-            </div>
+            {showQuickYears ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Jump:</span>
+                <button
+                  type="button"
+                  className="shadcn-dp-quick-chip"
+                  onClick={(e) => handleQuickAddYears(1, e)}
+                  title="Expires in 1 year"
+                >
+                  +1 Yr
+                </button>
+                <button
+                  type="button"
+                  className="shadcn-dp-quick-chip"
+                  onClick={(e) => handleQuickAddYears(2, e)}
+                  title="Expires in 2 years"
+                >
+                  +2 Yrs
+                </button>
+                <button
+                  type="button"
+                  className="shadcn-dp-quick-chip"
+                  onClick={(e) => handleQuickAddYears(3, e)}
+                  title="Expires in 3 years"
+                >
+                  +3 Yrs
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                  type="button"
+                  className="shadcn-dp-quick-chip"
+                  onClick={handleSetToday}
+                  title="Select Today"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="shadcn-dp-quick-chip"
+                  onClick={handleSetYesterday}
+                  title="Select Yesterday"
+                >
+                  Yesterday
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button
-                type="button"
-                onClick={handleSetToday}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: '#0f172a',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '2px 4px'
-                }}
-              >
-                Today
-              </button>
+              {showQuickYears && (
+                <button
+                  type="button"
+                  onClick={handleSetToday}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px 4px'
+                  }}
+                >
+                  Today
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleClear}

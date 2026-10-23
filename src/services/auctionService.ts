@@ -300,6 +300,29 @@ class AuctionService {
           }
         };
 
+        // Fetch fresh expenses from Supabase auction_expenses table if table exists
+        try {
+          const { data: expRows, error: expErr } = await client
+            .from('auction_expenses')
+            .select('*')
+            .eq('auction_id', id)
+            .order('date', { ascending: false });
+
+          if (!expErr && expRows && Array.isArray(expRows) && expRows.length > 0) {
+            loaded.expenses = expRows.map((r: any) => ({
+              id: r.id,
+              type: r.type,
+              account: r.account,
+              payFrom: r.pay_from || 'Company Credit Card',
+              description: r.description || '',
+              amount: Number(r.amount) || 0,
+              date: r.date,
+              receiptUrl: r.receipt_url || undefined,
+              receiptName: r.receipt_name || undefined
+            }));
+          }
+        } catch (_) {}
+
         const idx = this.auctions.findIndex(a => a.id === id);
         if (idx >= 0) {
           this.auctions[idx] = loaded;
@@ -765,6 +788,31 @@ class AuctionService {
   }
 
   public async getAuctionExpenses(auctionId: string): Promise<AuctionExpense[]> {
+    try {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from('auction_expenses')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .order('date', { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          type: d.type,
+          account: d.account,
+          payFrom: d.pay_from || 'Company Credit Card',
+          description: d.description || '',
+          amount: Number(d.amount) || 0,
+          date: d.date,
+          receiptUrl: d.receipt_url || undefined,
+          receiptName: d.receipt_name || undefined
+        }));
+      }
+    } catch (e) {
+      console.warn('[AuctionService] Supabase getAuctionExpenses error:', e);
+    }
+
     const auction = await this.getAuctionById(auctionId);
     return auction?.expenses || [];
   }
@@ -775,34 +823,114 @@ class AuctionService {
   }
 
   public async addExpense(auctionId: string, expense: Omit<AuctionExpense, 'id'>): Promise<AuctionExpense | null> {
-    const auction = await this.getAuctionById(auctionId);
-    if (!auction) return null;
     const newExpense: AuctionExpense = {
       ...expense,
       id: `exp-${Date.now()}`
     };
-    auction.expenses = [newExpense, ...(auction.expenses || [])];
-    await this.saveAuction(auction);
+
+    // 1. Update local cache / auctions detail
+    const auction = await this.getAuctionById(auctionId);
+    if (auction) {
+      auction.expenses = [newExpense, ...(auction.expenses || [])];
+      await this.saveAuction(auction);
+    }
+
+    // 2. Persist directly into Supabase auction_expenses table
+    try {
+      const client = supabaseAdmin || supabase;
+      const { error } = await client
+        .from('auction_expenses')
+        .insert({
+          id: newExpense.id,
+          auction_id: auctionId,
+          type: newExpense.type,
+          account: newExpense.account,
+          pay_from: newExpense.payFrom,
+          description: newExpense.description,
+          amount: newExpense.amount,
+          date: newExpense.date,
+          receipt_url: newExpense.receiptUrl || null,
+          receipt_name: newExpense.receiptName || null
+        });
+
+      if (error) {
+        console.error('[AuctionService] Supabase addExpense error:', error.message);
+      } else {
+        console.log('[AuctionService] Expense persisted to Supabase:', newExpense.id);
+      }
+    } catch (e) {
+      console.warn('[AuctionService] Supabase addExpense exception:', e);
+    }
+
     return newExpense;
   }
 
   public async updateExpense(auctionId: string, expenseId: string, updated: Partial<AuctionExpense>): Promise<boolean> {
+    // 1. Update local cache
     const auction = await this.getAuctionById(auctionId);
-    if (!auction) return false;
-    const idx = (auction.expenses || []).findIndex(e => e.id === expenseId);
-    if (idx >= 0) {
-      auction.expenses[idx] = { ...auction.expenses[idx], ...updated };
-      await this.saveAuction(auction);
-      return true;
+    if (auction) {
+      const idx = (auction.expenses || []).findIndex(e => e.id === expenseId);
+      if (idx >= 0) {
+        auction.expenses[idx] = { ...auction.expenses[idx], ...updated };
+        await this.saveAuction(auction);
+      }
     }
-    return false;
+
+    // 2. Update Supabase auction_expenses table
+    try {
+      const client = supabaseAdmin || supabase;
+      const updatePayload: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      if (updated.type !== undefined) updatePayload.type = updated.type;
+      if (updated.account !== undefined) updatePayload.account = updated.account;
+      if (updated.payFrom !== undefined) updatePayload.pay_from = updated.payFrom;
+      if (updated.description !== undefined) updatePayload.description = updated.description;
+      if (updated.amount !== undefined) updatePayload.amount = updated.amount;
+      if (updated.date !== undefined) updatePayload.date = updated.date;
+      if (updated.receiptUrl !== undefined) updatePayload.receipt_url = updated.receiptUrl || null;
+      if (updated.receiptName !== undefined) updatePayload.receipt_name = updated.receiptName || null;
+
+      const { error } = await client
+        .from('auction_expenses')
+        .update(updatePayload)
+        .eq('id', expenseId)
+        .eq('auction_id', auctionId);
+
+      if (error) {
+        console.error('[AuctionService] Supabase updateExpense error:', error.message);
+      }
+    } catch (e) {
+      console.warn('[AuctionService] Supabase updateExpense exception:', e);
+    }
+
+    return true;
   }
 
   public async deleteExpense(auctionId: string, expenseId: string): Promise<boolean> {
+    // 1. Update local cache
     const auction = await this.getAuctionById(auctionId);
-    if (!auction) return false;
-    auction.expenses = (auction.expenses || []).filter(e => e.id !== expenseId);
-    await this.saveAuction(auction);
+    if (auction) {
+      auction.expenses = (auction.expenses || []).filter(e => e.id !== expenseId);
+      await this.saveAuction(auction);
+    }
+
+    // 2. Delete from Supabase auction_expenses table
+    try {
+      const client = supabaseAdmin || supabase;
+      const { error } = await client
+        .from('auction_expenses')
+        .delete()
+        .eq('id', expenseId)
+        .eq('auction_id', auctionId);
+
+      if (error) {
+        console.error('[AuctionService] Supabase deleteExpense error:', error.message);
+      }
+    } catch (e) {
+      console.warn('[AuctionService] Supabase deleteExpense exception:', e);
+    }
+
     return true;
   }
 }

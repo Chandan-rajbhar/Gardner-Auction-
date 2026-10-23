@@ -42,6 +42,10 @@ export interface AuctionExpense {
   amount: number;
   date: string;
   receiptUrl?: string;
+  receiptName?: string;
+  isConsignorDeductible?: boolean;
+  consignorId?: string;
+  consignorName?: string;
 }
 
 export interface HiBidSiteStat {

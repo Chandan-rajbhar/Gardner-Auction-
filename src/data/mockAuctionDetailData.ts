@@ -338,28 +338,39 @@ export const MOCK_AUCTIONS_DETAIL: AuctionDetail[] = [
         id: 'exp-1',
         type: 'Auction Marketing Expense',
         account: 'facebook',
-        payFrom: 'Cash',
-        description: 'Facebook Campaign Ads',
-        amount: 0.00,
+        payFrom: 'cash',
+        description: 'facebook',
+        amount: 450.00,
         date: '2026-10-12'
       },
       {
         id: 'exp-2',
         type: 'Auction Marketing Expense',
         account: 'local newspaper',
-        payFrom: 'Cash',
-        description: 'Local Newspaper Print Ad',
-        amount: 0.00,
+        payFrom: 'cash',
+        description: 'local newspaper',
+        amount: 320.00,
         date: '2026-10-13'
       },
       {
         id: 'exp-3',
         type: 'Auction Marketing Expense',
         account: 'miscellaneous',
-        payFrom: 'Cash',
-        description: 'Miscellaneous Marketing Flyers',
-        amount: 0.00,
+        payFrom: 'cash',
+        description: 'miscellaneous',
+        amount: 150.00,
         date: '2026-10-14'
+      },
+      {
+        id: 'exp-4',
+        type: 'Consignor Deductible Charges (Grading / PCGS / NGC)',
+        account: 'pcgs / ngc grading services',
+        payFrom: 'Operating Checking Account (ACH / Wire)',
+        description: 'PCGS TrueView Expedited Certification & Gold Coin Slabs',
+        amount: 420.00,
+        date: '2026-10-15',
+        isConsignorDeductible: true,
+        consignorName: 'Estate of Sterling Numismatics'
       }
     ],
 

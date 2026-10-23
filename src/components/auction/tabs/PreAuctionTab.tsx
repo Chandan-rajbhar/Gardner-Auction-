@@ -4,6 +4,7 @@ import { PreAuctionSubTab, FeaturedImage, AuctionLink, AuctionExpense } from '..
 import { FormField } from '../../Common/FormField';
 import { SearchableSelect } from '../../Common/SearchableSelect';
 import { ShadcnSelect, ShadcnSelectOption } from '../../ui/ShadcnSelect';
+import { ShadcnDatePicker } from '../../ui/ShadcnDatePicker';
 import { ModernCheckbox } from '../../ui/ModernCheckbox';
 import { ModernRadio, ModernRadioGroup } from '../../ui/ModernRadio';
 import { FormModal } from '../../Common/FormModal';
@@ -294,7 +295,9 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     account: true,
     payFrom: true,
     description: true,
-    amount: true
+    amount: true,
+    date: true,
+    receipt: true
   });
 
   // Sub-tab 4: Lots State & Modal
@@ -407,22 +410,74 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   // Expenses Constants & Handlers
   const EXPENSE_TYPES = [
     'Auction Marketing Expense',
+    'Marketing & Advertising',
+    'Photography & Digital Media',
+    'Saleroom & Venue Facilities',
+    'Labor & Rostrum Clerking',
+    'Transportation & Rigging',
+    'Insurance & Appraisal Fees',
+    'Internet Platform & HiBid Listing Fees',
+    'Office & Administrative Supplies',
+    'Consignor Deductible Charges (Grading / PCGS / NGC)',
     'Auctioneer Fee',
-    'Labor',
     'Shipping Supplies',
-    'Insurance',
-    'Venue',
     'Other'
   ];
 
-  const PAY_FROM_OPTIONS = ['Cash', 'Check', 'Credit Card', 'Bank Transfer'];
+  const PAY_FROM_OPTIONS = [
+    'Operating Checking Account (ACH / Wire)',
+    'Company Credit Card',
+    'Saleroom Cash / Drawer',
+    'Petty Cash',
+    'Consignor Escrow Account',
+    'Cash',
+    'Check',
+    'Bank Transfer'
+  ];
 
   const existingAccounts = Array.from(new Set([
     'facebook',
+    'google ads',
+    'instagram',
     'local newspaper',
+    'signage & banners',
+    'security guard service',
+    'forklift & rigging rental',
+    'hibid platform fees',
+    'pcgs / ngc grading services',
     'miscellaneous',
     ...(auction.expenses || []).map(e => e.account).filter(Boolean)
   ]));
+
+  // ShadcnSelect options for Expense Drawer
+  const expenseTypeSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    const list: ShadcnSelectOption[] = EXPENSE_TYPES.map(t => ({
+      value: t,
+      label: t
+    }));
+    if (expType && !EXPENSE_TYPES.includes(expType)) {
+      list.unshift({ value: expType, label: expType, badge: 'Custom' });
+    }
+    return list;
+  }, [expType]);
+
+  const expenseAccountSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    const list: ShadcnSelectOption[] = existingAccounts.map(acc => ({
+      value: acc,
+      label: acc
+    }));
+    if (expAccount && !existingAccounts.includes(expAccount)) {
+      list.unshift({ value: expAccount, label: expAccount, badge: 'Custom' });
+    }
+    return list;
+  }, [existingAccounts, expAccount]);
+
+  const payFromSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    return PAY_FROM_OPTIONS.map(opt => ({
+      value: opt,
+      label: opt
+    }));
+  }, []);
 
   const handleOpenAddExpense = () => {
     setEditingExpense(null);
@@ -432,7 +487,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     setExpAccount(existingAccounts[0] || 'facebook');
     setIsCustomAccount(false);
     setCustomAccount('');
-    setExpPayFrom('Cash');
+    setExpPayFrom('Company Credit Card');
     setExpDesc('');
     setExpAmount('');
     setExpDate(new Date().toISOString().split('T')[0]);
@@ -458,21 +513,21 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
       setIsCustomAccount(false);
       setCustomAccount('');
     } else {
-      setExpAccount('__new__');
+      setExpAccount('__new_account__');
       setIsCustomAccount(true);
       setCustomAccount(exp.account);
     }
 
-    setExpPayFrom(exp.payFrom || 'Cash');
+    setExpPayFrom(exp.payFrom || 'Company Credit Card');
     setExpDesc(exp.description);
     setExpAmount(exp.amount !== undefined ? exp.amount.toString() : '');
     setExpDate(exp.date || new Date().toISOString().split('T')[0]);
-    setExpReceiptName(exp.receiptUrl ? 'Receipt attached' : '');
+    setExpReceiptName(exp.receiptName || (exp.receiptUrl ? 'Receipt attached' : ''));
     setExpReceiptPreview(exp.receiptUrl || null);
     setIsExpenseModalOpen(true);
   };
 
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expDesc.trim() || !expAmount) return;
 
@@ -480,29 +535,25 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     const finalAccount = isCustomAccount && customAccount.trim() ? customAccount.trim() : expAccount;
     const amountVal = Math.max(0, parseFloat(expAmount) || 0);
 
+    const payload: Partial<AuctionExpense> = {
+      type: finalType,
+      account: finalAccount,
+      payFrom: expPayFrom,
+      description: expDesc.trim(),
+      amount: amountVal,
+      date: expDate,
+      receiptUrl: expReceiptPreview || undefined,
+      receiptName: expReceiptName || undefined
+    };
+
     if (editingExpense) {
       dispatch({
         type: 'UPDATE_EXPENSE',
         id: editingExpense.id,
-        expense: {
-          type: finalType,
-          account: finalAccount,
-          payFrom: expPayFrom,
-          description: expDesc.trim(),
-          amount: amountVal,
-          date: expDate,
-          receiptUrl: expReceiptPreview || undefined
-        }
+        expense: payload
       });
-      auctionService.updateExpense(auction.id, editingExpense.id, {
-        type: finalType,
-        account: finalAccount,
-        payFrom: expPayFrom,
-        description: expDesc.trim(),
-        amount: amountVal,
-        date: expDate,
-        receiptUrl: expReceiptPreview || undefined
-      });
+      await auctionService.updateExpense(auction.id, editingExpense.id, payload);
+      showToast('success', 'Expense Updated', 'Operating expense record updated successfully.');
     } else {
       const newExp: AuctionExpense = {
         id: `exp-${Date.now()}`,
@@ -512,24 +563,57 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
         description: expDesc.trim(),
         amount: amountVal,
         date: expDate,
-        receiptUrl: expReceiptPreview || undefined
+        receiptUrl: expReceiptPreview || undefined,
+        receiptName: expReceiptName || undefined
       };
       dispatch({
         type: 'ADD_EXPENSE',
         expense: newExp
       });
-      auctionService.addExpense(auction.id, newExp);
+      await auctionService.addExpense(auction.id, newExp);
+      showToast('success', 'Expense Logged', 'Operating expense saved to database.');
     }
 
     setIsExpenseModalOpen(false);
     setEditingExpense(null);
   };
 
-  const handleConfirmDeleteExpense = () => {
+  const handleExportExpensesCSV = () => {
+    const list = auction.expenses || [];
+    if (list.length === 0) {
+      showToast('info', 'No Expenses', 'No expenses available to export for this auction.');
+      return;
+    }
+    const headers = ['Date', 'Type', 'Account / Payee', 'Pay From', 'Expense Description', 'Amount', 'Billable to Consignor', 'Consignor Name'];
+    const rows = list.map(e => [
+      `"${e.date || ''}"`,
+      `"${(e.type || '').replace(/"/g, '""')}"`,
+      `"${(e.account || '').replace(/"/g, '""')}"`,
+      `"${(e.payFrom || '').replace(/"/g, '""')}"`,
+      `"${(e.description || '').replace(/"/g, '""')}"`,
+      (Number(e.amount) || 0).toFixed(2),
+      e.isConsignorDeductible ? '"Yes"' : '"No"',
+      `"${(e.consignorName || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Expenses_Auction_${auction.id || 'export'}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('success', 'Export Complete', 'Expenses CSV downloaded successfully.');
+  };
+
+  const handleConfirmDeleteExpense = async () => {
     if (!expenseToDelete) return;
     dispatch({ type: 'REMOVE_EXPENSE', id: expenseToDelete.id });
-    auctionService.deleteExpense(auction.id, expenseToDelete.id);
+    await auctionService.deleteExpense(auction.id, expenseToDelete.id);
     setExpenseToDelete(null);
+    showToast('success', 'Expense Removed', 'Operating expense deleted from database.');
   };
 
   // Simulated drag-to-reorder for featured images
@@ -758,11 +842,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                     <label className="ecomm-form-label">
                       <span>Start Date <span className="ecomm-required-star">*</span></span>
                     </label>
-                    <input 
-                      type="date"
-                      value={auction.startDate}
-                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'startDate', value: e.target.value })}
-                      className="ecomm-input"
+                    <ShadcnDatePicker 
+                      value={auction.startDate || ''}
+                      onChange={(val) => dispatch({ type: 'UPDATE_FIELD', field: 'startDate', value: val })}
+                      placeholder="Select start date"
+                      align="left"
                     />
                     {errors.startDate && (
                       <span style={{ fontSize: 11.5, color: '#dc2626', marginTop: 3 }}>{errors.startDate}</span>
@@ -772,11 +856,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                     <label className="ecomm-form-label">
                       <span>End Date <span className="ecomm-required-star">*</span></span>
                     </label>
-                    <input 
-                      type="date"
-                      value={auction.endDate}
-                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'endDate', value: e.target.value })}
-                      className="ecomm-input"
+                    <ShadcnDatePicker 
+                      value={auction.endDate || ''}
+                      onChange={(val) => dispatch({ type: 'UPDATE_FIELD', field: 'endDate', value: val })}
+                      placeholder="Select end date"
+                      align="left"
                     />
                     {errors.endDate && (
                       <span style={{ fontSize: 11.5, color: '#dc2626', marginTop: 3 }}>{errors.endDate}</span>
@@ -1794,13 +1878,15 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
               {/* Open & Close Bidding Date-Time */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <FormField label="Open Bidding">
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input 
-                      type="date"
-                      value={auction.uploadSettings.openBiddingDate}
-                      onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'openBiddingDate', value: e.target.value })}
-                      style={{ flex: 1, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
-                    />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <ShadcnDatePicker 
+                        value={auction.uploadSettings.openBiddingDate || ''}
+                        onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'openBiddingDate', value: val })}
+                        placeholder="Open date"
+                        align="left"
+                      />
+                    </div>
                     <input 
                       type="text"
                       placeholder="10:00 AM"
@@ -1812,13 +1898,15 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                 </FormField>
 
                 <FormField label="Close Bidding">
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input 
-                      type="date"
-                      value={auction.uploadSettings.closeBiddingDate}
-                      onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'closeBiddingDate', value: e.target.value })}
-                      style={{ flex: 1, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
-                    />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <ShadcnDatePicker 
+                        value={auction.uploadSettings.closeBiddingDate || ''}
+                        onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'closeBiddingDate', value: val })}
+                        placeholder="Close date"
+                        align="right"
+                      />
+                    </div>
                     <input 
                       type="text"
                       placeholder="07:00 PM"
@@ -3194,7 +3282,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
       )}
 
       {/* =========================================================================
-          SUB-TAB 6: EXPENSES
+          SUB-TAB 6: EXPENSES (AF360 Standardized Financial Management)
           ========================================================================= */}
       {currentTab === 'expenses' && (() => {
         const query = expenseSearch.toLowerCase().trim();
@@ -3206,7 +3294,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
             (exp.payFrom || '').toLowerCase().includes(query) ||
             (exp.description || '').toLowerCase().includes(query) ||
             (exp.amount !== undefined ? exp.amount.toString() : '').includes(query) ||
-            (exp.date || '').toLowerCase().includes(query)
+            (exp.date || '').toLowerCase().includes(query) ||
+            (exp.consignorName || '').toLowerCase().includes(query)
           );
         });
 
@@ -3233,6 +3322,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
         const totalExpensesAmount = (auction.expenses || []).reduce(
           (sum, exp) => sum + (Number(exp.amount) || 0), 0
         );
+        const expenseRecordsCount = (auction.expenses || []).length;
+        const avgExpenseAmount = expenseRecordsCount > 0 ? (totalExpensesAmount / expenseRecordsCount) : 0;
 
         const toggleSort = (col: typeof expenseSortColumn) => {
           if (expenseSortColumn === col) {
@@ -3245,55 +3336,137 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
         const renderSortIcon = (col: typeof expenseSortColumn) => {
           if (expenseSortColumn !== col) {
-            return <ArrowUpDown size={12} style={{ color: 'var(--text-dim)', marginLeft: 4 }} />;
+            return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: 4 }} />;
           }
           return expenseSortDirection === 'asc'
-            ? <ArrowUp size={12} style={{ color: 'var(--gold-primary)', marginLeft: 4 }} />
-            : <ArrowDown size={12} style={{ color: 'var(--gold-primary)', marginLeft: 4 }} />;
+            ? <ArrowUp size={12} style={{ color: '#005953', marginLeft: 4 }} />
+            : <ArrowDown size={12} style={{ color: '#005953', marginLeft: 4 }} />;
         };
 
         return (
-          <div className="syndication-card">
-            {/* Toolbar */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              marginBottom: 16,
-              flexWrap: 'wrap'
-            }}>
-              <button 
-                type="button" 
-                className="btn btn-gold"
-                onClick={handleOpenAddExpense}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <Plus size={15} />
-                <span>+ New Expense</span>
-              </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Financial KPI Summary Banner */}
+            <div className="expenses-kpi-banner">
+              <div className="expenses-kpi-card">
+                <div className="expenses-kpi-label">
+                  <span>Total Event Expenses</span>
+                  <DollarSign size={14} color="#005953" />
+                </div>
+                <div className="expenses-kpi-value" style={{ color: totalExpensesAmount > 0 ? '#b91c1c' : '#0f172a' }}>
+                  ${totalExpensesAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="expenses-kpi-subtext">Cumulative operating charges logged</div>
+              </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
-                <div style={{ position: 'relative', width: 260 }}>
-                  <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+              <div className="expenses-kpi-card">
+                <div className="expenses-kpi-label">
+                  <span>Expense Records</span>
+                  <FileText size={14} color="#64748b" />
+                </div>
+                <div className="expenses-kpi-value" style={{ fontFamily: 'inherit' }}>
+                  {expenseRecordsCount} Line Items
+                </div>
+                <div className="expenses-kpi-subtext">Vendor accounts & receipts recorded</div>
+              </div>
+
+              <div className="expenses-kpi-card">
+                <div className="expenses-kpi-label">
+                  <span>Average Cost / Line Item</span>
+                  <Coins size={14} color="#475569" />
+                </div>
+                <div className="expenses-kpi-value">
+                  ${avgExpenseAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="expenses-kpi-subtext">Mean operational charge across event</div>
+              </div>
+            </div>
+
+            {/* Main AF360 Table Card */}
+            <div className="syndication-card" style={{ padding: 16 }}>
+              {/* Top Action Toolbar */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom: 14,
+                flexWrap: 'wrap'
+              }}>
+                <button 
+                  type="button" 
+                  className="btn-af360-new-expense"
+                  onClick={handleOpenAddExpense}
+                >
+                  <span>NEW EXPENSE</span>
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={handleExportExpensesCSV}
+                    className="btn btn-secondary"
+                    title="Export all expense rows to CSV for QuickBooks / bookkeeper reconciliation"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      padding: '6px 12px',
+                      height: 34
+                    }}
+                  >
+                    <Download size={13} />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* AF360 Search Bar & Column Configuration Row */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 14,
+                position: 'relative'
+              }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input 
                     type="text"
-                    placeholder="Search expenses..."
+                    placeholder="Search expenses by type, account, pay from, description, or amount..."
                     value={expenseSearch}
                     onChange={(e) => {
                       setExpenseSearch(e.target.value);
                       setExpensePage(1);
                     }}
                     className="catalog-search-input"
-                    style={{ width: '100%', height: 34, paddingLeft: 30, fontSize: 12.5 }}
+                    style={{
+                      width: '100%',
+                      height: 36,
+                      paddingLeft: 34,
+                      paddingRight: expenseSearch ? 32 : 12,
+                      fontSize: 13,
+                      borderRadius: 4,
+                      border: '1px solid #cbd5e1'
+                    }}
                   />
                   {expenseSearch && (
                     <button
                       type="button"
                       onClick={() => setExpenseSearch('')}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)' }}
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#94a3b8',
+                        padding: 2
+                      }}
                     >
-                      <X size={13} />
+                      <X size={14} />
                     </button>
                   )}
                 </div>
@@ -3305,9 +3478,18 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                     className="btn btn-secondary"
                     onClick={() => setIsColumnSettingsOpen(!isColumnSettingsOpen)}
                     title="Column settings"
-                    style={{ width: 34, height: 34, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      padding: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 4,
+                      borderColor: '#cbd5e1'
+                    }}
                   >
-                    <SlidersHorizontal size={15} />
+                    <Settings size={16} color="#64748b" />
                   </button>
 
                   {isColumnSettingsOpen && (
@@ -3317,17 +3499,17 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       top: '100%',
                       marginTop: 6,
                       background: '#ffffff',
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
                       borderRadius: 8,
-                      boxShadow: 'var(--shadow-card-hover)',
-                      padding: 12,
-                      minWidth: 190,
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                      padding: 14,
+                      minWidth: 220,
                       zIndex: 50,
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 8
+                      gap: 10
                     }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim, #64748b)', letterSpacing: '0.05em' }}>
                         Column Settings
                       </div>
                       {[
@@ -3335,9 +3517,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                         { key: 'account', label: 'Account' },
                         { key: 'payFrom', label: 'Pay From' },
                         { key: 'description', label: 'Expense Description' },
-                        { key: 'amount', label: 'Amount' }
+                        { key: 'amount', label: 'Amount' },
+                        { key: 'date', label: 'Date Incurred' },
+                        { key: 'receipt', label: 'Receipt Attachment' }
                       ].map(({ key, label }) => (
-                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: 'var(--text-main)' }}>
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', color: 'var(--text-main, #0f172a)' }}>
                           <input 
                             type="checkbox"
                             checked={visibleColumns[key as keyof typeof visibleColumns]}
@@ -3350,226 +3534,312 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Table */}
-            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border-subtle)' }}>
-                    {visibleColumns.type && (
-                      <th 
-                        onClick={() => toggleSort('type')}
-                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          Type {renderSortIcon('type')}
-                        </span>
-                      </th>
-                    )}
-                    {visibleColumns.account && (
-                      <th 
-                        onClick={() => toggleSort('account')}
-                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          Account {renderSortIcon('account')}
-                        </span>
-                      </th>
-                    )}
-                    {visibleColumns.payFrom && (
-                      <th 
-                        onClick={() => toggleSort('payFrom')}
-                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          Pay From {renderSortIcon('payFrom')}
-                        </span>
-                      </th>
-                    )}
-                    {visibleColumns.description && (
-                      <th 
-                        onClick={() => toggleSort('description')}
-                        style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          Expense Description {renderSortIcon('description')}
-                        </span>
-                      </th>
-                    )}
-                    {visibleColumns.amount && (
-                      <th 
-                        onClick={() => toggleSort('amount')}
-                        style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
-                          Amount {renderSortIcon('amount')}
-                        </span>
-                      </th>
-                    )}
-                    <th style={{ textAlign: 'center', padding: '10px 14px', width: 90, fontWeight: 600 }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((exp) => (
-                    <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: '#ffffff' }}>
+              {/* Table */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                       {visibleColumns.type && (
-                        <td style={{ padding: '10px 14px', color: 'var(--text-main)', fontWeight: 500 }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            fontSize: 11.5,
-                            fontWeight: 600,
-                            background: '#f1f5f9',
-                            color: '#334155'
-                          }}>
-                            {exp.type}
+                        <th 
+                          onClick={() => toggleSort('type')}
+                          style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Type {renderSortIcon('type')}
                           </span>
-                        </td>
+                        </th>
                       )}
                       {visibleColumns.account && (
-                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
-                          <span style={{ textTransform: 'lowercase' }}>{exp.account}</span>
-                        </td>
+                        <th 
+                          onClick={() => toggleSort('account')}
+                          style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Account {renderSortIcon('account')}
+                          </span>
+                        </th>
                       )}
                       {visibleColumns.payFrom && (
-                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>
-                          <span style={{ textTransform: 'capitalize' }}>{exp.payFrom || 'Cash'}</span>
-                        </td>
+                        <th 
+                          onClick={() => toggleSort('payFrom')}
+                          style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Pay From {renderSortIcon('payFrom')}
+                          </span>
+                        </th>
                       )}
                       {visibleColumns.description && (
-                        <td style={{ padding: '10px 14px', color: 'var(--text-main)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span>{exp.description}</span>
-                            {exp.receiptUrl && (
-                              <span 
-                                title="Receipt attached" 
-                                style={{ fontSize: 10.5, padding: '1px 5px', borderRadius: 3, background: '#ecfdf5', color: '#047857', fontWeight: 600 }}
-                              >
-                                Receipt
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                        <th 
+                          onClick={() => toggleSort('description')}
+                          style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Expense Description {renderSortIcon('description')}
+                          </span>
+                        </th>
                       )}
                       {visibleColumns.amount && (
-                        <td style={{
-                          padding: '10px 14px',
-                          textAlign: 'right',
-                          fontFamily: 'var(--font-mono)',
-                          fontWeight: 600,
-                          color: exp.amount > 0 ? '#dc2626' : 'var(--text-main)'
-                        }}>
-                          ${(Number(exp.amount) || 0).toFixed(2)}
-                        </td>
+                        <th 
+                          onClick={() => toggleSort('amount')}
+                          style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                            Amount {renderSortIcon('amount')}
+                          </span>
+                        </th>
                       )}
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          <button 
-                            type="button"
-                            onClick={() => handleOpenEditExpense(exp)}
-                            style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', padding: 4 }}
-                            title="Edit expense"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setExpenseToDelete(exp)}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 4 }}
-                            title="Delete expense"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
+                      {visibleColumns.date && (
+                        <th 
+                          onClick={() => toggleSort('date')}
+                          style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Date {renderSortIcon('date')}
+                          </span>
+                        </th>
+                      )}
+                      {visibleColumns.receipt && (
+                        <th style={{ textAlign: 'center', padding: '10px 14px', width: 80, fontWeight: 600, color: '#334155' }}>
+                          Receipt
+                        </th>
+                      )}
+                      <th style={{ textAlign: 'center', padding: '10px 14px', width: 140, fontWeight: 600, color: '#334155' }}>
+                        Actions
+                      </th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {paged.map((exp) => (
+                      <tr 
+                        key={exp.id} 
+                        style={{ borderBottom: '1px solid #f1f5f9', background: '#ffffff', transition: 'background-color 0.1s ease' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fafafa')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                      >
+                        {visibleColumns.type && (
+                          <td style={{ padding: '11px 14px', color: '#0f172a', fontWeight: 500 }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              background: '#f1f5f9',
+                              color: '#334155'
+                            }}>
+                              {exp.type}
+                            </span>
+                          </td>
+                        )}
+                        {visibleColumns.account && (
+                          <td style={{ padding: '11px 14px', color: '#475569' }}>
+                            <span style={{ textTransform: 'lowercase', fontFamily: 'var(--font-mono, monospace)', fontSize: 12.5 }}>
+                              {exp.account}
+                            </span>
+                          </td>
+                        )}
+                        {visibleColumns.payFrom && (
+                          <td style={{ padding: '11px 14px', color: '#475569' }}>
+                            <span style={{ textTransform: 'lowercase' }}>{exp.payFrom || 'cash'}</span>
+                          </td>
+                        )}
+                        {visibleColumns.description && (
+                          <td style={{ padding: '11px 14px', color: '#0f172a' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>{exp.description}</span>
+                              {exp.receiptUrl && (
+                                <span className="badge-receipt-attached" title={exp.receiptName || 'Receipt document attached'}>
+                                  Receipt
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.amount && (
+                          <td style={{
+                            padding: '11px 14px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono, monospace)',
+                            fontWeight: 600,
+                            color: exp.amount > 0 ? '#b91c1c' : '#0f172a',
+                            fontSize: 13
+                          }}>
+                            ${(Number(exp.amount) || 0).toFixed(2)}
+                          </td>
+                        )}
+                        {visibleColumns.date && (
+                          <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 12 }}>
+                            {exp.date || '-'}
+                          </td>
+                        )}
+                        {visibleColumns.receipt && (
+                          <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                            {exp.receiptUrl ? (
+                              <a
+                                href={exp.receiptUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="View attached receipt"
+                                style={{ display: 'inline-flex', alignItems: 'center', color: '#0284c7' }}
+                              >
+                                <FileText size={15} />
+                              </a>
+                            ) : (
+                              <span style={{ color: '#cbd5e1' }}>-</span>
+                            )}
+                          </td>
+                        )}
+                        <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <button 
+                              type="button"
+                              onClick={() => handleOpenEditExpense(exp)}
+                              className="btn-af360-table-edit"
+                              title="Edit expense record"
+                            >
+                              <Edit3 size={11} strokeWidth={2.2} />
+                              <span>EDIT</span>
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setExpenseToDelete(exp)}
+                              className="btn-af360-table-delete"
+                              title="Delete expense record"
+                            >
+                              <X size={11} strokeWidth={2.5} />
+                              <span>DELETE</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
 
-                  {paged.length === 0 && (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
-                        {expenseSearch ? 'No expenses match search criteria.' : 'No expenses logged for this auction event.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    {paged.length === 0 && (
+                      <tr>
+                        <td 
+                          colSpan={
+                            1 +
+                            (visibleColumns.type ? 1 : 0) +
+                            (visibleColumns.account ? 1 : 0) +
+                            (visibleColumns.payFrom ? 1 : 0) +
+                            (visibleColumns.description ? 1 : 0) +
+                            (visibleColumns.amount ? 1 : 0) +
+                            (visibleColumns.date ? 1 : 0) +
+                            (visibleColumns.receipt ? 1 : 0)
+                          }
+                          style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-dim, #64748b)' }}
+                        >
+                          {expenseSearch ? 'No expenses match search criteria.' : 'No expenses logged for this auction event yet. Click NEW EXPENSE above to create one.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
 
-              {/* Summary Row */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                padding: '12px 18px',
-                background: '#fafaf8',
-                borderTop: '1.5px solid var(--border-subtle)',
-                fontSize: 13.5,
-                fontWeight: 600,
-                color: 'var(--text-main)'
-              }}>
-                <span>Total expenses:&nbsp;</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>
-                  ${totalExpensesAmount.toFixed(2)}
-                </span>
-              </div>
-
-              {/* Footer */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 16px',
-                borderTop: '1px solid var(--border-subtle)',
-                fontSize: 12.5,
-                background: '#ffffff',
-                color: 'var(--text-secondary)',
-                flexWrap: 'wrap',
-                gap: 10
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Show</span>
-                  <select
-                    value={expensePageSize}
-                    onChange={(e) => {
-                      setExpensePageSize(Number(e.target.value));
-                      setExpensePage(1);
-                    }}
-                    className="catalog-search-input"
-                    style={{ height: 28, padding: '0 8px', fontSize: 12 }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>entries</span>
+                {/* Summary Row */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  padding: '12px 18px',
+                  background: '#fafaf8',
+                  borderTop: '1.5px solid #e2e8f0',
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: 'var(--text-main, #0f172a)'
+                }}>
+                  <span>Total expenses:&nbsp;</span>
+                  <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: totalExpensesAmount > 0 ? '#b91c1c' : '#0f172a' }}>
+                    ${totalExpensesAmount.toFixed(2)}
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setExpensePage(p => Math.max(1, p - 1))}
-                    disabled={safePage <= 1}
-                    style={{ padding: '4px 10px', fontSize: 12 }}
-                  >
-                    Prev
-                  </button>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                    {safePage} / {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setExpensePage(p => Math.min(totalPages, p + 1))}
-                    disabled={safePage >= totalPages}
-                    style={{ padding: '4px 10px', fontSize: 12 }}
-                  >
-                    Next
-                  </button>
+                {/* AF360 Pagination Bar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 16px',
+                  borderTop: '1px solid #e2e8f0',
+                  fontSize: 12.5,
+                  background: '#ffffff',
+                  color: '#64748b',
+                  flexWrap: 'wrap',
+                  gap: 12
+                }}>
+                  {/* Entries selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>Show</span>
+                    <select
+                      value={expensePageSize}
+                      onChange={(e) => {
+                        setExpensePageSize(Number(e.target.value));
+                        setExpensePage(1);
+                      }}
+                      className="af360-page-select"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span>entries</span>
+                  </div>
+
+                  {/* Centered AF360 Page Navigation */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setExpensePage(p => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      style={{
+                        padding: '3px 10px',
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        borderRadius: 4,
+                        color: safePage <= 1 ? '#94a3b8' : '#334155'
+                      }}
+                    >
+                      &lt; PREV
+                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <select
+                        value={safePage}
+                        onChange={(e) => setExpensePage(Number(e.target.value))}
+                        className="af360-page-select"
+                        style={{ height: 26, padding: '0 6px', fontSize: 11.5 }}
+                      >
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                        / {totalPages}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setExpensePage(p => Math.min(totalPages, p + 1))}
+                      disabled={safePage >= totalPages}
+                      style={{
+                        padding: '3px 10px',
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        borderRadius: 4,
+                        color: safePage >= totalPages ? '#94a3b8' : '#334155'
+                      }}
+                    >
+                      NEXT &gt;
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3704,259 +3974,378 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
         </div>
       </FormModal>
 
-      {/* New / Edit Expense Modal */}
-      <FormModal
-        isOpen={isExpenseModalOpen}
-        title={editingExpense ? 'Edit Operating Expense' : 'Log New Operating Expense'}
-        onClose={() => {
-          setIsExpenseModalOpen(false);
-          setEditingExpense(null);
-        }}
-        onSubmit={handleSaveExpense}
-        submitLabel={editingExpense ? 'Update Expense' : 'Save Expense'}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Type with + New type */}
-          <FormField label="Expense Type *" required>
-            {!isCustomType ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  value={expType}
-                  onChange={(e) => {
-                    if (e.target.value === '__new_type__') {
-                      setIsCustomType(true);
-                      setCustomExpType('');
-                    } else {
-                      setExpType(e.target.value);
-                    }
-                  }}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                >
-                  {EXPENSE_TYPES.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                  <option value="__new_type__">+ New type...</option>
-                </select>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsCustomType(true)}
-                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
-                >
-                  + New type
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter custom expense type"
-                  value={customExpType}
-                  onChange={(e) => setCustomExpType(e.target.value)}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setIsCustomType(false);
-                    setExpType(EXPENSE_TYPES[0]);
-                  }}
-                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </FormField>
-
-          {/* Account (creatable) */}
-          <FormField label="Account *" required>
-            {!isCustomAccount ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  value={expAccount}
-                  onChange={(e) => {
-                    if (e.target.value === '__new_account__') {
-                      setIsCustomAccount(true);
-                      setCustomAccount('');
-                    } else {
-                      setExpAccount(e.target.value);
-                    }
-                  }}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                >
-                  {existingAccounts.map(acc => (
-                    <option key={acc} value={acc}>{acc}</option>
-                  ))}
-                  <option value="__new_account__">+ New account...</option>
-                </select>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsCustomAccount(true)}
-                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
-                >
-                  + New
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. google ads, storage locker"
-                  value={customAccount}
-                  onChange={(e) => setCustomAccount(e.target.value)}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36 }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setIsCustomAccount(false);
-                    setExpAccount(existingAccounts[0] || 'facebook');
-                  }}
-                  style={{ padding: '0 12px', height: 36, whiteSpace: 'nowrap', fontSize: 12 }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </FormField>
-
-          {/* Pay From */}
-          <FormField label="Pay From *" required>
-            <select
-              value={expPayFrom}
-              onChange={(e) => setExpPayFrom(e.target.value)}
-              className="catalog-search-input"
-              style={{ width: '100%', height: 36 }}
-            >
-              {PAY_FROM_OPTIONS.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          {/* Expense Description */}
-          <FormField label="Expense Description *" required>
-            <input 
-              type="text"
-              required
-              placeholder="e.g. Facebook Campaign Ads"
-              value={expDesc}
-              onChange={(e) => setExpDesc(e.target.value)}
-              className="catalog-search-input"
-              style={{ width: '100%', height: 36 }}
-            />
-          </FormField>
-
-          {/* Amount and Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FormField label="Amount ($) *" required>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontWeight: 600, color: 'var(--text-dim)' }}>$</span>
-                <input 
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  placeholder="0.00"
-                  value={expAmount}
-                  onChange={(e) => setExpAmount(e.target.value)}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 36, paddingLeft: 24, fontFamily: 'var(--font-mono)' }}
-                />
-              </div>
-            </FormField>
-
-            <FormField label="Date *" required>
-              <input 
-                type="date"
-                required
-                value={expDate}
-                onChange={(e) => setExpDate(e.target.value)}
-                className="catalog-search-input"
-                style={{ width: '100%', height: 36 }}
-              />
-            </FormField>
-          </div>
-
-          {/* Optional Receipt Upload */}
-          <FormField label="Receipt (Optional image or PDF)">
-            {expReceiptPreview || expReceiptName ? (
+      {/* New / Edit Expense Side Drawer (Slide-Over from Right) */}
+      {isExpenseModalOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            transition: 'opacity 0.25s ease'
+          }}
+          onClick={() => {
+            setIsExpenseModalOpen(false);
+            setEditingExpense(null);
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            style={{
+              width: '580px',
+              maxWidth: '94vw',
+              height: '100vh',
+              background: '#ffffff',
+              boxShadow: '-14px 0 44px rgba(0, 0, 0, 0.22)',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'slideInRightDrawer 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              overflow: 'hidden'
+            }}
+          >
+            <form onSubmit={handleSaveExpense} style={{ display: 'flex', flexDirection: 'column', height: '100%', margin: 0 }}>
+              {/* Drawer Header */}
               <div style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid #e2e8f0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '8px 12px',
-                background: '#f8fafc',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 6
+                background: '#ffffff',
+                flexShrink: 0
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                  {expReceiptPreview && expReceiptPreview.startsWith('data:image') ? (
-                    <img src={expReceiptPreview} alt="Receipt preview" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} />
-                  ) : (
-                    <FileText size={18} color="var(--gold-primary)" />
-                  )}
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    {expReceiptName || 'Attached receipt document'}
-                  </span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                    {editingExpense ? 'Edit Operating Expense' : 'Log New Operating Expense'}
+                  </h3>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+                    Manage auction event operating costs, vendor accounts, and consignor deductions.
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setExpReceiptName('');
-                    setExpReceiptPreview(null);
+                    setIsExpenseModalOpen(false);
+                    setEditingExpense(null);
                   }}
-                  style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 4 }}
-                  title="Remove receipt"
+                  style={{
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: 6,
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Close side form"
                 >
-                  <Trash2 size={14} />
+                  <X size={16} />
                 </button>
               </div>
-            ) : (
-              <label style={{
-                display: 'block',
-                border: '1.5px dashed var(--border-subtle)',
-                borderRadius: 6,
-                padding: '16px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: '#fafaf8'
+
+              {/* Drawer Body (Scrollable) */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '22px 24px 100px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16
               }}>
-                <Upload size={18} color="var(--gold-primary)" style={{ margin: '0 auto 6px' }} />
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Click to upload receipt (JPG, PNG, PDF)
+                {/* Type with + New type */}
+                <FormField label="Expense Type *" required>
+                  {!isCustomType ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <ShadcnSelect
+                          value={expType}
+                          onChange={(val) => {
+                            setExpType(val);
+                            setIsCustomType(false);
+                          }}
+                          options={expenseTypeSelectOptions}
+                          placeholder="Select expense type..."
+                          searchable
+                          searchPlaceholder="Search expense type..."
+                          showAdd
+                          onAddOption={() => {
+                            setIsCustomType(true);
+                            setCustomExpType('');
+                          }}
+                          addOptionLabel="+ Custom Expense Type"
+                          fullWidth
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsCustomType(true)}
+                        style={{ padding: '0 12px', height: 38, whiteSpace: 'nowrap', fontSize: 12, flexShrink: 0 }}
+                        title="Enter custom expense type"
+                      >
+                        + New type
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter custom expense type"
+                        value={customExpType}
+                        onChange={(e) => setCustomExpType(e.target.value)}
+                        className="catalog-search-input"
+                        style={{ flex: 1, height: 38 }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setIsCustomType(false);
+                          setExpType(EXPENSE_TYPES[0]);
+                        }}
+                        style={{ padding: '0 12px', height: 38, whiteSpace: 'nowrap', fontSize: 12, flexShrink: 0 }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </FormField>
+
+                {/* Account (creatable) */}
+                <FormField label="Account *" required>
+                  {!isCustomAccount ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <ShadcnSelect
+                          value={expAccount}
+                          onChange={(val) => {
+                            setExpAccount(val);
+                            setIsCustomAccount(false);
+                          }}
+                          options={expenseAccountSelectOptions}
+                          placeholder="Select vendor or account..."
+                          searchable
+                          searchPlaceholder="Search vendor / account..."
+                          showAdd
+                          onAddOption={() => {
+                            setIsCustomAccount(true);
+                            setCustomAccount('');
+                          }}
+                          addOptionLabel="+ Custom Vendor / Account"
+                          fullWidth
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsCustomAccount(true)}
+                        style={{ padding: '0 12px', height: 38, whiteSpace: 'nowrap', fontSize: 12, flexShrink: 0 }}
+                        title="Enter custom vendor/account"
+                      >
+                        + New
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. google ads, storage locker"
+                        value={customAccount}
+                        onChange={(e) => setCustomAccount(e.target.value)}
+                        className="catalog-search-input"
+                        style={{ flex: 1, height: 38 }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setIsCustomAccount(false);
+                          setExpAccount(existingAccounts[0] || 'facebook');
+                        }}
+                        style={{ padding: '0 12px', height: 38, whiteSpace: 'nowrap', fontSize: 12, flexShrink: 0 }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </FormField>
+
+                {/* Pay From */}
+                <FormField label="Pay From *" required>
+                  <ShadcnSelect
+                    value={expPayFrom}
+                    onChange={setExpPayFrom}
+                    options={payFromSelectOptions}
+                    placeholder="Select payment method..."
+                    fullWidth
+                  />
+                </FormField>
+
+                {/* Expense Description */}
+                <FormField label="Expense Description *" required>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. Facebook Campaign Ads"
+                    value={expDesc}
+                    onChange={(e) => setExpDesc(e.target.value)}
+                    className="catalog-search-input"
+                    style={{ width: '100%', height: 38 }}
+                  />
+                </FormField>
+
+                {/* Amount and Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <FormField label="Amount ($) *" required>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontWeight: 600, color: 'var(--text-dim)' }}>$</span>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        placeholder="0.00"
+                        value={expAmount}
+                        onChange={(e) => setExpAmount(e.target.value)}
+                        className="catalog-search-input"
+                        style={{ width: '100%', height: 38, paddingLeft: 24, fontFamily: 'var(--font-mono)' }}
+                      />
+                    </div>
+                  </FormField>
+
+                  <FormField label="Date *" required>
+                    <ShadcnDatePicker
+                      value={expDate}
+                      onChange={setExpDate}
+                      placeholder="Select expense date"
+                      align="right"
+                    />
+                  </FormField>
                 </div>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setExpReceiptName(file.name);
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        setExpReceiptPreview(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
+
+                {/* Optional Receipt Upload */}
+                <FormField label="Receipt (Optional image or PDF)">
+                  {expReceiptPreview || expReceiptName ? (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: '#f8fafc',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 6
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                        {expReceiptPreview && expReceiptPreview.startsWith('data:image') ? (
+                          <img src={expReceiptPreview} alt="Receipt preview" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4 }} />
+                        ) : (
+                          <FileText size={20} color="var(--gold-primary)" />
+                        )}
+                        <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {expReceiptName || 'Attached receipt document'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpReceiptName('');
+                          setExpReceiptPreview(null);
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 4 }}
+                        title="Remove receipt"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label style={{
+                      display: 'block',
+                      border: '1.5px dashed var(--border-subtle)',
+                      borderRadius: 6,
+                      padding: '18px 16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: '#fafaf8'
+                    }}>
+                      <Upload size={20} color="var(--gold-primary)" style={{ margin: '0 auto 6px' }} />
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        Click to upload receipt (JPG, PNG, PDF)
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setExpReceiptName(file.name);
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setExpReceiptPreview(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </FormField>
+              </div>
+
+              {/* Drawer Footer */}
+              <div style={{
+                padding: '14px 24px',
+                borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 10,
+                flexShrink: 0
+              }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setIsExpenseModalOpen(false);
+                    setEditingExpense(null);
                   }}
-                />
-              </label>
-            )}
-          </FormField>
+                  style={{ padding: '8px 18px', fontSize: 13, fontWeight: 600, borderRadius: 6 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-gold"
+                  style={{
+                    padding: '8px 22px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Save size={14} />
+                  <span>{editingExpense ? 'Update Expense' : 'Save Expense'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </FormModal>
+      )}
 
       {/* Delete Expense Confirmation Modal */}
       <ConfirmModal
