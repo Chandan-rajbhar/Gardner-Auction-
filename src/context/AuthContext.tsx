@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, supabaseAdmin, isSupabaseConfigured, SupabaseAuthUser } from '../lib/supabase';
+import { supabase, supabaseAdmin, isSupabaseConfigured, SupabaseAuthUser, SUPABASE_URL } from '../lib/supabase';
 
 export interface AuthUser {
   id: string;
@@ -110,14 +110,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Fetch trusted user profile from Supabase 'public.users' table
-  // Handles potential difference between auth.uid() and public.users record identifier
+  // Fetch trusted user profile from Supabase: checks 'admin_users' first, then 'users'
   const fetchUserProfile = async (sbUser: SupabaseAuthUser): Promise<AuthUser> => {
     try {
       const cleanEmail = sbUser.email ? sbUser.email.trim().toLowerCase() : '';
+
+      // 1. Check public.admin_users table first for dashboard admin registrations
+      try {
+        const { data: adminRecord } = await supabase
+          .from('admin_users')
+          .select('*')
+          .or(`auth_id.eq.${sbUser.id},email.eq.${cleanEmail}`)
+          .maybeSingle();
+
+        if (adminRecord) {
+          const assignedRole = (adminRecord.role as AuthUser['role']) || 'admin';
+          const fullName = adminRecord.full_name || sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'Administrator';
+          return {
+            id: sbUser.id,
+            dbId: adminRecord.id,
+            name: fullName,
+            email: adminRecord.email || sbUser.email || '',
+            role: assignedRole,
+            title: adminRecord.title || getRoleTitle(assignedRole),
+            avatarText: getInitials(fullName),
+            avatarUrl: resolveAvatarUrl(adminRecord.avatar_url),
+            phone: adminRecord.phone || '',
+            createdAt: adminRecord.created_at || sbUser.created_at || new Date().toISOString(),
+            lastLoginAt: sbUser.last_sign_in_at || new Date().toISOString()
+          };
+        }
+      } catch {
+        // Fall through to public.users or metadata
+      }
+
       let profileData: any = null;
 
-      // 1. Try matching by auth ID first
+      // 2. Try matching in public.users by auth ID
       const { data: byId } = await supabase
         .from('users')
         .select('*')
@@ -127,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (byId) {
         profileData = byId;
       } else if (cleanEmail) {
-        // 2. Fallback: look up by verified email
+        // Fallback: look up by verified email
         const { data: byEmail } = await supabase
           .from('users')
           .select('*')
@@ -153,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper to safely sync or create user profile in public.users
+  // Helper to safely sync or create user profile in public.admin_users or public.users
   const syncProfileToSupabase = async (profileData: {
     id: string;
     fullName: string;
@@ -163,7 +192,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isSupabaseConfigured) return;
     try {
       const cleanEmail = profileData.email.trim().toLowerCase();
-      // Check if row already exists
+
+      // If user has an administrative role, sync directly to public.admin_users
+      if (profileData.role !== 'user') {
+        try {
+          const { data: existingAdmin } = await supabase
+            .from('admin_users')
+            .select('id, email')
+            .or(`auth_id.eq.${profileData.id},email.eq.${cleanEmail}`)
+            .maybeSingle();
+
+          if (existingAdmin) {
+            await supabase
+              .from('admin_users')
+              .update({
+                auth_id: profileData.id,
+                full_name: profileData.fullName,
+                role: profileData.role
+              })
+              .eq('id', existingAdmin.id);
+          } else {
+            await supabase
+              .from('admin_users')
+              .insert({
+                auth_id: profileData.id,
+                full_name: profileData.fullName,
+                email: cleanEmail,
+                role: profileData.role,
+                status: 'active'
+              });
+          }
+          return;
+        } catch (adminErr) {
+          console.warn('[AuthContext] admin_users sync notice:', adminErr);
+        }
+      }
+
+      // Otherwise sync standard customers to public.users
       const { data: existing } = await supabase
         .from('users')
         .select('id, email')

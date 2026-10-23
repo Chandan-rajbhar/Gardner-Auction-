@@ -513,6 +513,10 @@ export const INITIAL_LOTS: LotItem[] = [
 export const INITIAL_USERS: UserBidder[] = [
   {
     id: 'usr-101',
+    customerCode: 'CUST-104',
+    firstName: 'Arthur',
+    lastName: 'Kensington',
+    phone1: '(406) 555-0192',
     paddleNumber: '104',
     name: 'Arthur Kensington',
     email: 'kensington.investments@heritage.com',
@@ -534,6 +538,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-102',
+    customerCode: 'CUST-219',
+    firstName: 'Eleanor',
+    lastName: 'Sterling',
+    phone1: '(206) 555-8374',
     paddleNumber: '219',
     name: 'Eleanor Sterling',
     email: 'eleanor@sterlingrarecoins.com',
@@ -555,6 +563,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-103',
+    customerCode: 'CUST-302',
+    firstName: 'Marcus',
+    lastName: 'Sterling Vance',
+    phone1: '(415) 555-9201',
     paddleNumber: '302',
     name: 'Marcus Sterling Vance',
     email: 'mvance@vanceholdings.org',
@@ -576,6 +588,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-104',
+    customerCode: 'CUST-118',
+    firstName: 'Harrison',
+    lastName: 'Pierce',
+    phone1: '(312) 555-4491',
     paddleNumber: '118',
     name: 'Dr. Harrison Pierce',
     email: 'h.pierce.md@stlukesnumis.org',
@@ -597,6 +613,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-105',
+    customerCode: 'CUST-145',
+    firstName: 'Robert',
+    lastName: 'Miller',
+    phone1: '(303) 555-8820',
     paddleNumber: '145',
     name: 'Sundance Precious Metals',
     email: 'trader@sundancebullion.com',
@@ -618,6 +638,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-106',
+    customerCode: 'CUST-419',
+    firstName: 'Julian',
+    lastName: 'Vance-Moreau',
+    phone1: '+41 22 555 9180',
     paddleNumber: 'Pending',
     name: 'Julian Vance-Moreau',
     email: 'julian.moreau@genevavault.ch',
@@ -639,6 +663,10 @@ export const INITIAL_USERS: UserBidder[] = [
   },
   {
     id: 'usr-107',
+    customerCode: 'CONS-001',
+    firstName: 'Henry',
+    lastName: 'Vance (Estate)',
+    phone1: '(406) 555-7712',
     paddleNumber: 'Consignor-01',
     name: 'Estate of Henry Vance',
     email: 'executors@vance-estate.org',

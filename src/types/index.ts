@@ -98,11 +98,16 @@ export type UserType = 'bidder' | 'consignor' | 'both';
 
 export interface UserBidder {
   id: string;
+  customerCode?: string;
+  firstName?: string;
+  lastName?: string;
+  phone1?: string;
   paddleNumber: string;
   name: string;
   email: string;
   phone: string;
   company?: string;
+  companyName?: string;
   siteOrigin: string;
   registrationDate: string;
   status: BidderStatus;
@@ -116,6 +121,18 @@ export interface UserBidder {
   address: string;
   cityStateZip: string;
   notes: string;
+  driversLicenseNumber?: string;
+  taxId?: string;
+  taxIdExpirationDate?: string;
+  taxExemptAllPurchases?: boolean;
+  isSeller?: boolean;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  isPermanentBidder?: boolean;
 }
 
 export interface LiveBid {
@@ -179,6 +196,7 @@ export interface ActivityLog {
 export type NavigationSection = 
   | 'overview'
   | 'users'
+  | 'admins'
   | 'auctions'
   | 'lots'
   | 'live_clerking'
@@ -187,3 +205,20 @@ export type NavigationSection =
   | 'logs'
   | 'settings'
   | 'profile';
+
+export interface AdminUserRecord {
+  id: string;
+  authId?: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  role: 'super_admin' | 'admin' | 'clerk' | 'consignor_manager' | 'operator';
+  title: string;
+  department: string;
+  avatarUrl?: string;
+  status: 'active' | 'suspended' | 'pending';
+  permissions?: Record<string, boolean>;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

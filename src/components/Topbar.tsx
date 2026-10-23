@@ -23,7 +23,8 @@ const getSectionTitle = (section?: NavigationSection): string => {
     case 'live_clerking': return 'Live Clerking Block';
     case 'auctions': return 'Auction Catalog';
     case 'lots': return 'Catalog Lots';
-    case 'users': return 'Bidders & Consignors';
+    case 'users': return 'Customers';
+    case 'admins': return 'Admins';
     case 'payments': return 'Settlement & Invoices';
     case 'reports': return 'Reports & Analytics';
     case 'logs': return 'Activity & Audit Log';

@@ -26,6 +26,7 @@ import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { OverviewView } from './components/views/OverviewView';
 import { UsersView } from './components/views/UsersView';
+import { AdminUsersView } from './components/views/AdminUsersView';
 import { AuctionsView } from './components/views/AuctionsView';
 import { LotsView } from './components/views/LotsView';
 import { LiveClerkingView } from './components/views/LiveClerkingView';
@@ -641,6 +642,10 @@ const AdminConsole: React.FC = () => {
               onUpdateUser={(updated) => setBidders(prev => prev.map(u => u.id === updated.id ? updated : u))}
               onAddUser={(newUser) => setBidders(prev => [newUser, ...prev])}
             />
+          )}
+
+          {currentSection === 'admins' && (
+            <AdminUsersView />
           )}
 
           {currentSection === 'auctions' && (

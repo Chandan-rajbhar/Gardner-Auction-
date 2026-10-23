@@ -56,11 +56,10 @@ export const supabase: SupabaseClient = createClient(
   }
 );
 
-// In browser environments, use SUPABASE_ANON_KEY to avoid security rejections.
-// Secret service-role keys are reserved for backend/server environments.
-const clientAdminKey = typeof window !== 'undefined' 
-  ? SUPABASE_ANON_KEY 
-  : (DEFAULT_SUPABASE_SECRET_KEY || SUPABASE_KEY);
+// Dedicated administrative client for secure console CRUD operations
+// NOTE: In browser runtime, never pass secret key to createClient (prevents "Forbidden use of secret API key in browser")
+const isBrowser = typeof window !== 'undefined';
+const clientAdminKey = (!isBrowser && DEFAULT_SUPABASE_SECRET_KEY) ? DEFAULT_SUPABASE_SECRET_KEY : SUPABASE_ANON_KEY;
 
 export const supabaseAdmin: SupabaseClient = createClient(
   SUPABASE_URL,
