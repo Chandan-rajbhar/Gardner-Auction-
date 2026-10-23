@@ -306,6 +306,41 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [customBidInput, setCustomBidInput] = useState<string>('');
   const [audioGavelEnabled, setAudioGavelEnabled] = useState<boolean>(true);
 
+  // AF360 Live Clerking Workflow State
+  const [customLots, setCustomLots] = useState<LotItem[]>(lots || []);
+  const [clerkLotNumber, setClerkLotNumber] = useState<string>('1');
+  const [clerkSeller, setClerkSeller] = useState<string>('');
+  const [clerkTitle, setClerkTitle] = useState<string>('');
+  const [clerkHammerPrice, setClerkHammerPrice] = useState<string>('');
+  const [clerkBidderNumber, setClerkBidderNumber] = useState<string>('');
+  const [clerkQuantity, setClerkQuantity] = useState<number>(1);
+  const [clerkStatus, setClerkStatus] = useState<string>('Sold');
+  const [clerkXMoney, setClerkXMoney] = useState<boolean>(false);
+  const [clerkingAssist, setClerkingAssist] = useState<boolean>(true);
+  const [isClerkingSaving, setIsClerkingSaving] = useState<boolean>(false);
+  const [clerkingSearch, setClerkingSearch] = useState<string>('');
+  const [clerkingPage, setClerkingPage] = useState<number>(1);
+  const [clerkingPageSize, setClerkingPageSize] = useState<number>(20);
+  const [selectedClerkingLotIds, setSelectedClerkingLotIds] = useState<Set<string>>(new Set());
+  const [isClerkingStatsExpanded, setIsClerkingStatsExpanded] = useState<boolean>(false);
+
+  // Clerking Drawer State (Edit / View)
+  const [clerkingDrawer, setClerkingDrawer] = useState<{
+    isOpen: boolean;
+    mode: 'edit' | 'view';
+    lot?: LotItem;
+  }>({ isOpen: false, mode: 'view' });
+  const [drawerClerkLotId, setDrawerClerkLotId] = useState('');
+  const [drawerClerkLotNum, setDrawerClerkLotNum] = useState('');
+  const [drawerClerkSeller, setDrawerClerkSeller] = useState('');
+  const [drawerClerkTitle, setDrawerClerkTitle] = useState('');
+  const [drawerClerkHammerPrice, setDrawerClerkHammerPrice] = useState('');
+  const [drawerClerkBidder, setDrawerClerkBidder] = useState('');
+  const [drawerClerkStatus, setDrawerClerkStatus] = useState('Sold');
+  const [drawerClerkQuantity, setDrawerClerkQuantity] = useState(1);
+  const [drawerClerkXMoney, setDrawerClerkXMoney] = useState(false);
+  const [isSavingDrawerClerking, setIsSavingDrawerClerking] = useState(false);
+
   // Bidder Check In Modal state (Matching AuctionFlex360 Bidder Check In)
   const [isBidderCheckInModalOpen, setIsBidderCheckInModalOpen] = useState(false);
   const [checkInTabMode, setCheckInTabMode] = useState<'find' | 'create'>('find');
@@ -502,13 +537,38 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     };
   }, [auction?.id, lots, dispatch]);
 
+  // Sync custom lots if lots prop changes externally
+  useEffect(() => {
+    if (lots && lots.length > 0) {
+      setCustomLots(lots);
+    }
+  }, [lots]);
+
   // Scoped lots for currently selected auction
   const auctionLots = useMemo(() => {
     if (!auction) return [];
-    return (lots && lots.length > 0)
-      ? lots.filter(l => !l.auctionId || l.auctionId === auction.id || (auction.id === 'auc-001' && l.auctionId === 'auc-001'))
+    const baseLots = customLots.length > 0 ? customLots : (lots || []);
+    return (baseLots && baseLots.length > 0)
+      ? baseLots.filter(l => !l.auctionId || l.auctionId === auction.id || (auction.id === 'auc-001' && l.auctionId === 'auc-001'))
       : [];
-  }, [lots, auction?.id]);
+  }, [lots, customLots, auction?.id]);
+
+  // Unique consignors/sellers across current auction lots
+  const uniqueSellersList = useMemo(() => {
+    const set = new Set<string>();
+    auctionLots.forEach(lot => {
+      const seller = lot.consignorName || (lot as any).sellerName || (lot as any).consignor_name;
+      if (seller && seller.trim()) {
+        set.add(seller.trim());
+      }
+    });
+    if (set.size === 0) {
+      set.add('Consignor #101');
+      set.add('Montana Estate Trust');
+      set.add('Silver Star Numismatics');
+    }
+    return Array.from(set).map(name => ({ value: name, label: name }));
+  }, [auctionLots]);
 
   // Selected bidder records for Check In dialog
   const selectedBiddersList = useMemo(() => {
@@ -528,8 +588,67 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   useEffect(() => {
     if (currentBlockLot && !activeClerkLotId) {
       setActiveClerkLotId(currentBlockLot.id);
+      setClerkLotNumber(String(currentBlockLot.lotNumber));
     }
   }, [currentBlockLot?.id]);
+
+  // Active selected lot in Clerking entry form
+  const selectedClerkLot = useMemo(() => {
+    const num = parseInt(clerkLotNumber, 10);
+    if (!isNaN(num)) {
+      const found = auctionLots.find(l => l.lotNumber === num);
+      if (found) return found;
+    }
+    return currentBlockLot || auctionLots[0];
+  }, [auctionLots, clerkLotNumber, currentBlockLot]);
+
+  // When selectedClerkLot changes or active lot changes, synchronize form
+  useEffect(() => {
+    if (selectedClerkLot) {
+      setClerkTitle(selectedClerkLot.title || '');
+      const s = selectedClerkLot.consignorName || (selectedClerkLot as any).sellerName || (selectedClerkLot as any).consignor_name || (uniqueSellersList[0]?.value || 'Consignor #101');
+      setClerkSeller(s);
+      if (selectedClerkLot.status === 'sold') {
+        setClerkHammerPrice(String(selectedClerkLot.hammerPrice || selectedClerkLot.currentBid || ''));
+        setClerkBidderNumber(selectedClerkLot.highBidderPaddle || (selectedClerkLot as any).soldToBidderId || '');
+        setClerkStatus('Sold');
+      } else if (selectedClerkLot.status === 'passed') {
+        setClerkStatus('Passed');
+      } else {
+        setClerkStatus('Sold');
+      }
+    }
+  }, [selectedClerkLot?.id]);
+
+  // Dynamic bidder validation badge
+  const bidderValidationStatus = useMemo(() => {
+    if (!clerkBidderNumber.trim()) return null;
+    const searchPaddle = clerkBidderNumber.trim().toLowerCase();
+    const matched = registrations.find(r => r.bidCardNumber.toLowerCase() === searchPaddle);
+    if (matched) {
+      if (matched.isCheckedIn) {
+        return {
+          status: 'checked_in',
+          text: `✓ ${matched.bidderName} (Checked In)`,
+          color: '#15803d',
+          bg: '#dcfce7'
+        };
+      } else {
+        return {
+          status: 'pending',
+          text: `⚠ ${matched.bidderName} (Pending Check In)`,
+          color: '#b45309',
+          bg: '#fef3c7'
+        };
+      }
+    }
+    return {
+      status: 'unregistered',
+      text: '✕ Not Registered',
+      color: '#b91c1c',
+      bg: '#fee2e2'
+    };
+  }, [clerkBidderNumber, registrations]);
 
   // Compute live metrics dynamically from Supabase records
   const metrics: AuctionDayMetrics = useMemo(() => {
@@ -2069,16 +2188,6 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   };
 
-  if (!auction) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center', background: '#ffffff', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-        <AlertCircle size={36} color="var(--gold-primary)" style={{ margin: '0 auto 12px' }} />
-        <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0 }}>No Auction Loaded</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Select an auction to view Auction Day console.</p>
-      </div>
-    );
-  }
-
   // Filtered registrations for Check In tab
   const filteredRegistrations = registrations.filter(r => {
     const matchesSearch = !checkInSearch || 
@@ -2102,6 +2211,265 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     const matchesStatus = altBidStatusFilter === 'all' || b.status.toLowerCase() === altBidStatusFilter.toLowerCase();
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  // Filtered clerking lots for table
+  const filteredClerkingLots = auctionLots.filter(l => {
+    if (!clerkingSearch.trim()) return true;
+    const q = clerkingSearch.toLowerCase();
+    const s = (l.consignorName || (l as any).sellerName || (l as any).consignor_name || '').toLowerCase();
+    const paddle = (l.highBidderPaddle || (l as any).soldToBidderId || '').toLowerCase();
+    return l.lotNumber.toString().includes(q) ||
+      l.title.toLowerCase().includes(q) ||
+      s.includes(q) ||
+      paddle.includes(q);
+  });
+
+  // Handle Save Clerking Entry
+  const handleSaveClerking = async () => {
+    if (!auction) return;
+    const parsedLotNum = parseInt(clerkLotNumber, 10);
+    const targetLot = auctionLots.find(l => l.lotNumber === parsedLotNum);
+    if (!targetLot) {
+      showToast('error', 'Lot Not Found', `Lot #${clerkLotNumber} does not exist in this catalog.`);
+      return;
+    }
+
+    const isSold = clerkStatus === 'Sold';
+    const isPassed = clerkStatus === 'Passed';
+    const finalPrice = isSold ? parseFloat(clerkHammerPrice) : 0;
+    const finalPaddle = isSold ? clerkBidderNumber.trim() : null;
+
+    if (isSold) {
+      if (isNaN(finalPrice) || finalPrice <= 0) {
+        showToast('error', 'Validation Error', 'Please enter a valid Hammer Price greater than $0.');
+        return;
+      }
+      if (!finalPaddle) {
+        showToast('error', 'Validation Error', 'Bidder Number is required for Sold status.');
+        return;
+      }
+    }
+
+    setIsClerkingSaving(true);
+    try {
+      // 1. Update lot in Supabase
+      await lotsService.updateLot(targetLot.id, {
+        status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
+        hammerPrice: finalPrice,
+        currentBid: isSold ? finalPrice : targetLot.startingBid,
+        highBidderPaddle: finalPaddle || undefined,
+        consignorName: clerkSeller.trim() || targetLot.consignorName
+      });
+
+      // 2. If sold, insert winning bid in public.bids
+      if (isSold) {
+        try {
+          const matchedReg = registrations.find(r => r.bidCardNumber.toLowerCase() === finalPaddle?.toLowerCase());
+          await supabaseAdmin.from('bids').insert([{
+            id: `bid-${Date.now()}`,
+            lot_id: targetLot.id,
+            auction_id: auction.id,
+            lot_number: targetLot.lotNumber,
+            amount: finalPrice,
+            paddle_number: finalPaddle,
+            bidder_name: matchedReg?.bidderName || `Bidder #${finalPaddle}`,
+            source: 'Floor Clerking',
+            is_winning: true,
+            created_at: new Date().toISOString()
+          }]);
+        } catch (bidErr) {
+          console.warn('[AuctionDayTab] Insert clerking bid error:', bidErr);
+        }
+      }
+
+      // 3. Update local customLots state
+      setCustomLots(prev => prev.map(l => {
+        if (l.id === targetLot.id) {
+          return {
+            ...l,
+            status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
+            hammerPrice: finalPrice,
+            currentBid: isSold ? finalPrice : l.startingBid,
+            highBidderPaddle: finalPaddle || undefined,
+            consignorName: clerkSeller.trim() || l.consignorName
+          };
+        }
+        return l;
+      }));
+
+      // Call parent callback if available
+      if (isSold && onHammerSold) {
+        onHammerSold(targetLot.id, finalPrice, finalPaddle || '101');
+      } else if (isPassed && onPassLot) {
+        onPassLot(targetLot.id, 'Reserve Not Met / Clerk Passed');
+      }
+
+      playGavelSound();
+      showToast('success', 'Clerking Saved', `Lot #${targetLot.lotNumber} marked as ${clerkStatus}${isSold ? ` for ${formatCurrency(finalPrice)} to Paddle #${finalPaddle}` : ''}.`);
+
+      // 4. Clerking Assist: Auto-advance to next lot if ON
+      if (clerkingAssist) {
+        const sortedLots = [...auctionLots].sort((a, b) => a.lotNumber - b.lotNumber);
+        const currentIndex = sortedLots.findIndex(l => l.lotNumber === targetLot.lotNumber);
+        const nextLot = sortedLots.slice(currentIndex + 1).find(l => l.status !== 'sold' && l.status !== 'passed') 
+          || sortedLots[currentIndex + 1];
+
+        if (nextLot) {
+          setClerkLotNumber(String(nextLot.lotNumber));
+          setClerkHammerPrice('');
+          setClerkBidderNumber('');
+          setClerkStatus('Sold');
+        } else {
+          showToast('info', 'Catalog Completed', 'All lots have been clerked for this auction.');
+        }
+      }
+    } catch (err) {
+      console.error('[AuctionDayTab] Clerking save error:', err);
+      showToast('error', 'Error', 'Failed to save clerking record to Supabase.');
+    } finally {
+      setIsClerkingSaving(false);
+    }
+  };
+
+  // Reopen Clerk Lot
+  const handleReopenClerkedLot = async (lotId: string) => {
+    if (!auction) return;
+    const target = auctionLots.find(l => l.id === lotId);
+    if (!target) return;
+
+    try {
+      await lotsService.updateLot(lotId, {
+        status: 'upcoming',
+        hammerPrice: 0,
+        highBidderPaddle: undefined
+      });
+
+      setCustomLots(prev => prev.map(l => l.id === lotId ? {
+        ...l,
+        status: 'upcoming',
+        hammerPrice: 0,
+        highBidderPaddle: undefined
+      } : l));
+
+      if (onReopenLot) onReopenLot(lotId);
+      showToast('info', 'Lot Reopened', `Lot #${target.lotNumber} reopened and returned to upcoming status.`);
+    } catch (_) {
+      showToast('error', 'Error', 'Failed to reopen lot in Supabase.');
+    }
+  };
+
+  // Batch Clerking Actions
+  const handleBatchClerkingAction = async (action: 'sold' | 'passed' | 'reopen') => {
+    if (!auction || selectedClerkingLotIds.size === 0) return;
+    const ids = Array.from(selectedClerkingLotIds);
+
+    for (const lotId of ids) {
+      const lot = auctionLots.find(l => l.id === lotId);
+      if (!lot) continue;
+
+      if (action === 'sold') {
+        await lotsService.updateLot(lotId, {
+          status: 'sold',
+          hammerPrice: lot.currentBid || lot.startingBid || 100,
+          highBidderPaddle: lot.highBidderPaddle || '101'
+        });
+      } else if (action === 'passed') {
+        await lotsService.updateLot(lotId, {
+          status: 'passed',
+          hammerPrice: 0
+        });
+      } else if (action === 'reopen') {
+        await lotsService.updateLot(lotId, {
+          status: 'upcoming',
+          hammerPrice: 0,
+          highBidderPaddle: undefined
+        });
+      }
+    }
+
+    setCustomLots(prev => prev.map(l => {
+      if (selectedClerkingLotIds.has(l.id)) {
+        if (action === 'sold') {
+          return { ...l, status: 'sold', hammerPrice: l.currentBid || l.startingBid || 100 };
+        } else if (action === 'passed') {
+          return { ...l, status: 'passed', hammerPrice: 0 };
+        } else if (action === 'reopen') {
+          return { ...l, status: 'upcoming', hammerPrice: 0, highBidderPaddle: undefined };
+        }
+      }
+      return l;
+    }));
+
+    setSelectedClerkingLotIds(new Set());
+    showToast('success', 'Batch Update Complete', `Updated ${ids.length} lot(s) to ${action}.`);
+  };
+
+  // Open Clerking Drawer
+  const handleOpenClerkingDrawer = (mode: 'edit' | 'view', lot: LotItem) => {
+    setDrawerClerkLotId(lot.id);
+    setDrawerClerkLotNum(String(lot.lotNumber));
+    setDrawerClerkSeller(lot.consignorName || (lot as any).sellerName || (lot as any).consignor_name || '');
+    setDrawerClerkTitle(lot.title);
+    setDrawerClerkHammerPrice(String(lot.hammerPrice || lot.currentBid || ''));
+    setDrawerClerkBidder(lot.highBidderPaddle || (lot as any).soldToBidderId || '');
+    setDrawerClerkStatus(lot.status === 'sold' ? 'Sold' : lot.status === 'passed' ? 'Passed' : 'Pending');
+    setDrawerClerkQuantity(1);
+    setDrawerClerkXMoney(false);
+    setClerkingDrawer({ isOpen: true, mode, lot });
+  };
+
+  // Save Clerking Drawer
+  const handleSaveDrawerClerking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auction || !drawerClerkLotId) return;
+
+    setIsSavingDrawerClerking(true);
+    try {
+      const isSold = drawerClerkStatus === 'Sold';
+      const isPassed = drawerClerkStatus === 'Passed';
+      const price = isSold ? parseFloat(drawerClerkHammerPrice) || 0 : 0;
+      const paddle = isSold ? drawerClerkBidder.trim() : null;
+
+      await lotsService.updateLot(drawerClerkLotId, {
+        status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
+        hammerPrice: price,
+        currentBid: isSold ? price : undefined,
+        highBidderPaddle: paddle || undefined,
+        consignorName: drawerClerkSeller.trim() || undefined
+      });
+
+      setCustomLots(prev => prev.map(l => {
+        if (l.id === drawerClerkLotId) {
+          return {
+            ...l,
+            status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
+            hammerPrice: price,
+            currentBid: isSold ? price : l.startingBid,
+            highBidderPaddle: paddle || undefined,
+            consignorName: drawerClerkSeller.trim() || l.consignorName
+          };
+        }
+        return l;
+      }));
+
+      showToast('success', 'Clerking Updated', `Updated clerking record for Lot #${drawerClerkLotNum}.`);
+      setClerkingDrawer({ isOpen: false, mode: 'view' });
+    } catch (_) {
+      showToast('error', 'Error', 'Failed to update clerking record in Supabase.');
+    } finally {
+      setIsSavingDrawerClerking(false);
+    }
+  };
+
+  if (!auction) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center', background: '#ffffff', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+        <AlertCircle size={36} color="var(--gold-primary)" style={{ margin: '0 auto 12px' }} />
+        <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0 }}>No Auction Loaded</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Select an auction to view Auction Day console.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -3788,18 +4156,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       })()}
 
       {/* =========================================================================
-          SUB-TAB 3: CLERKING (Embedded Rostrum Controls + Launch Fullscreen)
+          SUB-TAB 3: CLERKING (Authentic AF360 Live Saleroom Clerking Console)
           ========================================================================= */}
       {currentTab === 'clerking' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Top Bar with Launch Full Rostrum Button */}
-          <div className="card-luxury" style={{ padding: '14px 20px', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          {/* Header Bar with Action to launch full Rostrum */}
+          <div className="card-luxury" style={{ padding: '14px 20px', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
                 Live Clerking Desk
               </h3>
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Active Lot: #{currentBlockLot?.lotNumber} — {currentBlockLot?.title}
+                Active Lot #{selectedClerkLot?.lotNumber || clerkLotNumber} — {selectedClerkLot?.title || 'Saleroom Lot'}
               </p>
             </div>
 
@@ -3808,303 +4176,614 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 type="button" 
                 className="btn btn-gold"
                 onClick={onNavigateClerking}
-                style={{ fontSize: 13, padding: '8px 18px' }}
+                style={{ fontSize: 13, padding: '8px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                title="Launch full-screen Rostrum view"
               >
                 <Radio size={15} />
-                <span>Launch Full-Screen Rostrum View</span>
+                <span>Auctioneer Screen</span>
               </button>
             </div>
           </div>
 
-          {/* Interactive In-Tab Rostrum Console */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 320px) 1fr minmax(260px, 300px)', gap: 16 }}>
-            {/* Left: Lots Queue */}
-            <div className="card-luxury" style={{ padding: 14, background: '#ffffff', maxHeight: 560, overflowY: 'auto' }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
-                Auction Lots ({auctionLots.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {auctionLots.map(lot => {
-                  const isSelected = lot.id === currentBlockLot?.id;
-                  return (
-                    <div
-                      key={lot.id}
-                      onClick={() => {
-                        setActiveClerkLotId(lot.id);
-                        if (onSelectLot) onSelectLot(lot.id);
-                      }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        border: isSelected ? '1.5px solid var(--gold-primary)' : '1px solid var(--border-subtle)',
-                        background: isSelected ? '#fefce8' : '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ width: 36, height: 36, borderRadius: 4, overflow: 'hidden', background: '#f8fafc', flexShrink: 0 }}>
-                        <img src={lot.image || '/assets/gold-coin.jpg'} alt={lot.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--gold-dark, #9a741e)' }}>
-                            #{lot.lotNumber}
-                          </span>
-                          <span style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: '1px 6px',
-                            borderRadius: 10,
-                            background: lot.status === 'sold' ? '#dcfce7' : lot.status === 'on_block' ? '#fef3c7' : '#f1f5f9',
-                            color: lot.status === 'sold' ? '#15803d' : lot.status === 'on_block' ? '#92400e' : '#64748b'
-                          }}>
-                            {lot.status}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {lot.title}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                          Bid: {formatCurrency(lot.currentBid || lot.startingBid)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Center: Live Bidding Controls on Active Lot */}
-            <div className="card-luxury" style={{ padding: 20, background: '#ffffff', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {currentBlockLot ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 14 }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--gold-primary)' }}>
-                          Lot #{currentBlockLot.lotNumber}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569' }}>
-                          {currentBlockLot.category}
-                        </span>
-                      </div>
-                      <h3 className="font-serif" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-main)', margin: '4px 0 0' }}>
-                        {currentBlockLot.title}
-                      </h3>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                        Estimate: {formatCurrency(currentBlockLot.estimateLow)} – {formatCurrency(currentBlockLot.estimateHigh)}
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700, letterSpacing: '0.05em' }}>
-                        Current High Bid
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 800, color: '#059669', lineHeight: 1.1 }}>
-                        {formatCurrency(currentBlockLot.currentBid || currentBlockLot.startingBid)}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 2 }}>
-                        High Bidder: Paddle #{currentBlockLot.highBidderPaddle || '104'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Increment Quick Bids */}
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>
-                      Quick Increment Bid {isAuctionClosed && <span style={{ color: '#b91c1c', fontWeight: 600 }}>(Disabled: Auction Closed)</span>}
-                    </label>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {[50, 100, 250, 500, 1000].map(inc => {
-                        const targetBid = (currentBlockLot.currentBid || currentBlockLot.startingBid) + inc;
-                        return (
-                          <button
-                            key={inc}
-                            type="button"
-                            disabled={isAuctionClosed}
-                            className="btn btn-secondary"
-                            onClick={() => {
-                              if (onPlaceBid) onPlaceBid(targetBid, clerkingPaddle, `Bidder #${clerkingPaddle}`, clerkingSource);
-                              playGavelSound();
-                              showToast('success', 'Bid Placed', `Bid advanced to ${formatCurrency(targetBid)}.`);
-                            }}
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 12.5,
-                              fontWeight: 700,
-                              padding: '8px 14px',
-                              opacity: isAuctionClosed ? 0.5 : 1,
-                              cursor: isAuctionClosed ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            +{formatCurrency(inc)} ({formatCurrency(targetBid)})
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Bidder & Source Selector */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        Bidder Paddle #
-                      </label>
-                      <input
-                        type="text"
-                        disabled={isAuctionClosed}
-                        value={clerkingPaddle}
-                        onChange={(e) => setClerkingPaddle(e.target.value)}
-                        className="catalog-search-input"
-                        style={{ width: '100%', height: 36, fontFamily: 'var(--font-mono)', fontWeight: 700 }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        Bid Channel / Source
-                      </label>
-                      <ShadcnSelect
-                        disabled={isAuctionClosed}
-                        value={clerkingSource}
-                        onChange={(val) => setClerkingSource(val as any)}
-                        size="md"
-                        options={[
-                          { value: 'Floor', label: 'Floor Saleroom' },
-                          { value: 'HiBid', label: 'HiBid Online Simulcast' },
-                          { value: 'Phone', label: 'Phone Clerk Line' },
-                          { value: 'Absentee', label: 'Absentee Left Book' }
-                        ]}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Rostrum Gavel Actions */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, marginTop: 'auto', paddingTop: 10 }}>
-                    <button
-                      type="button"
-                      disabled={isAuctionClosed}
-                      className="btn btn-gold"
-                      onClick={() => {
-                        if (onHammerSold) {
-                          onHammerSold(currentBlockLot.id, currentBlockLot.currentBid || currentBlockLot.startingBid, clerkingPaddle);
-                          playGavelSound();
-                          showToast('success', 'Gavel Knock: SOLD', `Lot #${currentBlockLot.lotNumber} SOLD for ${formatCurrency(currentBlockLot.currentBid || currentBlockLot.startingBid)} to Paddle #${clerkingPaddle}!`);
-                        }
-                      }}
-                      style={{
-                        padding: '12px 16px',
-                        fontSize: 14,
-                        fontWeight: 700,
-                        opacity: isAuctionClosed ? 0.5 : 1,
-                        cursor: isAuctionClosed ? 'not-allowed' : 'pointer'
-                      }}
-                      title={isAuctionClosed ? "Auction is closed. Gavel actions locked." : undefined}
-                    >
-                      <Gavel size={18} />
-                      <span>HAMMER DOWN / SOLD</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isAuctionClosed}
-                      className="btn btn-secondary"
-                      onClick={() => {
-                        if (onPassLot) {
-                          onPassLot(currentBlockLot.id, 'Reserve Not Met');
-                          playGavelSound();
-                          showToast('info', 'Passed', `Lot #${currentBlockLot.lotNumber} marked passed.`);
-                        }
-                      }}
-                      style={{
-                        padding: '12px 14px',
-                        fontSize: 13,
-                        opacity: isAuctionClosed ? 0.5 : 1,
-                        cursor: isAuctionClosed ? 'not-allowed' : 'pointer'
-                      }}
-                      title={isAuctionClosed ? "Auction is closed. Pass action locked." : undefined}
-                    >
-                      <span>Pass Lot</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => {
-                        if (onNextLot) onNextLot();
-                      }}
-                      style={{ padding: '12px 14px', fontSize: 13 }}
-                    >
-                      <span>Next Lot →</span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                  No active lot selected.
+          {/* Reserve & Pre-Sale Summary Card */}
+          <div className="card-luxury" style={{ padding: '16px 20px', background: '#ffffff' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
+                  Reserve (Each)
+                </span>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-main)', marginTop: 4 }}>
+                  {selectedClerkLot?.reserve && Number(selectedClerkLot.reserve) > 0 ? formatCurrency(selectedClerkLot.reserve) : '--'}
                 </div>
-              )}
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
+                  Total Reserve
+                </span>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-main)', marginTop: 4 }}>
+                  {selectedClerkLot?.reserve && Number(selectedClerkLot.reserve) > 0 ? formatCurrency(Number(selectedClerkLot.reserve) * (clerkQuantity || 1)) : '--'}
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
+                  Pre-Sale Estimate (Each)
+                </span>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--gold-dark, #9a741e)', marginTop: 4 }}>
+                  {selectedClerkLot ? `${formatCurrency(selectedClerkLot.estimateLow)} – ${formatCurrency(selectedClerkLot.estimateHigh)}` : '--'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Clerking Entry Form Card */}
+          <div className="card-luxury" style={{ padding: 20, background: '#ffffff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid #e2e8f0', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Gavel size={18} color="var(--gold-primary, #cba135)" />
+                <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  Clerking Entry
+                </h4>
+              </div>
+
+              {/* Clerking Assist Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#475569' }}>
+                  Clerking Assist
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setClerkingAssist(!clerkingAssist)}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: clerkingAssist ? '#16a34a' : '#cbd5e1',
+                    border: 'none',
+                    padding: 2,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s ease',
+                    position: 'relative'
+                  }}
+                  title="Auto-advance to next lot after saving"
+                  aria-label="Toggle Clerking Assist"
+                >
+                  <div style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    transform: clerkingAssist ? 'translateX(20px)' : 'translateX(0)',
+                    transition: 'transform 0.2s ease',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                </button>
+              </div>
             </div>
 
-            {/* Right: Bids Feed */}
-            <div className="card-luxury" style={{ padding: 14, background: '#ffffff', maxHeight: 560, overflowY: 'auto' }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
-                Recent Bids Feed
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {bids.slice(0, 10).map((b, i) => (
-                  <div key={b.id || i} style={{ padding: '8px 10px', borderRadius: 6, background: '#f8fafc', border: '1px solid var(--border-subtle)', fontSize: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--gold-dark, #9a741e)' }}>
-                        {formatCurrency(b.amount)}
-                      </span>
-                      <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600 }}>
-                        {b.source}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>
-                      <span>Paddle #{b.paddleNumber}</span>
-                      <span>{b.timestamp}</span>
-                    </div>
-                  </div>
-                ))}
-                {bids.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-dim)', fontSize: 12 }}>
-                    No bids registered yet this session.
-                  </div>
-                )}
+            {/* Entry Fields */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+              {/* Lot Number */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Lot Number *
+                </label>
+                <input
+                  type="number"
+                  disabled={isAuctionClosed}
+                  value={clerkLotNumber}
+                  onChange={(e) => setClerkLotNumber(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                  placeholder="e.g. 1"
+                />
               </div>
+
+              {/* Seller */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Seller *
+                </label>
+                <ShadcnSelect
+                  disabled={isAuctionClosed}
+                  value={clerkSeller}
+                  onChange={(val) => setClerkSeller(val)}
+                  size="md"
+                  options={uniqueSellersList.length > 0 ? uniqueSellersList : [{ value: 'Consignor #101', label: 'Consignor #101' }]}
+                />
+              </div>
+
+              {/* Title */}
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Title
+                </label>
+                <input
+                  type="text"
+                  disabled={isAuctionClosed}
+                  value={clerkTitle}
+                  onChange={(e) => setClerkTitle(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 38, fontSize: 13 }}
+                  placeholder="Item lead / title"
+                />
+              </div>
+
+              {/* Hammer Price with X Money */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    Hammer Price ($)
+                  </label>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#475569', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={clerkXMoney}
+                      onChange={(e) => setClerkXMoney(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>x money</span>
+                  </label>
+                </div>
+                <input
+                  type="number"
+                  step="10"
+                  disabled={isAuctionClosed}
+                  value={clerkHammerPrice}
+                  onChange={(e) => setClerkHammerPrice(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 15, color: '#15803d' }}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Bidder Number with validation helper */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Bidder Number
+                </label>
+                <input
+                  type="text"
+                  disabled={isAuctionClosed}
+                  value={clerkBidderNumber}
+                  onChange={(e) => setClerkBidderNumber(e.target.value)}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                  placeholder="e.g. 104"
+                />
+                <div style={{ marginTop: 4, minHeight: 18 }}>
+                  {bidderValidationStatus ? (
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: bidderValidationStatus.bg,
+                      color: bidderValidationStatus.color,
+                      display: 'inline-block'
+                    }}>
+                      {bidderValidationStatus.text}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Enter paddle number</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  disabled={isAuctionClosed}
+                  value={clerkQuantity}
+                  onChange={(e) => setClerkQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="catalog-search-input"
+                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Status
+                </label>
+                <ShadcnSelect
+                  disabled={isAuctionClosed}
+                  value={clerkStatus}
+                  onChange={(val) => setClerkStatus(val)}
+                  size="md"
+                  options={[
+                    { value: 'Sold', label: 'Sold' },
+                    { value: 'Passed', label: 'Passed' },
+                    { value: 'Pending', label: 'Pending' },
+                    { value: 'Withdrawn', label: 'Withdrawn' }
+                  ]}
+                />
+              </div>
+            </div>
+
+            {/* Save Button Row */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+              <button
+                type="button"
+                disabled={isClerkingSaving || isAuctionClosed}
+                onClick={handleSaveClerking}
+                className="btn btn-gold"
+                style={{
+                  height: 40,
+                  padding: '0 28px',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  letterSpacing: '0.04em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  opacity: isAuctionClosed ? 0.5 : 1,
+                  cursor: isAuctionClosed ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <Gavel size={16} />
+                <span>{isClerkingSaving ? 'SAVING...' : 'SAVE'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Clerking Records Table Section */}
+          <div className="card-luxury" style={{ padding: 20, background: '#ffffff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+              {/* Batch Action Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ShadcnDropdownMenu
+                  trigger={
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: 12.5, fontWeight: 600, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <span>{selectedClerkingLotIds.size > 0 ? `${selectedClerkingLotIds.size} Selected` : 'No Clerkings Selected'}</span>
+                      <ChevronDown size={14} />
+                    </button>
+                  }
+                  items={[
+                    {
+                      label: 'Mark Selected as Sold',
+                      onClick: () => handleBatchClerkingAction('sold'),
+                      disabled: selectedClerkingLotIds.size === 0
+                    },
+                    {
+                      label: 'Mark Selected as Passed',
+                      onClick: () => handleBatchClerkingAction('passed'),
+                      disabled: selectedClerkingLotIds.size === 0
+                    },
+                    {
+                      label: 'Reopen Selected Lots',
+                      onClick: () => handleBatchClerkingAction('reopen'),
+                      disabled: selectedClerkingLotIds.size === 0
+                    }
+                  ]}
+                />
+              </div>
+
+              {/* Search with gear configuration icon */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="catalog-search-wrapper" style={{ width: 240 }}>
+                  <Search size={14} className="catalog-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search clerked lots..."
+                    value={clerkingSearch}
+                    onChange={(e) => {
+                      setClerkingSearch(e.target.value);
+                      setClerkingPage(1);
+                    }}
+                    className="catalog-search-input"
+                    style={{ height: 34, fontSize: 12.5 }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  title="Table column settings"
+                  style={{ height: 34, padding: '0 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Settings size={15} color="#64748b" />
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="catalog-table-scroll" style={{ border: '1px solid var(--border-subtle)', borderRadius: 6 }}>
+              <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 44, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={filteredClerkingLots.length > 0 && selectedClerkingLotIds.size === filteredClerkingLots.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClerkingLotIds(new Set(filteredClerkingLots.map(l => l.id)));
+                          } else {
+                            setSelectedClerkingLotIds(new Set());
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        aria-label="Select all clerkings"
+                      />
+                    </th>
+                    <th style={{ width: 95 }}>LOT NUMBER</th>
+                    <th style={{ width: 140 }}>SELLER</th>
+                    <th style={{ minWidth: 200 }}>TITLE</th>
+                    <th style={{ width: 130, textAlign: 'right' }}>HAMMER PRICE</th>
+                    <th style={{ width: 85, textAlign: 'center' }}>X MONEY</th>
+                    <th style={{ width: 110, textAlign: 'center' }}>BIDDER NUMBER</th>
+                    <th style={{ width: 85, textAlign: 'center' }}>QUANTITY</th>
+                    <th style={{ width: 100, textAlign: 'center' }}>STATUS</th>
+                    <th style={{ width: 110, textAlign: 'center' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const clerkStartIndex = (clerkingPage - 1) * clerkingPageSize;
+                    const pageSlice = filteredClerkingLots.slice(clerkStartIndex, clerkStartIndex + clerkingPageSize);
+
+                    if (pageSlice.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={10} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
+                            No items to display.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return pageSlice.map(lot => {
+                      const isSelected = selectedClerkingLotIds.has(lot.id);
+                      const isSold = lot.status === 'sold';
+                      const isPassed = lot.status === 'passed';
+                      const sellerName = lot.consignorName || (lot as any).sellerName || (lot as any).consignor_name || '—';
+                      const hammerVal = isSold ? (lot.hammerPrice || lot.currentBid || 0) : null;
+                      const paddleNum = lot.highBidderPaddle || (lot as any).soldToBidderId || (isSold ? '101' : null);
+
+                      return (
+                        <tr
+                          key={lot.id}
+                          style={{
+                            background: isSelected ? 'rgba(203, 161, 53, 0.08)' : undefined,
+                            transition: 'background 0.15s ease'
+                          }}
+                        >
+                          <td style={{ textAlign: 'center', padding: '10px 8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                const next = new Set(selectedClerkingLotIds);
+                                if (next.has(lot.id)) next.delete(lot.id);
+                                else next.add(lot.id);
+                                setSelectedClerkingLotIds(next);
+                              }}
+                              style={{ cursor: 'pointer' }}
+                              aria-label={`Select Lot #${lot.lotNumber}`}
+                            />
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-dark, #9a741e)' }}>
+                            #{lot.lotNumber}
+                          </td>
+                          <td style={{ color: '#475569', fontWeight: 500 }}>
+                            {sellerName}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>
+                              {lot.title}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: isSold ? '#15803d' : '#94a3b8' }}>
+                            {hammerVal !== null ? formatCurrency(hammerVal) : '—'}
+                          </td>
+                          <td style={{ textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                            {clerkXMoney ? 'Yes' : 'No'}
+                          </td>
+                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                            {paddleNum ? `#${paddleNum}` : '—'}
+                          </td>
+                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+                            1
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: isSold ? '#dcfce7' : isPassed ? '#fee2e2' : lot.status === 'on_block' ? '#fef3c7' : '#f1f5f9',
+                              color: isSold ? '#15803d' : isPassed ? '#b91c1c' : lot.status === 'on_block' ? '#92400e' : '#64748b'
+                            }}>
+                              {isSold ? 'Sold' : isPassed ? 'Passed' : lot.status === 'on_block' ? 'On Block' : 'Upcoming'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <TableRowActionMenu
+                              actions={[
+                                {
+                                  label: 'View Details',
+                                  icon: <Eye size={14} />,
+                                  onClick: () => handleOpenClerkingDrawer('view', lot)
+                                },
+                                {
+                                  label: 'Edit Clerking',
+                                  icon: <Edit size={14} />,
+                                  onClick: () => handleOpenClerkingDrawer('edit', lot)
+                                },
+                                ...(isSold || isPassed ? [
+                                  {
+                                    label: 'Reopen Lot',
+                                    icon: <RotateCcw size={14} />,
+                                    onClick: () => handleReopenClerkedLot(lot.id)
+                                  }
+                                ] : []),
+                                ...(!isPassed && !isSold ? [
+                                  {
+                                    label: 'Mark as Passed',
+                                    icon: <AlertCircle size={14} />,
+                                    onClick: () => {
+                                      if (onPassLot) onPassLot(lot.id, 'Reserve Not Met');
+                                      setCustomLots(prev => prev.map(l => l.id === lot.id ? { ...l, status: 'passed', hammerPrice: 0 } : l));
+                                      showToast('info', 'Passed', `Lot #${lot.lotNumber} marked as Passed.`);
+                                    }
+                                  }
+                                ] : [])
+                              ]}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {filteredClerkingLots.length > 0 && (
+              <ShadcnPagination
+                currentPage={clerkingPage}
+                pageSize={clerkingPageSize}
+                totalItems={filteredClerkingLots.length}
+                onPageChange={setClerkingPage}
+                onPageSizeChange={(newSize) => {
+                  setClerkingPageSize(newSize);
+                  setClerkingPage(1);
+                }}
+              />
+            )}
+
+            {/* Expandable Bottom Clerking Stats Drawer */}
+            <div style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setIsClerkingStatsExpanded(!isClerkingStatsExpanded)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: 'var(--text-main)',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                {isClerkingStatsExpanded ? (
+                  <>
+                    <ChevronDown size={16} style={{ transform: 'rotate(180deg)' }} />
+                    <span>Hide Clerking Stats</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={16} />
+                    <span>Show Clerking Stats</span>
+                  </>
+                )}
+              </button>
+
+              {isClerkingStatsExpanded && (() => {
+                const clerkedLots = auctionLots.filter(l => l.status === 'sold' || l.status === 'passed');
+                const soldCount = auctionLots.filter(l => l.status === 'sold').length;
+                const passedCount = auctionLots.filter(l => l.status === 'passed').length;
+                const totalRealized = auctionLots.filter(l => l.status === 'sold').reduce((sum, l) => sum + (Number(l.hammerPrice) || Number(l.currentBid) || 0), 0);
+                const clearanceRate = clerkedLots.length > 0 ? Math.round((soldCount / clerkedLots.length) * 100) : 0;
+
+                return (
+                  <div style={{
+                    marginTop: 10,
+                    padding: 16,
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 6,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 14
+                  }}>
+                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Total Clerkings</span>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-main)', marginTop: 2 }}>
+                        {clerkedLots.length}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#f0fdf4', padding: '10px 14px', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#166534' }}>Total Realization</span>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#15803d', marginTop: 2 }}>
+                        {formatCurrency(totalRealized)}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Lots Sold</span>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#15803d', marginTop: 2 }}>
+                        {soldCount}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Lots Passed</span>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#b91c1c', marginTop: 2 }}>
+                        {passedCount}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Clearance Rate</span>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--gold-dark, #9a741e)', marginTop: 2 }}>
+                        {clearanceRate}%
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          SUB-TAB 4: ALTERNATE BIDS (Exact Visual Match to Screenshot 1 + Full Workflow)
+          SUB-TAB 4: ALTERNATE BIDS (Exact Visual Match to AF360 Reference)
           ========================================================================= */}
       {currentTab === 'alternate-bids' && (
         <div className="card-luxury" style={{ padding: 20, background: '#ffffff' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h3 className="font-serif" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                Alternate Bids (Phone / Absentee / Floor)
+                Alternate Bids
               </h3>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Pre-recorded order bids, clerk phone instructions, and left books
+                Pre-recorded order bids, phone clerk bids, and absentee left books
               </p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div className="catalog-search-wrapper" style={{ width: 200 }}>
+              <div className="catalog-search-wrapper" style={{ width: 220 }}>
                 <Search size={14} className="catalog-search-icon" />
                 <input 
                   type="text" 
                   placeholder="Search lot, bidder..."
                   value={altBidSearch}
-                  onChange={(e) => setAltBidSearch(e.target.value)}
+                  onChange={(e) => {
+                    setAltBidSearch(e.target.value);
+                    setAltBidsPage(1);
+                  }}
                   className="catalog-search-input"
                   style={{ height: 34, fontSize: 12.5 }}
                 />
@@ -4112,7 +4791,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
               <ShadcnSelect
                 value={altBidTypeFilter}
-                onChange={(val) => setAltBidTypeFilter(val)}
+                onChange={(val) => {
+                  setAltBidTypeFilter(val);
+                  setAltBidsPage(1);
+                }}
                 size="sm"
                 className="w-32"
                 options={[
@@ -4125,7 +4807,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
               <ShadcnSelect
                 value={altBidStatusFilter}
-                onChange={(val) => setAltBidStatusFilter(val)}
+                onChange={(val) => {
+                  setAltBidStatusFilter(val);
+                  setAltBidsPage(1);
+                }}
                 size="sm"
                 className="w-36"
                 options={[
@@ -4137,15 +4822,28 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 ]}
               />
 
-              {/* + + Add Bid button styled exactly like Screenshot 1 */}
+              {/* Import Alternate Bids button */}
+              <button
+                type="button"
+                onClick={() => {
+                  showToast('info', 'Import Alternate Bids', 'Alternate Bids CSV/Excel import template ready.');
+                  setIsAltBidModalOpen(true);
+                }}
+                className="btn btn-secondary"
+                style={{ fontSize: 12.5, fontWeight: 600, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                title="Import alternate bids"
+              >
+                <Download size={14} style={{ transform: 'rotate(180deg)' }} />
+                <span>Import Alternate Bids</span>
+              </button>
+
+              {/* Add Alternate Bids button */}
               <button 
                 type="button" 
                 disabled={isAuctionClosed}
                 onClick={() => handleOpenAltBidDrawer('add')}
+                className="btn btn-gold"
                 style={{
-                  background: isAuctionClosed ? '#94a3b8' : '#151922',
-                  color: isAuctionClosed ? '#f8fafc' : 'var(--gold-bright, #dfb74a)',
-                  border: isAuctionClosed ? 'none' : '1px solid rgba(203, 161, 53, 0.4)',
                   padding: '7px 16px',
                   borderRadius: 6,
                   fontSize: 13,
@@ -4153,14 +4851,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   cursor: isAuctionClosed ? 'not-allowed' : 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                  gap: 6
                 }}
                 id="btn-add-alternate-bid"
                 title={isAuctionClosed ? "Auction is closed. Order bids locked." : "Record new alternate order bid"}
               >
-                <span style={{ fontSize: 14 }}>+ +</span>
-                <span>Add Bid</span>
+                <Plus size={15} />
+                <span>Add Alternate Bids</span>
               </button>
             </div>
           </div>
@@ -4169,15 +4866,16 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 90 }}>LOT NUMBER</th>
-                  <th style={{ minWidth: 200 }}>LOT DESCRIPTION</th>
+                  <th style={{ width: 110 }}>BIDDER NUMBER</th>
+                  <th style={{ width: 95 }}>LOT NUMBER</th>
                   <th style={{ minWidth: 160 }}>BIDDER NAME</th>
-                  <th style={{ width: 90 }}>PADDLE #</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>BID AMOUNT</th>
-                  <th style={{ width: 110, textAlign: 'center' }}>BID TYPE</th>
+                  <th style={{ minWidth: 200 }}>LOT LEAD</th>
+                  <th style={{ width: 85, textAlign: 'center' }}>QUANTITY</th>
+                  <th style={{ width: 120, textAlign: 'right' }}>MAX BID</th>
+                  <th style={{ width: 95, textAlign: 'center' }}>X THE MONEY</th>
+                  <th style={{ width: 130, textAlign: 'right' }}>MAX BID TOTAL</th>
                   <th style={{ width: 100, textAlign: 'center' }}>STATUS</th>
-                  <th style={{ width: 130 }}>CREATED DATE</th>
-                  <th style={{ width: 150, textAlign: 'center' }}>ACTIONS</th>
+                  <th style={{ width: 110, textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -4185,15 +4883,31 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   const altStartIndex = (altBidsPage - 1) * altBidsPageSize;
                   const pageSlice = filteredAlternateBids.slice(altStartIndex, altStartIndex + altBidsPageSize);
 
+                  if (pageSlice.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={10} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
+                          No items to display.
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return pageSlice.map(bid => {
                     const targetLot = auctionLots.find(l => l.lotNumber === bid.lotNumber);
                     const displayDesc = bid.lotDescription || targetLot?.title || `Catalog Lot #${bid.lotNumber}`;
-                    const createdStr = bid.createdAt ? formatDate(bid.createdAt) : 'Oct 22, 2026';
+                    const maxVal = bid.maxAmount || bid.amount || 0;
 
                     return (
                       <tr key={bid.id}>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>
+                          #{bid.paddleNumber}
+                        </td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-dark, #9a741e)' }}>
                           #{bid.lotNumber}
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                          {bid.bidderName}
                         </td>
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>
@@ -4205,29 +4919,17 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                             </div>
                           )}
                         </td>
-                        <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>{bid.bidderName}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>#{bid.paddleNumber}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#059669' }}>
-                            {formatCurrency(bid.amount)}
-                          </div>
-                          {bid.maxAmount && bid.maxAmount > bid.amount && (
-                            <div style={{ fontSize: 11, color: 'var(--gold-dark, #9a741e)', fontFamily: 'var(--font-mono)' }}>
-                              Max: {formatCurrency(bid.maxAmount)}
-                            </div>
-                          )}
+                        <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+                          1
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            borderRadius: 4, 
-                            fontSize: 11, 
-                            fontWeight: 700,
-                            background: bid.bidType === 'Phone' ? '#eff6ff' : bid.bidType === 'Absentee' ? '#fef3c7' : '#f1f5f9',
-                            color: bid.bidType === 'Phone' ? '#1d4ed8' : bid.bidType === 'Absentee' ? '#92400e' : '#334155'
-                          }}>
-                            {bid.bidType}
-                          </span>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#059669' }}>
+                          {formatCurrency(maxVal)}
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                          No
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)' }}>
+                          {formatCurrency(maxVal * 1)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span style={{ 
@@ -4241,23 +4943,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                             {bid.status}
                           </span>
                         </td>
-                        <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                          {createdStr}
-                        </td>
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            {bid.status === 'Active' && !isAuctionClosed && (
-                              <button
-                                type="button"
-                                onClick={() => handleExecuteAltBid(bid)}
-                                className="btn btn-secondary"
-                                style={{ fontSize: 11.5, padding: '3px 8px', background: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0' }}
-                                title="Execute on live rostrum"
-                              >
-                                Execute
-                              </button>
-                            )}
-
                             <TableRowActionMenu
                               actions={[
                                 {
@@ -4296,14 +4983,6 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     );
                   });
                 })()}
-
-                {filteredAlternateBids.length === 0 && (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
-                      No alternate phone or absentee bids recorded.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
@@ -7687,6 +8366,108 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </div>
           </div>
         )}
+      </ShadcnSheet>
+
+      {/* =========================================================================
+          RIGHT-SIDE DRAWER 6: CLERKING RECORD (Edit / View Clerked Lot)
+          ========================================================================= */}
+      <ShadcnSheet
+        isOpen={clerkingDrawer.isOpen}
+        onClose={() => setClerkingDrawer({ isOpen: false, mode: 'view' })}
+        title={clerkingDrawer.mode === 'edit' ? `Edit Clerking Record — Lot #${drawerClerkLotNum}` : `Clerking Details — Lot #${drawerClerkLotNum}`}
+        description="Verify or adjust hammer price, successful bidder, and sale status in Supabase"
+        width={540}
+      >
+        <form onSubmit={handleSaveDrawerClerking} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+            <FormField label="Lot Number">
+              <input
+                type="text"
+                disabled
+                value={`#${drawerClerkLotNum}`}
+                className="catalog-search-input"
+                style={{ width: '100%', height: 38, background: '#f1f5f9', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+              />
+            </FormField>
+
+            <FormField label="Status *">
+              <ShadcnSelect
+                value={drawerClerkStatus}
+                onChange={(val) => setDrawerClerkStatus(val)}
+                options={[
+                  { value: 'Sold', label: 'Sold' },
+                  { value: 'Passed', label: 'Passed' },
+                  { value: 'Pending', label: 'Pending' },
+                  { value: 'Withdrawn', label: 'Withdrawn' }
+                ]}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Title">
+            <input
+              type="text"
+              value={drawerClerkTitle}
+              onChange={(e) => setDrawerClerkTitle(e.target.value)}
+              className="catalog-search-input"
+              style={{ width: '100%', height: 38, fontSize: 13 }}
+            />
+          </FormField>
+
+          <FormField label="Seller / Consignor">
+            <input
+              type="text"
+              value={drawerClerkSeller}
+              onChange={(e) => setDrawerClerkSeller(e.target.value)}
+              className="catalog-search-input"
+              style={{ width: '100%', height: 38, fontSize: 13 }}
+            />
+          </FormField>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+            <FormField label="Hammer Price ($)">
+              <input
+                type="number"
+                step="10"
+                value={drawerClerkHammerPrice}
+                onChange={(e) => setDrawerClerkHammerPrice(e.target.value)}
+                className="catalog-search-input"
+                style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#15803d' }}
+                placeholder="0.00"
+              />
+            </FormField>
+
+            <FormField label="Winning Bidder (Paddle #)">
+              <input
+                type="text"
+                value={drawerClerkBidder}
+                onChange={(e) => setDrawerClerkBidder(e.target.value)}
+                className="catalog-search-input"
+                style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+                placeholder="e.g. 104"
+              />
+            </FormField>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => setClerkingDrawer({ isOpen: false, mode: 'view' })}
+              className="btn btn-secondary"
+              style={{ height: 38, padding: '0 16px', fontSize: 13 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSavingDrawerClerking}
+              className="btn btn-gold"
+              style={{ height: 38, padding: '0 20px', fontSize: 13, fontWeight: 700 }}
+            >
+              {isSavingDrawerClerking ? 'Saving...' : 'Save Clerking Record'}
+            </button>
+          </div>
+        </form>
       </ShadcnSheet>
 
       {/* =========================================================================

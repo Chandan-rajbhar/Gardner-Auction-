@@ -138,9 +138,8 @@
    2. Main Two-Column Layout (Sidebar + Grid)
    ========================================================================== */
 .cap-main-catalog-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 32px;
+  display: block;
+  width: 100%;
 }
 
 /* ==========================================================================
@@ -284,12 +283,11 @@
    4. Right Column: Content Header & Grid
    ========================================================================== */
 .cap-catalog-content {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   background: #141517;
   border: 1px solid #282c35;
   border-radius: 14px;
-  padding: 24px 24px 20px 24px;
+  padding: 28px 28px 24px 28px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
@@ -299,37 +297,77 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #24272e;
 }
 
 .cap-content-title-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  max-width: 800px;
+}
+
+.cap-header-meta-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .cap-gold-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #dfba52;
 }
 
+.cap-session-status-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .cap-content-main-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 28px;
-  font-weight: 500;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 600;
   color: #ffffff;
   margin: 0;
   line-height: 1.2;
 }
 
+.cap-content-subtitle {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.cap-header-right-meta {
+  display: flex;
+  align-items: center;
+}
+
 .cap-lots-counter {
-  font-size: 13px;
-  color: #8e96a4;
+  font-size: 13.5px;
+  color: #94a3b8;
+  background: #1c1f26;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #2d313b;
+}
+
+.cap-lots-counter strong {
+  color: #dfba52;
 }
 
 /* Controls Bar (Filter Pills & Sort) */
@@ -599,8 +637,8 @@
 
 .cap-products-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
   width: 100%;
 }
 
@@ -772,7 +810,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.cap-card-bid-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #78716c;
 }
 
 .cap-card-cat-tag {
@@ -784,7 +830,7 @@
 }
 
 .cap-card-bid-val {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: #15171e;
 }
@@ -1167,6 +1213,28 @@
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 12px;
+}
+
+.cap-lot-seller-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(223, 186, 82, 0.12);
+  border: 1px solid rgba(223, 186, 82, 0.35);
+  color: #dfba52;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 9px;
+  border-radius: 12px;
+}
+
+.cap-lot-seller-badge strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.cap-seller-icon {
+  color: #dfba52;
 }
 
 .cap-shield-icon {
@@ -3413,3 +3481,2257 @@
     gap: 14px;
   }
 }
+
+/* ==========================================================================
+   MULTI-AUCTION OVERVIEW STYLING (Tarika 1: Multi-Auction Card Flow)
+   ========================================================================== */
+
+.cap-auctions-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.cap-auctions-overview-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cap-auctions-header-text {
+  flex: 1;
+  min-width: 280px;
+}
+
+.cap-auctions-header-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #dfba52;
+  margin-bottom: 8px;
+}
+
+.cap-auctions-header-title {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  line-height: 1.25;
+}
+
+.cap-auctions-header-sub {
+  font-size: 14.5px;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 680px;
+  line-height: 1.55;
+}
+
+/* Filter Pills Bar */
+.cap-auctions-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cap-auctions-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cap-auction-filter-pill {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #15171a;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cap-auction-filter-pill:hover {
+  background: rgba(223, 186, 82, 0.1);
+  color: #ffffff;
+  border-color: rgba(223, 186, 82, 0.35);
+}
+
+.cap-auction-filter-pill.active {
+  background: linear-gradient(135deg, rgba(223, 186, 82, 0.2) 0%, rgba(197, 155, 39, 0.28) 100%);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+.cap-auction-pill-badge {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cap-auction-filter-pill.active .cap-auction-pill-badge {
+  background: #dfba52;
+  color: #0c0d0e;
+}
+
+/* Multi-Auction Cards Grid */
+.cap-auctions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 26px;
+}
+
+@media (max-width: 440px) {
+  .cap-auctions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cap-auction-card {
+  background: #131518;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.cap-auction-card:hover {
+  border-color: rgba(223, 186, 82, 0.6);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(223, 186, 82, 0.25);
+}
+
+/* Media Banner */
+.cap-auction-card-media {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: #1c1f24;
+  cursor: pointer;
+}
+
+.cap-auction-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.cap-auction-card:hover .cap-auction-card-img {
+  transform: scale(1.04);
+}
+
+.cap-auction-media-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(19, 21, 24, 0.95) 0%, rgba(19, 21, 24, 0.25) 55%, rgba(0, 0, 0, 0.45) 100%);
+  pointer-events: none;
+}
+
+.cap-auction-card-badges {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 2;
+}
+
+.cap-status-pill-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+}
+
+.cap-status-pill-closing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(223, 186, 82, 0.92);
+  color: #0c0d0e;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.cap-status-pill-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.92);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.cap-pulse-dot-red {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation: pulse-dot 1.4s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.cap-auction-lots-pill {
+  background: rgba(12, 13, 14, 0.88);
+  border: 1px solid rgba(223, 186, 82, 0.35);
+  color: #dfba52;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  letter-spacing: 0.5px;
+}
+
+/* Card Body Content */
+.cap-auction-card-body {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.cap-auction-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cap-auction-card-code {
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #dfba52;
+  letter-spacing: 0.8px;
+}
+
+.cap-auction-card-category {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cap-auction-card-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.cap-auction-card-title:hover {
+  color: #f5cb50;
+}
+
+.cap-auction-card-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.55;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card Meta Details */
+.cap-auction-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 12.5px;
+  color: #cbd5e1;
+}
+
+.cap-meta-row-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cap-meta-ico {
+  color: #dfba52;
+  flex-shrink: 0;
+}
+
+/* Card Action Button */
+.cap-auction-card-footer {
+  padding: 0 22px 22px 22px;
+}
+
+.cap-btn-browse-catalog {
+  width: 100%;
+  height: 44px;
+  background: linear-gradient(135deg, #dfba52 0%, #c59b27 100%);
+  color: #0c0d0e;
+  border: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.3px;
+}
+
+.cap-btn-browse-catalog:hover {
+  background: linear-gradient(135deg, #f5cb50 0%, #dfba52 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(223, 186, 82, 0.4);
+}
+
+/* Top Breadcrumb Bar when viewing an Auction's Catalog */
+.cap-catalog-breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #131518;
+  border: 1px solid rgba(223, 186, 82, 0.3);
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.cap-breadcrumb-back-btn {
+  background: none;
+  border: none;
+  color: #dfba52;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  transition: color 0.15s ease;
+}
+
+.cap-breadcrumb-back-btn:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.cap-breadcrumb-event-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.cap-breadcrumb-badge {
+  background: rgba(223, 186, 82, 0.18);
+  color: #dfba52;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+/* ==========================================================================
+   Current Auctions — Highlander / Past Catalogs UI Design Enhancements
+   ========================================================================== */
+.current-auctions-page {
+  background-color: var(--bg-page);
+  min-height: 85vh;
+  padding-bottom: 80px;
+}
+
+.auction-closed-flag.live-flag {
+  background: rgba(185, 28, 28, 0.94);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+}
+
+.auction-closed-flag.open-flag {
+  background: rgba(16, 90, 48, 0.94);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: #ffffff;
+}
+
+.auction-closed-flag.closing-flag {
+  background: rgba(180, 130, 20, 0.94);
+  border-color: rgba(223, 186, 82, 0.6);
+  color: #ffffff;
+}
+
+.auction-header-status-badge.live-badge {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.auction-header-status-badge.open-badge {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.45);
+}
+
+.auction-header-status-badge.closing-badge {
+  background-color: rgba(203, 161, 53, 0.2);
+  color: var(--gold-light);
+  border: 1px solid rgba(203, 161, 53, 0.45);
+}
+
+.attribute-badge.status-open-badge {
+  color: #151821;
+}
+
+.attribute-badge.status-open-badge .attr-icon {
+  color: #16a34a;
+}
+
+.attribute-badge.status-live-badge {
+  color: #151821;
+}
+
+.attribute-badge.status-live-badge .attr-icon {
+  color: #dc2626;
+}
+
+.attribute-badge.status-closing-badge {
+  color: #151821;
+}
+
+.attribute-badge.status-closing-badge .attr-icon {
+  color: #d97706;
+}
+
+.lot-live-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(12, 14, 20, 0.92) 100%);
+  padding: 8px 12px 6px;
+  color: var(--gold-light);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-view-lot-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #cba135 0%, #b88f28 100%);
+  color: #0c0e12;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 10px;
+}
+
+.btn-view-lot-gold:hover {
+  background: linear-gradient(135deg, #dfba52 0%, #cba135 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(203, 161, 53, 0.35);
+}
+
+.current-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 16px;
+  color: #64748b;
+}
+
+.g-dossier-loading-container,
+.current-loading-state {
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  padding: 40px;
+}
+
+.g-dossier-spinner-ring,
+.current-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(197, 160, 74, 0.2);
+  border-top-color: #c5a04a;
+  border-radius: 50%;
+  animation: gSpin 0.85s linear infinite;
+}
+
+@keyframes gSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Current Auctions Page: 3 Cards in a Row Grid Layout
+   ========================================================================== */
+.current-auctions-page .past-auctions-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 14px;
+}
+
+@media (max-width: 1140px) {
+  .current-auctions-page .past-auctions-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .current-auctions-page .past-auctions-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.current-auctions-page .past-auction-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.current-auctions-page .past-auction-card-header {
+  padding: 12px 16px;
+  gap: 10px;
+}
+
+.current-auctions-page .auction-card-main-title {
+  font-size: 16.5px;
+  line-height: 1.3;
+}
+
+.current-auctions-page .header-realized-tag {
+  font-size: 11.5px;
+  padding: 3px 9px;
+}
+
+.current-auctions-page .past-auction-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  flex: 1;
+}
+
+.current-auctions-page .auction-body-left {
+  width: 100%;
+}
+
+.current-auctions-page .auction-img-frame {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 200px;
+}
+
+.current-auctions-page .auction-share-btn {
+  padding: 6px 10px;
+  font-size: 11.5px;
+}
+
+.current-auctions-page .auction-body-center {
+  width: 100%;
+  gap: 8px;
+}
+
+.current-auctions-page .auction-company-name {
+  font-size: 15px;
+}
+
+.current-auctions-page .auction-location-row {
+  font-size: 12.5px;
+}
+
+.current-auctions-page .auction-dates-block {
+  padding: 6px 10px;
+}
+
+.current-auctions-page .auction-dates-line {
+  font-size: 12.5px;
+}
+
+.current-auctions-page .auction-schedule-line {
+  font-size: 12px;
+}
+
+.current-auctions-page .auction-desc-text {
+  font-size: 12.5px;
+}
+
+.current-auctions-page .auction-body-right {
+  width: 100%;
+  padding-left: 0;
+  border-left: none;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light-subtle, rgba(0, 0, 0, 0.07));
+  gap: 8px;
+}
+
+.current-auctions-page .attribute-badge {
+  font-size: 12.5px;
+}
+
+.current-auctions-page .lots-count-indicator {
+  margin-top: 2px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.current-auctions-page .past-auction-actions-bar {
+  margin-top: auto;
+  padding: 0 16px 16px;
+  gap: 8px;
+}
+
+.current-auctions-page .btn-auction-action {
+  height: 38px;
+  padding: 0 8px;
+  font-size: 12px;
+  gap: 5px;
+}
+
+.current-auctions-page .past-auction-notices-container {
+  padding: 0 16px 16px;
+  gap: 8px;
+}
+
+.current-auctions-page .card-notice-callout {
+  padding: 8px 10px;
+}
+
+.current-auctions-page .notice-content {
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   GARDNER AUCTION — REDESIGNED CATALOG LOTS & SPECIMEN MODAL
+   Navy (#0D111A), Warm Cream (#FAF7F0), and Radiant Gold (#DFBA52)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+/* ==========================================================================
+   APPROVED REFERENCE CURRENT & UPCOMING AUCTIONS PAGE
+   Matches reference image with dark navy hero, gavel photo background,
+   elegant gold accents, and clean off-white content toolbar.
+   ========================================================================== */
+
+.ref-auctions-page-root {
+  background-color: #f7f5ef;
+  min-height: 100vh;
+  color: #1e293b;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding-bottom: 80px;
+}
+
+/* 1. Hero Section */
+.ref-hero-section {
+  position: relative;
+  background-color: #0b0f19;
+  background-image: 
+    linear-gradient(90deg, rgba(8, 12, 20, 0.96) 0%, rgba(8, 12, 20, 0.88) 45%, rgba(8, 12, 20, 0.42) 75%, rgba(8, 12, 20, 0.78) 100%),
+    url('/images/current_auction_hero.jpg');
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
+  color: #faf7f0;
+  padding: 24px 0 56px 0;
+  border-bottom: 1px solid rgba(223, 186, 82, 0.18);
+}
+
+.ref-hero-top-nav {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.ref-btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(14, 18, 28, 0.82);
+  border: 1px solid rgba(223, 186, 82, 0.35);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f5f2ea;
+  text-decoration: none;
+  backdrop-filter: blur(6px);
+  transition: all 0.2s ease;
+}
+
+.ref-btn-back:hover {
+  background: rgba(223, 186, 82, 0.18);
+  border-color: #dfba52;
+  color: #dfba52;
+  transform: translateX(-2px);
+}
+
+.ref-hero-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.ref-hero-left {
+  flex: 1;
+  max-width: 680px;
+}
+
+.ref-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #dfba52;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.ref-eyebrow-line {
+  display: inline-block;
+  width: 22px;
+  height: 1.5px;
+  background-color: #dfba52;
+}
+
+.ref-hero-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(30px, 4.2vw, 46px);
+  font-weight: 600;
+  color: #faf7f0;
+  line-height: 1.15;
+  margin: 0 0 12px 0;
+  letter-spacing: 0.2px;
+}
+
+.ref-hero-subtitle {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #cbd0dc;
+  margin: 0;
+  max-width: 560px;
+}
+
+.ref-hero-right {
+  flex-shrink: 0;
+}
+
+.ref-hero-quote-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding-left: 28px;
+  border-left: 1px solid rgba(223, 186, 82, 0.3);
+}
+
+.ref-quote-bar {
+  display: block;
+  width: 28px;
+  height: 1.5px;
+  background-color: #dfba52;
+  margin-bottom: 10px;
+}
+
+.ref-quote-line {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #dfba52;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+/* 2. Floating Toolbar Section */
+.ref-toolbar-section {
+  position: relative;
+  z-index: 10;
+  margin-top: -30px;
+}
+
+.ref-toolbar-card {
+  background: #ffffff;
+  border: 1px solid #e2ddd2;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+  padding: 16px 20px;
+}
+
+.ref-toolbar-primary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ref-search-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d9d4c7;
+  border-radius: 8px;
+  height: 42px;
+  min-width: 260px;
+  flex: 1.4;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ref-search-form:focus-within {
+  border-color: #cba135;
+  box-shadow: 0 0 0 2px rgba(203, 161, 53, 0.2);
+}
+
+.ref-search-icon-left {
+  margin-left: 12px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.ref-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #1e293b;
+  min-width: 0;
+}
+
+.ref-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.ref-search-clear-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ref-search-clear-btn:hover {
+  color: #1e293b;
+}
+
+.ref-search-submit-btn {
+  width: 42px;
+  height: 42px;
+  background: #0f1422;
+  border: none;
+  color: #dfba52;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.ref-search-submit-btn:hover {
+  background: #1c2438;
+}
+
+.ref-select-col {
+  flex: 1;
+  min-width: 160px;
+}
+
+.ref-select-col.ref-catalog-col {
+  flex: 1.2;
+  min-width: 170px;
+}
+
+.ref-select-col .shadcn-select-trigger {
+  height: 42px !important;
+  background-color: #ffffff !important;
+  border: 1px solid #d9d4c7 !important;
+  border-radius: 8px !important;
+  color: #1e293b !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  padding: 0 12px !important;
+}
+
+.ref-select-col .shadcn-select-trigger:hover {
+  border-color: #cba135 !important;
+}
+
+.ref-select-col .shadcn-select-icon {
+  color: #64748b !important;
+}
+
+.ref-view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f7f5ef;
+  border: 1px solid #e2ddd2;
+  border-radius: 10px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.ref-toggle-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  border-radius: 8px;
+  padding: 0 14px;
+  height: 36px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #64748b;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.ref-toggle-tab.active {
+  background: #0f1422;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15, 20, 34, 0.2);
+}
+
+.ref-tab-icon {
+  color: inherit;
+}
+
+.ref-toggle-tab.active .ref-tab-icon {
+  color: #dfba52;
+}
+
+.ref-tab-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #e4dfd4;
+  color: #64748b;
+}
+
+.ref-toggle-tab.active .ref-tab-badge {
+  background: #dfba52;
+  color: #0f1422;
+}
+
+/* Secondary Row inside Card */
+.ref-toolbar-secondary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #f0ece3;
+}
+
+.ref-secondary-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ref-results-text {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.ref-results-text strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.ref-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f7f3e8;
+  border: 1px solid rgba(223, 186, 82, 0.45);
+  color: #856404;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 16px;
+}
+
+.ref-active-chip button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #856404;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.ref-reset-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.ref-reset-filters-btn:hover {
+  color: #0f172a;
+}
+
+.ref-secondary-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.ref-view-size-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ref-view-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #64748b;
+}
+
+.ref-page-size-select {
+  width: 125px;
+}
+
+.ref-page-size-select .shadcn-select-trigger {
+  height: 32px !important;
+  background-color: #ffffff !important;
+  border: 1px solid #d9d4c7 !important;
+  border-radius: 6px !important;
+  font-size: 12.5px !important;
+  color: #1e293b !important;
+  padding: 0 10px !important;
+}
+
+.ref-pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #d9d4c7;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.ref-page-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ref-page-btn:hover:not(:disabled) {
+  background: #f1eddf;
+  color: #0f1422;
+}
+
+.ref-page-btn:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.ref-page-indicator {
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ref-content-section {
+  padding: 30px 0 60px 0;
+}
+
+/* Responsive adjustments for Approved Reference Layout */
+@media (max-width: 1100px) {
+  .ref-toolbar-primary-row {
+    gap: 10px;
+  }
+  .ref-search-form {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .ref-hero-quote-box {
+    display: none;
+  }
+  .ref-hero-section {
+    padding: 20px 0 46px 0;
+  }
+  .ref-hero-title {
+    font-size: 32px;
+  }
+  .ref-hero-subtitle {
+    font-size: 14px;
+  }
+  .ref-toolbar-section {
+    margin-top: -24px;
+  }
+  .ref-select-col {
+    flex: 1 1 calc(33.333% - 8px);
+    min-width: 140px;
+  }
+  .ref-view-mode-toggle {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .ref-hero-section {
+    padding: 16px 0 40px 0;
+  }
+  .ref-hero-top-nav {
+    margin-bottom: 16px;
+  }
+  .ref-btn-back {
+    padding: 5px 12px;
+    font-size: 12.5px;
+  }
+  .ref-hero-title {
+    font-size: 26px;
+  }
+  .ref-toolbar-section {
+    margin-top: -20px;
+  }
+  .ref-toolbar-card {
+    padding: 14px;
+    border-radius: 10px;
+  }
+  .ref-select-col {
+    flex: 1 1 calc(50% - 6px);
+  }
+  .ref-select-col.ref-catalog-col {
+    flex: 1 1 calc(50% - 6px);
+  }
+  .ref-view-mode-toggle {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .ref-toggle-tab {
+    flex: 1;
+    justify-content: center;
+  }
+  .ref-toolbar-secondary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .ref-secondary-right {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .ref-hero-title {
+    font-size: 22px;
+  }
+  .ref-hero-subtitle {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .ref-select-col,
+  .ref-select-col.ref-catalog-col {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .ref-secondary-right {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .ref-view-size-wrap {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .ref-pagination-controls {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   3. RESPONSIVE ADAPTIVE LOT GRID & LOT CARDS
+   -------------------------------------------------------------------------- */
+.g-catalog-lots-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  width: 100%;
+  margin-top: 24px;
+}
+
+/* Premium Lot Card */
+.g-catalog-lot-card {
+  background: #111520;
+  border: 1px solid rgba(223, 186, 82, 0.22);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  position: relative;
+  min-width: 0;
+  height: 100%;
+}
+
+.g-catalog-lot-card:hover {
+  transform: translateY(-4px);
+  border-color: #dfba52;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(223, 186, 82, 0.16);
+}
+
+/* Media Frame: controlled height for compact, balanced cards */
+.g-lot-media-frame {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: radial-gradient(circle at center, #1b2130 0%, #0c0f16 100%);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.g-lot-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+  transition: transform 0.35s ease;
+}
+
+.g-catalog-lot-card:hover .g-lot-card-img {
+  transform: scale(1.06);
+}
+
+.g-lot-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #7b8496;
+  font-size: 11.5px;
+}
+
+/* Media Top Overlay */
+.g-lot-overlay-top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.g-lot-badge-num {
+  font-family: var(--font-serif, 'Playfair Display', serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #0c0e14;
+  background: linear-gradient(135deg, #dfba52 0%, #c5a04a 100%);
+  padding: 3px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.g-lot-card-watch-btn {
+  pointer-events: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(13, 17, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.g-lot-card-watch-btn:hover {
+  background: #0d111a;
+  border-color: #dfba52;
+  color: #dfba52;
+  transform: scale(1.08);
+}
+
+.g-lot-card-watch-btn.active {
+  background: rgba(223, 186, 82, 0.2);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+/* Bottom Real-time Bidding Strip */
+.g-lot-live-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(9, 12, 18, 0.92) 40%, rgba(9, 12, 18, 0.98) 100%);
+  padding: 8px 10px 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 4;
+}
+
+.g-strip-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #fca5a5;
+  text-transform: uppercase;
+}
+
+.g-strip-bid {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f1c448;
+  letter-spacing: 0.2px;
+  text-shadow: 0 0 8px rgba(241, 196, 72, 0.25);
+}
+
+/* Card Body */
+.g-lot-card-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #111520;
+}
+
+.g-lot-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.g-lot-category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #b88f28;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.g-lot-bids-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.g-lot-title {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  line-height: 1.35;
+  height: 38px;
+  display: flex;
+  align-items: flex-start;
+  overflow: hidden;
+}
+
+.g-lot-title-btn {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #faf7f0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.15s ease;
+  width: 100%;
+}
+
+.g-lot-title-btn:hover {
+  color: #dfba52;
+}
+
+/* Valuation Box */
+.g-lot-price-box {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #161b28;
+  border: 1px solid rgba(223, 186, 82, 0.18);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  min-height: 48px;
+}
+
+.g-price-primary,
+.g-price-secondary {
+  display: flex;
+  flex-direction: column;
+}
+
+.g-price-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #7b8496;
+  margin-bottom: 2px;
+}
+
+.g-price-amount {
+  font-size: 15px;
+  font-weight: 800;
+  color: #f1c448;
+  line-height: 1.1;
+}
+
+.g-est-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  line-height: 1.1;
+}
+
+.g-lot-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #8c909e;
+  margin-bottom: 12px;
+  overflow: hidden;
+  height: 16px;
+}
+
+.g-session-title-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Prominent Action Button */
+.g-btn-view-lot {
+  width: 100%;
+  height: 38px;
+  margin-top: auto;
+  background: linear-gradient(135deg, #cba135 0%, #b88f28 100%);
+  color: #0c0e14;
+  border: none;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 10px rgba(203, 161, 53, 0.22);
+}
+
+.g-btn-view-lot:hover {
+  background: linear-gradient(135deg, #dfba52 0%, #cba135 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(203, 161, 53, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   4. REDESIGNED LOT DETAILS MODAL (LUXURY DOSSIER EXPERIENCE)
+   -------------------------------------------------------------------------- */
+.g-lot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: modalFadeIn 0.25s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.g-lot-modal-container {
+  width: 100%;
+  max-width: 1040px;
+  max-height: 90vh;
+  background: #0d111a !important;
+  border: 1.5px solid rgba(223, 186, 82, 0.4) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75), 0 0 30px rgba(223, 186, 82, 0.12) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopIn {
+  from { transform: scale(0.96) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Modal Header */
+.g-lot-modal-header {
+  padding: 22px 28px;
+  background: #0f1422;
+  border-bottom: 1px solid rgba(223, 186, 82, 0.2);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.g-lot-modal-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.g-lot-modal-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.g-modal-lot-num {
+  font-family: var(--font-serif, 'Playfair Display', serif);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #0c0e14;
+  background: linear-gradient(135deg, #dfba52 0%, #c5a04a 100%);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.g-modal-dot {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.g-modal-lot-cat {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #dfba52;
+}
+
+.g-modal-lot-session {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.g-lot-modal-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(22px, 3.2vw, 28px);
+  font-weight: 600;
+  color: #faf7f0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.g-lot-modal-close-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(223, 186, 82, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.g-lot-modal-close-btn:hover {
+  background: rgba(223, 186, 82, 0.2);
+  border-color: #dfba52;
+  color: #dfba52;
+  transform: rotate(90deg);
+}
+
+/* Modal Body */
+.g-lot-modal-body {
+  padding: 28px;
+  overflow-y: auto;
+  flex: 1;
+  background: #0b0e16;
+}
+
+.g-lot-modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.g-lot-modal-body::-webkit-scrollbar-track {
+  background: #090c12;
+}
+
+.g-lot-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(223, 186, 82, 0.35);
+  border-radius: 4px;
+}
+
+.g-lot-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #dfba52;
+}
+
+.g-lot-modal-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Left Showcase Pane */
+.g-lot-modal-media-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.g-modal-image-frame {
+  position: relative;
+  background: radial-gradient(circle at center, #1c2232 0%, #080a0f 100%);
+  border: 1.5px solid rgba(223, 186, 82, 0.35);
+  border-radius: 12px;
+  overflow: hidden;
+  height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.g-modal-main-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 16px;
+  transition: transform 0.35s ease;
+}
+
+.g-modal-image-frame:hover .g-modal-main-img {
+  transform: scale(1.04);
+}
+
+.g-modal-img-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #8c909e;
+  font-size: 13px;
+}
+
+.g-modal-live-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(8, 10, 15, 0.88) 35%, rgba(8, 10, 15, 0.98) 100%);
+  padding: 14px 18px 10px;
+  color: #dfba52;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0 0 12px 12px;
+}
+
+.g-modal-live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fca5a5;
+  letter-spacing: 1px;
+}
+
+.g-modal-bids-count {
+  color: #f1c448;
+  font-weight: 800;
+}
+
+.g-modal-seal-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #111624;
+  border: 1px solid rgba(223, 186, 82, 0.25);
+  border-radius: 10px;
+}
+
+.g-seal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.g-seal-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #faf7f0;
+}
+
+.g-seal-desc {
+  font-size: 11.5px;
+  color: #8c909e;
+}
+
+/* Right Information Pane */
+.g-lot-modal-info-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.g-modal-desc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.g-modal-section-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #dfba52;
+}
+
+.g-modal-lead-desc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+/* Bidding Console Card */
+.g-modal-bid-widget {
+  background: linear-gradient(145deg, #131828 0%, #0d121e 100%);
+  border: 1.5px solid rgba(223, 186, 82, 0.45);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.g-widget-stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.g-widget-stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.g-widget-stat-group.right-align {
+  text-align: right;
+}
+
+.g-widget-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #8c909e;
+}
+
+.g-widget-val-gold {
+  font-size: clamp(26px, 3.5vw, 34px);
+  font-weight: 800;
+  color: #f1c448;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  text-shadow: 0 0 16px rgba(241, 196, 72, 0.3);
+}
+
+.g-widget-val-estimate {
+  font-size: 18px;
+  font-weight: 700;
+  color: #faf7f0;
+}
+
+.g-widget-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g-btn-place-bid {
+  flex: 1;
+  height: 48px;
+  background: linear-gradient(135deg, #dfba52 0%, #c5a04a 100%);
+  color: #0c0e14;
+  border: none;
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(223, 186, 82, 0.35);
+}
+
+.g-btn-place-bid:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f5cb50 0%, #dfba52 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(223, 186, 82, 0.5);
+}
+
+.g-btn-place-bid:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.g-btn-watchlist {
+  height: 48px;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(223, 186, 82, 0.3);
+  border-radius: 8px;
+  color: #faf7f0;
+  font-size: 13.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.g-btn-watchlist:hover {
+  background: rgba(223, 186, 82, 0.15);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+.g-btn-watchlist.active {
+  background: rgba(223, 186, 82, 0.18);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+/* Specifications Section */
+.g-modal-specs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.g-specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(223, 186, 82, 0.2);
+  border: 1px solid rgba(223, 186, 82, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.g-spec-item {
+  background: #111624;
+  padding: 11px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.g-spec-item.span-full {
+  grid-column: 1 / -1;
+}
+
+.g-spec-term {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8c909e;
+}
+
+.g-spec-definition {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #faf7f0;
+}
+
+.g-spec-definition.gold {
+  color: #f1c448;
+  font-weight: 700;
+}
+
+/* Condition Card */
+.g-modal-condition-card {
+  background: #111624;
+  border: 1px solid rgba(223, 186, 82, 0.3);
+  border-left: 4px solid #dfba52;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.g-condition-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.g-condition-title-row h4 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #dfba52;
+  margin: 0;
+}
+
+.g-condition-content {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+/* Modal Footer */
+.g-lot-modal-footer {
+  padding: 16px 28px;
+  background: #0f1422;
+  border-top: 1px solid rgba(223, 186, 82, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.g-footer-trust-tag {
+  font-size: 11.5px;
+  color: #8c909e;
+}
+
+.g-btn-close-modal {
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #faf7f0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.g-btn-close-modal:hover {
+  background: rgba(223, 186, 82, 0.15);
+  border-color: #dfba52;
+  color: #dfba52;
+}
+
+/* --------------------------------------------------------------------------
+   5. RESPONSIVE MEDIA QUERIES
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .g-lot-modal-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .g-modal-image-frame {
+    height: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .g-catalog-toolbar-section {
+    position: static;
+  }
+
+  .g-toolbar-primary-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .g-toolbar-search-form {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .g-toolbar-selects-group {
+    width: 100%;
+  }
+
+  .g-select-item {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .g-view-mode-toggle {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .g-toggle-tab-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .g-toolbar-secondary-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .g-secondary-right-wrap {
+    margin-left: 0;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .g-specs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Medium Desktop / Tablet Landscape: 3 cards per row */
+@media (max-width: 1200px) {
+  .g-catalog-lots-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+}
+
+/* Small Tablets / Large Mobile: 2 cards per row */
+@media (max-width: 860px) {
+  .g-catalog-lots-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 540px) {
+  .g-lot-modal-container {
+    max-height: 94vh;
+    border-radius: 12px !important;
+  }
+
+  .g-lot-modal-header {
+    padding: 16px 20px;
+  }
+
+  .g-lot-modal-body {
+    padding: 18px 20px;
+  }
+
+  .g-modal-image-frame {
+    height: 240px;
+  }
+
+  .g-widget-stats-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .g-widget-stat-group.right-align {
+    text-align: left;
+  }
+
+  .g-widget-actions-row {
+    flex-direction: column;
+  }
+
+  .g-btn-place-bid,
+  .g-btn-watchlist {
+    width: 100%;
+  }
+
+  .g-lot-modal-footer {
+    padding: 14px 20px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .g-btn-close-modal {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* Narrow Mobile: 1 card per row */
+@media (max-width: 520px) {
+  .g-catalog-lots-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+
+
+
