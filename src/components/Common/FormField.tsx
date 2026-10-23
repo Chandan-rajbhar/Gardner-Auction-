@@ -19,6 +19,11 @@ export const FormField: React.FC<FormFieldProps> = ({
   inline = false,
   style
 }) => {
+  // Strip any trailing asterisk from label string to avoid double asterisks "* *"
+  const hasAsteriskInLabel = label.trim().endsWith('*');
+  const cleanLabel = hasAsteriskInLabel ? label.replace(/\s*\*+\s*$/, '').trim() : label.trim();
+  const showRequired = required || hasAsteriskInLabel;
+
   return (
     <div 
       className="form-group" 
@@ -26,27 +31,29 @@ export const FormField: React.FC<FormFieldProps> = ({
         display: inline ? 'flex' : 'block', 
         alignItems: inline ? 'center' : undefined,
         gap: inline ? 12 : undefined,
-        marginBottom: 14,
+        marginBottom: 12,
         ...style 
       }}
     >
       <label style={{ 
         display: 'block', 
-        fontSize: 12.5, 
-        fontWeight: 600, 
-        color: 'var(--text-main)', 
-        marginBottom: inline ? 0 : 6,
+        fontSize: 11.5, 
+        fontWeight: 700, 
+        color: '#475569', 
+        textTransform: 'uppercase',
+        letterSpacing: '0.03em',
+        marginBottom: inline ? 0 : 5,
         minWidth: inline ? 140 : undefined
       }}>
-        {label} {required && <span style={{ color: '#dc2626' }}>*</span>}
+        {cleanLabel} {showRequired && <span style={{ color: '#dc2626', marginLeft: 2 }}>*</span>}
       </label>
       <div style={{ flex: 1, width: '100%' }}>
         {children}
         {hint && !error && (
-          <p style={{ fontSize: 11.5, color: 'var(--text-dim)', margin: '4px 0 0' }}>{hint}</p>
+          <p style={{ fontSize: 11.5, color: '#64748b', margin: '4px 0 0' }}>{hint}</p>
         )}
         {error && (
-          <p style={{ fontSize: 11.5, color: '#dc2626', margin: '4px 0 0', fontWeight: 500 }}>{error}</p>
+          <p style={{ fontSize: 11.5, color: '#dc2626', margin: '4px 0 0', fontWeight: 600 }}>{error}</p>
         )}
       </div>
     </div>

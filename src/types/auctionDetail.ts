@@ -60,6 +60,10 @@ export interface BidderRegistration {
   id: string;
   bidCardNumber: string;
   bidderName: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  hearAboutUs?: string;
   username: string;
   hibidReputation: string; // e.g. "5.0 ★ (42 reviews)"
   bidCount: number;
@@ -70,6 +74,27 @@ export interface BidderRegistration {
   shippingRequested: boolean;
   bidderNotes: string;
   isCheckedIn: boolean;
+  depositAmount?: number;
+  depositStatus?: 'Collected' | 'Pending' | 'Refunded' | 'Applied' | 'Waived';
+  createdAt?: string;
+}
+
+export interface BidderDeposit {
+  id: string;
+  auctionId: string;
+  registrationId?: string;
+  bidCardNumber: string;
+  bidderName: string;
+  amount: number;
+  amountApplied?: number;
+  amountRemaining?: number;
+  paymentMethod: 'Credit Card' | 'Cash' | 'Wire Transfer' | 'Check' | "Cashier's Check" | 'ACH';
+  status: 'Collected' | 'Pending' | 'Refunded' | 'Applied';
+  date: string;
+  referenceNumber?: string;
+  notes?: string;
+  receivedBy?: string;
+  createdAt?: string;
 }
 
 export interface AuctionLotStat {
@@ -88,13 +113,15 @@ export interface AuctionLotStat {
 export interface AlternateBid {
   id: string;
   lotNumber: number;
+  lotDescription?: string;
   bidderName: string;
   paddleNumber: string;
   bidType: 'Phone' | 'Absentee' | 'Floor';
   amount: number;
   maxAmount: number;
   notes: string;
-  status: 'Active' | 'Executed' | 'Cancelled';
+  status: 'Active' | 'Executed' | 'Cancelled' | 'Rejected';
+  createdAt?: string;
 }
 
 export interface SettlementEntry {
@@ -237,6 +264,7 @@ export interface AuctionDetail {
     registrations: BidderRegistration[];
     lotStats: AuctionLotStat[];
     alternateBids: AlternateBid[];
+    deposits?: BidderDeposit[];
   };
 
   // Settlements

@@ -638,26 +638,83 @@ body {
 }
 
 .af360-tab {
-  padding: 8px 18px;
-  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  border-radius: 6px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: #64748b;
   cursor: pointer;
   background: transparent;
   border: none;
-  transition: all 0.18s ease;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .af360-tab:hover {
-  color: var(--gold-primary, #cba135);
+  color: #0f172a;
+  background: #f1f5f9;
 }
 
 .af360-tab.active {
-  background: #151922;
-  color: var(--gold-primary, #cba135);
-  border: 1.5px solid var(--gold-primary, #cba135);
-  box-shadow: 0 0 10px rgba(203, 161, 53, 0.25);
+  background: #f0f4f9 !important;
+  color: #0f172a !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+/* ==========================================================================
+   AUCTION DAY / AF360 ACTION BUTTONS & CHECK IN WORKFLOW
+   Aligned with Gardner Executive Theme (Obsidian #0f172a / Slate / Gold)
+   ========================================================================== */
+.af360-btn-teal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #0f172a;
+  color: #ffffff;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  text-decoration: none;
+}
+
+.af360-btn-teal:hover:not(:disabled) {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #334155;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  transform: translateY(-1px);
+}
+
+.af360-btn-teal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.af360-red-banner {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 /* ==========================================================================
@@ -9020,4 +9077,871 @@ body {
     justify-content: center;
     min-height: 40px;
   }
+}
+
+/* ==========================================================================
+   AUCTION DAY & CHECK IN RESPONSIVE & LUXURY STYLING
+   ========================================================================== */
+
+.af360-action-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.af360-btn-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.af360-btn {
+  height: 38px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.af360-btn:active {
+  transform: scale(0.98);
+}
+
+.af360-btn-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border: 1px solid #1e293b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.af360-btn-primary:hover:not(:disabled) {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+.af360-btn-secondary {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.af360-btn-secondary:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.af360-btn-gold {
+  background: linear-gradient(135deg, #dfb74a 0%, #cba135 100%);
+  color: #0f172a;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(203, 161, 53, 0.28);
+}
+
+.af360-btn-gold:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e8c665 0%, #d4aa3e 100%);
+  box-shadow: 0 4px 14px rgba(203, 161, 53, 0.4);
+}
+
+/* Quick deposit amount chips */
+.dep-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dep-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.dep-chip.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+/* Responsive breakdowns for mobile and tablet */
+@media (max-width: 768px) {
+  .af360-action-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .af360-btn-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+    gap: 8px;
+  }
+
+  .af360-btn-group > button,
+  .af360-btn-group > div {
+    width: 100%;
+  }
+
+  .af360-btn-group > div > button {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #btn-register-bidder {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .responsive-form-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-form-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .af360-btn-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   SHADCN DROPDOWN MENU
+   ========================================================================== */
+.shadcn-dropdown-content {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.06);
+  padding: 4px;
+  min-width: 210px;
+  animation: shadcnSelectOpen 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.shadcn-dropdown-content.align-left {
+  left: 0;
+  right: auto;
+}
+
+.shadcn-dropdown-content.align-right {
+  right: 0;
+  left: auto;
+}
+
+.shadcn-dropdown-label {
+  padding: 6px 12px 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.shadcn-dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.12s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.shadcn-dropdown-item:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.shadcn-dropdown-item.destructive {
+  color: #dc2626;
+}
+
+.shadcn-dropdown-item.destructive:hover:not(:disabled) {
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+.shadcn-dropdown-item.is-disabled,
+.shadcn-dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shadcn-dropdown-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.shadcn-dropdown-item-label {
+  flex: 1;
+}
+
+.shadcn-dropdown-item-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.shadcn-dropdown-separator {
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 4px 0;
+}
+
+/* ==========================================================================
+   AUCTION DAY / LIVE CLERKING FULL RESPONSIVENESS (ALL DEVICES)
+   ========================================================================== */
+.auction-day-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.auction-day-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.auction-day-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.auction-day-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.auction-day-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.auction-day-search-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.auction-day-pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+/* Tablet & Below (<= 1024px) */
+@media (max-width: 1024px) {
+  .auction-day-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* Mobile & Small Tablet (<= 768px) */
+@media (max-width: 768px) {
+  .image2-subtabs-row {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .image2-subtabs-row::-webkit-scrollbar {
+    display: none;
+  }
+  .image2-subtab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .auction-day-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .auction-day-header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .auction-day-header-actions > button,
+  .auction-day-header-actions > div {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .auction-day-toolbar-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .auction-day-toolbar-row > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  #btn-register-bidder {
+    grid-column: span 2;
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .auction-day-search-bar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .auction-day-search-bar-row > div:first-child {
+    width: 100% !important;
+  }
+
+  .auction-day-search-filter-wrap {
+    width: 100%;
+  }
+
+  .auction-day-search-filter-wrap > div {
+    width: 100% !important;
+  }
+
+  .auction-day-pagination-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    text-align: center;
+  }
+
+  .auction-day-pagination-controls {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+/* Small Mobile (<= 480px) */
+@media (max-width: 480px) {
+  .auction-day-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .auction-day-header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .auction-day-toolbar-row {
+    grid-template-columns: 1fr;
+  }
+
+  #btn-register-bidder {
+    grid-column: span 1;
+  }
+}
+
+/* ==========================================================================
+   SHADCN SHEET / RIGHT-SIDE DRAWER KEYFRAMES & RESPONSIVE RULES
+   ========================================================================== */
+@keyframes shadcnSheetFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shadcnSheetSlideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes shadcnSheetSlideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .shadcn-sheet-panel {
+    max-width: 100vw !important;
+    width: 100vw !important;
+  }
+}
+
+/* ==========================================================================
+   SHADCN UI DROPDOWNS & SELECT DESIGN SYSTEM
+   ========================================================================== */
+
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* --- Shadcn Select Root & Triggers --- */
+.shadcn-select-root {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.shadcn-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  user-select: none;
+}
+
+/* Sizes */
+.shadcn-select-root.size-sm .shadcn-select-trigger {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+
+.shadcn-select-root.size-md .shadcn-select-trigger {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.shadcn-select-root.size-lg .shadcn-select-trigger {
+  height: 42px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+/* States */
+.shadcn-select-trigger:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.shadcn-select-root.is-open .shadcn-select-trigger,
+.shadcn-select-trigger:focus-visible {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shadcn-select-root.is-disabled .shadcn-select-trigger,
+.shadcn-select-trigger:disabled {
+  opacity: 0.55;
+  background: #f1f5f9;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+}
+
+/* Variants */
+.shadcn-select-root.variant-subtle .shadcn-select-trigger {
+  background: #f8fafc;
+  border-color: transparent;
+}
+.shadcn-select-root.variant-subtle .shadcn-select-trigger:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.shadcn-select-root.variant-gold .shadcn-select-trigger {
+  border-color: rgba(203, 161, 53, 0.4);
+}
+.shadcn-select-root.variant-gold.is-open .shadcn-select-trigger {
+  border-color: #cba135;
+  box-shadow: 0 0 0 2px rgba(203, 161, 53, 0.22);
+}
+
+/* Value & Placeholder */
+.shadcn-select-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.shadcn-select-value-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.shadcn-select-placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.shadcn-select-chevron {
+  color: #64748b;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shadcn-select-chevron.is-rotated {
+  transform: rotate(180deg);
+  color: #0f172a;
+}
+
+/* --- Shadcn Select Content Popover --- */
+.shadcn-select-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-width: 380px;
+  z-index: 100;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+  animation: dropdownIn 0.15s ease-out;
+  outline: none;
+}
+
+.shadcn-select-content.align-right {
+  left: auto;
+  right: 0;
+}
+
+.shadcn-select-viewport {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.shadcn-select-viewport::-webkit-scrollbar {
+  width: 5px;
+}
+.shadcn-select-viewport::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* --- Shadcn Select Items --- */
+.shadcn-select-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #1e293b;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease, color 0.12s ease;
+  line-height: 1.35;
+}
+
+.shadcn-select-item.is-highlighted,
+.shadcn-select-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.shadcn-select-item.is-selected {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.shadcn-select-item.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.shadcn-select-item-content {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shadcn-select-check-icon {
+  display: flex;
+  align-items: center;
+  color: #0d9488;
+  flex-shrink: 0;
+}
+
+/* --- Shadcn Dropdown Menu Design System --- */
+.shadcn-dropdown-root {
+  position: relative;
+  display: inline-block;
+}
+
+.shadcn-dropdown-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px -4px rgba(0, 0, 0, 0.14), 0 4px 8px -2px rgba(0, 0, 0, 0.05);
+  padding: 5px;
+  min-width: 210px;
+  z-index: 100;
+  animation: dropdownIn 0.15s ease-out;
+  outline: none;
+}
+
+.shadcn-dropdown-content.align-right {
+  right: 0;
+  left: auto;
+}
+
+.shadcn-dropdown-content.align-left {
+  left: 0;
+  right: auto;
+}
+
+.shadcn-dropdown-label {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.shadcn-dropdown-separator {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px -5px;
+}
+
+.shadcn-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 11px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.shadcn-dropdown-item:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.shadcn-dropdown-item.destructive {
+  color: #ef4444;
+}
+
+.shadcn-dropdown-item.destructive:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.shadcn-dropdown-item:disabled,
+.shadcn-dropdown-item.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shadcn-dropdown-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.shadcn-dropdown-item.destructive .shadcn-dropdown-item-icon {
+  color: #ef4444;
+}
+
+.shadcn-dropdown-item-label {
+  flex: 1;
+}
+
+.shadcn-dropdown-item-badge {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+}
+
+/* Three dots table action button styling */
+.btn-three-dots {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-three-dots:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.btn-three-dots.active {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.dropdown-action-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dropdown-action-item:hover:not(:disabled) {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.dropdown-action-item.destructive {
+  color: #ef4444;
+}
+
+.dropdown-action-item.destructive:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
 }

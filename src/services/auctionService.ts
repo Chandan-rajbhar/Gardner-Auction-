@@ -242,7 +242,10 @@ class AuctionService {
               ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
               ...(row.lot_defaults || {})
             },
-            expenses: isMockAuction ? base.expenses : (base.expenses || [])
+            expenses: isMockAuction ? base.expenses : (base.expenses || []),
+            dayStats: (row.day_stats && Object.keys(row.day_stats).length > 0)
+              ? { ...base.dayStats, ...row.day_stats }
+              : base.dayStats
           };
         });
 
@@ -309,7 +312,10 @@ class AuctionService {
             ...(isMockAuction ? base.lotDefaults : createEmptyAuctionDetail().lotDefaults),
             ...(data.lot_defaults || {})
           },
-          expenses: isMockAuction ? base.expenses : []
+          expenses: isMockAuction ? base.expenses : [],
+          dayStats: (data.day_stats && Object.keys(data.day_stats).length > 0)
+            ? { ...base.dayStats, ...data.day_stats }
+            : base.dayStats
         };
 
         const idx = this.auctions.findIndex(a => a.id === id);
@@ -376,6 +382,7 @@ class AuctionService {
         auction_links: updated.auctionLinks || [],
         upload_settings: updated.uploadSettings || {},
         lot_defaults: updated.lotDefaults || {},
+        day_stats: updated.dayStats,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 
