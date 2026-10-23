@@ -21,7 +21,9 @@ import {
   Layers,
   ArrowRight,
   RefreshCw,
-  X
+  X,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -36,6 +38,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 }) => {
   const [auctions, setAuctions] = useState<AuctionDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'In Progress' | 'Closed'>('All');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [selectedAuctionIds, setSelectedAuctionIds] = useState<string[]>([]);
@@ -65,11 +68,14 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
   const loadAuctions = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await auctionService.getAuctions();
       setAuctions(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load auctions:', e);
+      setError(e?.message || 'Failed to load auction events from database.');
+      setAuctions([]);
     } finally {
       setIsLoading(false);
     }
@@ -540,6 +546,38 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         </div>
       )}
 
+      {/* Error State Banner with Retry */}
+      {error && (
+        <div style={{
+          padding: '14px 18px',
+          borderRadius: 8,
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={20} color="#dc2626" />
+            <div>
+              <div style={{ fontWeight: 600, color: '#991b1b', fontSize: 13.5 }}>Unable to load auctions from database</div>
+              <div style={{ color: '#b91c1c', fontSize: 12.5 }}>{error}</div>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onClick={loadAuctions} 
+            className="btn btn-secondary"
+            style={{ fontSize: 12, padding: '6px 14px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <RefreshCw size={13} />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
       {/* Table View */}
       {viewMode === 'table' ? (
         <DataTable
@@ -554,6 +592,11 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           rowActions={rowActions}
           itemNoun="auctions"
           isLoading={isLoading}
+          emptyMessage={
+            statusFilter === 'All'
+              ? 'No auction events found in the database. Click "Create Auction" above to create your first event.'
+              : `No auctions found with status "${statusFilter}".`
+          }
           topRightControls={
             selectedAuctionIds.length > 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -608,55 +651,87 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         />
       ) : (
         /* Grid View */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-          {filteredAuctions.map(a => (
-            <div 
-              key={a.id}
-              className="syndication-card"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: 14,
-                cursor: 'pointer',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
-              }}
-              onClick={() => onOpenAuction(a.id)}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <StatusPill status={a.status} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--gold-dark)', fontWeight: 600 }}>
-                    {a.code}
-                  </span>
-                </div>
-
-                <h3 className="font-serif" style={{ fontSize: 17, color: 'var(--text-main)', marginBottom: 6, lineHeight: 1.3 }}>
-                  {a.name}
-                </h3>
-
-                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: 0 }}>
-                  {a.description}
-                </p>
-              </div>
-
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Calendar size={13} color="var(--gold-primary)" />
-                  <span>{formatDate(a.startDate)} – {formatDate(a.endDate)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {a.dayStats?.lotCount || 0} Lots
-                  </span>
-                  <span style={{ color: 'var(--gold-primary)', fontWeight: 600, fontSize: 12 }}>
-                    Open Dashboard →
-                  </span>
-                </div>
-              </div>
+        isLoading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 20px', gap: 12, background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+            <Loader2 size={26} className="animate-spin" style={{ color: 'var(--gold-primary)' }} />
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading auctions from database...</span>
+          </div>
+        ) : filteredAuctions.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 20px', gap: 12, background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 22, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              <Calendar size={22} />
             </div>
-          ))}
-        </div>
+            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 15 }}>
+              {statusFilter === 'All' ? 'No auction events found' : `No ${statusFilter.toLowerCase()} auctions found`}
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, maxWidth: 420 }}>
+              {statusFilter === 'All'
+                ? 'There are currently no auction records in the database. Create a new auction event to get started.'
+                : `No auctions currently match the status "${statusFilter}".`}
+            </p>
+            {statusFilter === 'All' && (
+              <button
+                type="button"
+                className="btn btn-gold"
+                style={{ marginTop: 6 }}
+                onClick={() => setIsNewModalOpen(true)}
+              >
+                <Plus size={14} />
+                <span>Create Auction</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+            {filteredAuctions.map(a => (
+              <div 
+                key={a.id}
+                className="syndication-card"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: 14,
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                }}
+                onClick={() => onOpenAuction(a.id)}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <StatusPill status={a.status} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--gold-dark)', fontWeight: 600 }}>
+                      {a.code}
+                    </span>
+                  </div>
+
+                  <h3 className="font-serif" style={{ fontSize: 17, color: 'var(--text-main)', marginBottom: 6, lineHeight: 1.3 }}>
+                    {a.name}
+                  </h3>
+
+                  <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: 0 }}>
+                    {a.description}
+                  </p>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Calendar size={13} color="var(--gold-primary)" />
+                    <span>{formatDate(a.startDate)} – {formatDate(a.endDate)}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-main)' }}>
+                      {a.dayStats?.lotCount || 0} Lots
+                    </span>
+                    <span style={{ color: 'var(--gold-primary)', fontWeight: 600, fontSize: 12 }}>
+                      Open Dashboard →
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {/* Create New Auction Modal */}
