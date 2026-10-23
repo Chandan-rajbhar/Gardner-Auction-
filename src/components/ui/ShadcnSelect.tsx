@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { ChevronDown, Check, Search, Plus, X } from 'lucide-react';
 
 export interface ShadcnSelectOption {
   value: string;
   label: string;
+  description?: string;
   icon?: React.ReactNode;
   badge?: string;
   disabled?: boolean;
@@ -22,6 +23,14 @@ export interface ShadcnSelectProps {
   id?: string;
   align?: 'left' | 'right';
   variant?: 'default' | 'subtle' | 'gold';
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  clearable?: boolean;
+  fullWidth?: boolean;
+  showAdd?: boolean;
+  onAddOption?: () => void;
+  addOptionLabel?: string;
+  style?: React.CSSProperties;
 }
 
 export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
@@ -36,14 +45,50 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
   ariaLabel,
   id,
   align = 'left',
-  variant = 'default'
+  variant = 'default',
+  searchable = false,
+  searchPlaceholder = 'Search options...',
+  clearable = false,
+  fullWidth = false,
+  showAdd = false,
+  onAddOption,
+  addOptionLabel = 'Add New Option',
+  style
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
+
+  // Filtered options based on search query
+  const filteredOptions = useMemo(() => {
+    if (!searchQuery.trim()) return options;
+    const q = searchQuery.toLowerCase();
+    return options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        opt.value.toLowerCase().includes(q) ||
+        (opt.badge && opt.badge.toLowerCase().includes(q)) ||
+        (opt.description && opt.description.toLowerCase().includes(q))
+    );
+  }, [options, searchQuery]);
+
+  // Focus search input when open
+  useEffect(() => {
+    if (isOpen && searchable) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+    if (!isOpen) {
+      setSearchQuery('');
+      setHighlightedIndex(-1);
+    }
+  }, [isOpen, searchable]);
 
   // Close on outside click
   useEffect(() => {
@@ -73,7 +118,7 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
         if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
           setIsOpen(true);
-          const currentIndex = options.findIndex((opt) => opt.value === value);
+          const currentIndex = filteredOptions.findIndex((opt) => opt.value === value);
           setHighlightedIndex(currentIndex >= 0 ? currentIndex : 0);
         }
         return;
@@ -87,22 +132,21 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
         case 'ArrowDown':
           e.preventDefault();
           setHighlightedIndex((prev) => {
-            const next = prev < options.length - 1 ? prev + 1 : 0;
-            return options[next]?.disabled ? (next < options.length - 1 ? next + 1 : 0) : next;
+            const next = prev < filteredOptions.length - 1 ? prev + 1 : 0;
+            return filteredOptions[next]?.disabled ? (next < filteredOptions.length - 1 ? next + 1 : 0) : next;
           });
           break;
         case 'ArrowUp':
           e.preventDefault();
           setHighlightedIndex((prev) => {
-            const next = prev > 0 ? prev - 1 : options.length - 1;
-            return options[next]?.disabled ? (next > 0 ? next - 1 : options.length - 1) : next;
+            const next = prev > 0 ? prev - 1 : filteredOptions.length - 1;
+            return filteredOptions[next]?.disabled ? (next > 0 ? next - 1 : filteredOptions.length - 1) : next;
           });
           break;
         case 'Enter':
-        case ' ':
-          e.preventDefault();
-          if (highlightedIndex >= 0 && options[highlightedIndex] && !options[highlightedIndex].disabled) {
-            onChange(options[highlightedIndex].value);
+          if (highlightedIndex >= 0 && filteredOptions[highlightedIndex] && !filteredOptions[highlightedIndex].disabled) {
+            e.preventDefault();
+            onChange(filteredOptions[highlightedIndex].value);
             setIsOpen(false);
           }
           break;
@@ -113,7 +157,7 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
           break;
       }
     },
-    [disabled, isOpen, options, value, highlightedIndex, onChange]
+    [disabled, isOpen, filteredOptions, value, highlightedIndex, onChange]
   );
 
   const handleSelect = (option: ShadcnSelectOption) => {
@@ -122,11 +166,19 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
     setIsOpen(false);
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange('');
+  };
+
   return (
     <div
       ref={containerRef}
-      className={`shadcn-select-root ${className} ${disabled ? 'is-disabled' : ''} ${isOpen ? 'is-open' : ''} size-${size} variant-${variant}`}
+      className={`shadcn-select-root ${className} ${disabled ? 'is-disabled' : ''} ${isOpen ? 'is-open' : ''} ${
+        fullWidth ? 'is-full-width' : ''
+      } size-${size} variant-${variant}`}
       id={id}
+      style={fullWidth ? { width: '100%', ...style } : style}
       onKeyDown={handleKeyDown}
     >
       {/* Trigger Button (shadcn SelectTrigger) */}
@@ -145,60 +197,127 @@ export const ShadcnSelect: React.FC<ShadcnSelectProps> = ({
             <span className="shadcn-select-value-text">
               {selectedOption.icon && <span className="option-icon">{selectedOption.icon}</span>}
               <span className="option-text">{selectedOption.label}</span>
+              {selectedOption.badge && <span className="option-inline-badge">{selectedOption.badge}</span>}
             </span>
           ) : (
             <span className="shadcn-select-placeholder">{placeholder}</span>
           )}
         </div>
 
-        <ChevronDown
-          size={size === 'sm' ? 14 : 16}
-          className={`shadcn-select-chevron ${isOpen ? 'is-rotated' : ''}`}
-          aria-hidden="true"
-        />
+        <div className="shadcn-select-actions-wrap">
+          {clearable && value && !disabled && (
+            <span
+              role="button"
+              tabIndex={0}
+              className="shadcn-select-clear-btn"
+              onClick={handleClear}
+              title="Clear selection"
+            >
+              <X size={13} />
+            </span>
+          )}
+          <ChevronDown
+            size={size === 'sm' ? 14 : 16}
+            className={`shadcn-select-chevron ${isOpen ? 'is-rotated' : ''}`}
+            aria-hidden="true"
+          />
+        </div>
       </button>
 
       {/* Popover Content (shadcn SelectContent) */}
       {isOpen && (
         <div
           ref={listboxRef}
-          className={`shadcn-select-content align-${align}`}
+          className={`shadcn-select-content align-${align} ${fullWidth ? 'is-full-width' : ''}`}
           role="listbox"
           tabIndex={-1}
           aria-label={ariaLabel || 'Options'}
         >
-          <div className="shadcn-select-viewport">
-            {options.map((option, idx) => {
-              const isSelected = option.value === value;
-              const isHighlighted = idx === highlightedIndex;
-
-              return (
-                <div
-                  key={option.value}
-                  role="option"
-                  aria-selected={isSelected}
-                  aria-disabled={option.disabled}
-                  className={`shadcn-select-item ${isSelected ? 'is-selected' : ''} ${
-                    isHighlighted ? 'is-highlighted' : ''
-                  } ${option.disabled ? 'is-disabled' : ''}`}
-                  onClick={() => handleSelect(option)}
-                  onMouseEnter={() => setHighlightedIndex(idx)}
+          {/* Optional Search Bar */}
+          {searchable && (
+            <div className="shadcn-select-search-wrap" onClick={(e) => e.stopPropagation()}>
+              <Search size={14} className="shadcn-select-search-icon" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="shadcn-select-search-input"
+                placeholder={searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="shadcn-select-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
                 >
-                  <div className="shadcn-select-item-content">
-                    {option.icon && <span className="option-item-icon">{option.icon}</span>}
-                    <span className="option-item-label">{option.label}</span>
-                    {option.badge && <span className="option-item-badge">{option.badge}</span>}
-                  </div>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
 
-                  {isSelected && (
-                    <span className="shadcn-select-check-icon" aria-hidden="true">
-                      <Check size={14} />
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+          {/* Options Viewport */}
+          <div className="shadcn-select-viewport">
+            {filteredOptions.length === 0 ? (
+              <div className="shadcn-select-empty-msg">No options found</div>
+            ) : (
+              filteredOptions.map((option, idx) => {
+                const isSelected = option.value === value;
+                const isHighlighted = idx === highlightedIndex;
+
+                return (
+                  <div
+                    key={option.value}
+                    role="option"
+                    aria-selected={isSelected}
+                    aria-disabled={option.disabled}
+                    className={`shadcn-select-item ${isSelected ? 'is-selected' : ''} ${
+                      isHighlighted ? 'is-highlighted' : ''
+                    } ${option.disabled ? 'is-disabled' : ''}`}
+                    onClick={() => handleSelect(option)}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                  >
+                    <div className="shadcn-select-item-content">
+                      {option.icon && <span className="option-item-icon">{option.icon}</span>}
+                      <div className="option-item-text-group">
+                        <span className="option-item-label">{option.label}</span>
+                        {option.description && (
+                          <span className="option-item-desc">{option.description}</span>
+                        )}
+                      </div>
+                      {option.badge && <span className="option-item-badge">{option.badge}</span>}
+                    </div>
+
+                    {isSelected && (
+                      <span className="shadcn-select-check-icon" aria-hidden="true">
+                        <Check size={14} strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
+
+          {/* Optional Add Option Footer */}
+          {showAdd && onAddOption && (
+            <div className="shadcn-select-add-footer">
+              <button
+                type="button"
+                className="shadcn-select-add-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  onAddOption();
+                }}
+              >
+                <Plus size={14} />
+                <span>{addOptionLabel}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

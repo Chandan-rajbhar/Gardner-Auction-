@@ -1,5 +1,8 @@
 import { AuctionDetail, SettlementCustomer, SettlementCharge, AuctionExpense } from '../types/auctionDetail';
 import { supabaseAdmin, supabase } from '../lib/supabase';
+import { LotItem } from '../types';
+import { validateAuctionPublishReadiness } from '../utils/publishValidation';
+import { DBLotRow, dbToLotItem } from './lotsService';
 
 const STORAGE_KEY = 'gardner_auctions_detail_v2';
 
@@ -367,7 +370,7 @@ class AuctionService {
 
       if (error) {
         console.error('[AuctionService] Supabase upsert error:', error.message);
-        return { success: true, data: updated, error: error.message };
+        return { success: false, data: updated, error: error.message };
       }
     } catch (e) {
       console.warn('[AuctionService] Supabase update notice:', e);
@@ -518,6 +521,148 @@ class AuctionService {
     }
 
     return true;
+  }
+
+  /**
+   * Safe server-side publication validation & execution.
+   * Fetches latest persisted data from Supabase, runs validation,
+   * verifies authorization, and safely transitions status to 'In Progress'.
+   */
+  public async publishAuctionLive(
+    auctionId: string,
+    userRole?: string
+  ): Promise<{ success: boolean; error?: string; errors?: string[] }> {
+    // 1. Authorization check
+    if (userRole && userRole !== 'super_admin' && userRole !== 'admin') {
+      return {
+        success: false,
+        error: 'Unauthorized: Only administrator roles have permission to publish auctions live.'
+      };
+    }
+
+    const client = supabaseAdmin || supabase;
+
+    // 2. Fetch fresh persisted auction data from Supabase
+    const freshAuction = await this.getAuctionById(auctionId);
+    if (!freshAuction) {
+      return {
+        success: false,
+        error: `Auction record with ID "${auctionId}" was not found in the database.`
+      };
+    }
+
+    // 3. Fetch latest lots for this auction from Supabase
+    let auctionLots: LotItem[] = [];
+    try {
+      const { data: lotsData, error: lotsError } = await client
+        .from('lots')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .order('lot_number', { ascending: true });
+
+      if (!lotsError && lotsData) {
+        auctionLots = (lotsData as DBLotRow[]).map(dbToLotItem);
+      }
+    } catch (err) {
+      console.warn('[AuctionService] Error fetching lots for publish verification:', err);
+    }
+
+    // Fallback: If no lots found by explicit auction_id and it's 'auc-001', check default catalog
+    if (auctionLots.length === 0 && auctionId === 'auc-001') {
+      try {
+        const { data: allLots } = await client
+          .from('lots')
+          .select('*')
+          .limit(20);
+        if (allLots && allLots.length > 0) {
+          auctionLots = (allLots as DBLotRow[]).map(dbToLotItem);
+        }
+      } catch (_) {}
+    }
+
+    // 4. Run centralized validation against latest persisted records
+    const validation = validateAuctionPublishReadiness(freshAuction, auctionLots, false);
+    if (!validation.canPublish) {
+      return {
+        success: false,
+        error: validation.allErrors[0] || 'Mandatory auction information is incomplete or invalid.',
+        errors: validation.allErrors
+      };
+    }
+
+    // 5. Safely update live status in Supabase
+    try {
+      const { error: updateError } = await client
+        .from('auctions')
+        .update({
+          status: 'In Progress',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', auctionId);
+
+      if (updateError) {
+        return {
+          success: false,
+          error: `Database update failed: ${updateError.message}`
+        };
+      }
+
+      // Update local memory cache and localStorage
+      const cached = this.auctions.find(a => a.id === auctionId);
+      if (cached) {
+        cached.status = 'In Progress';
+        this.persist();
+      }
+
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        success: false,
+        error: `Unexpected error during live publication: ${msg}`
+      };
+    }
+  }
+
+  /**
+   * Safely reverts live auction back to 'Open' (Draft) state
+   */
+  public async unpublishAuction(
+    auctionId: string,
+    userRole?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (userRole && userRole !== 'super_admin' && userRole !== 'admin') {
+      return {
+        success: false,
+        error: 'Unauthorized: Only administrator roles have permission to alter live status.'
+      };
+    }
+
+    const client = supabaseAdmin || supabase;
+    try {
+      const { error: updateError } = await client
+        .from('auctions')
+        .update({
+          status: 'Open',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', auctionId);
+
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+
+      const cached = this.auctions.find(a => a.id === auctionId);
+      if (cached) {
+        cached.status = 'Open';
+        this.persist();
+      }
+
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: msg };
+    }
   }
 
   // Settlements

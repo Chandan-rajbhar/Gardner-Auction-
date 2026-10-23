@@ -5,10 +5,10 @@ export type StageType = 'pre-auction' | 'auction-day' | 'settlement';
 export type PreAuctionSubTab = 
   | 'details' 
   | 'upload-settings' 
-  | 'preview' 
   | 'lots' 
   | 'lot-images' 
-  | 'expenses';
+  | 'expenses'
+  | 'preview';
 
 export type AuctionDaySubTab = 
   | 'dashboard' 

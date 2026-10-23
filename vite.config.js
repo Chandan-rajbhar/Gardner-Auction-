@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createClient } from '@supabase/supabase-js'
 
+import { Buffer } from 'node:buffer'
+
 const SUPABASE_URL = 'https://rzacpssumjahxndmqnxm.supabase.co'
 const SUPABASE_SECRET_KEY = Buffer.from('c2Jfc2VjcmV0X3RyLXFKbFpHektPaUZZaUlIR1RGX1FfcGZjVWcwclg=', 'base64').toString('utf-8')
 
@@ -14,14 +16,14 @@ function adminApiPlugin() {
   return {
     name: 'admin-api-middleware',
     configureServer(server) {
-      server.middlewares.use('/api', (req, res, next) => {
+      server.middlewares.use('/api', (req, res) => {
         const url = req.url?.split('?')[0] // stripped of '/api', e.g. '/customers/delete'
 
         let body = ''
         req.on('data', (chunk) => { body += chunk })
         req.on('end', async () => {
           res.setHeader('Content-Type', 'application/json')
-          let parsed = {}
+          let parsed
           try {
             parsed = JSON.parse(body || '{}')
           } catch {

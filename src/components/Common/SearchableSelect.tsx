@@ -140,14 +140,14 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             right: 0,
             marginTop: 4,
             background: '#ffffff',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 6,
-            boxShadow: 'var(--shadow-dropdown)',
-            zIndex: 50,
-            maxHeight: 220,
+            border: '1px solid rgba(197, 155, 39, 0.35)',
+            borderRadius: 8,
+            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.18), 0 4px 10px -2px rgba(0, 0, 0, 0.08)',
+            zIndex: 9999,
+            maxHeight: 260,
             overflowY: 'auto'
           }}>
-            <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ padding: '6px 8px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
               <input 
                 type="text"
                 autoFocus
@@ -158,14 +158,15 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   width: '100%',
                   padding: '6px 8px',
                   fontSize: 12,
-                  border: '1px solid var(--border-subtle)',
+                  border: '1px solid #cbd5e1',
                   borderRadius: 4,
-                  outline: 'none'
+                  outline: 'none',
+                  background: '#ffffff'
                 }}
               />
             </div>
 
-            <div style={{ padding: '4px 0' }}>
+            <div style={{ padding: '4px' }}>
               {filteredOptions.map((opt) => {
                 const isSelected = opt.value === value;
                 return (
@@ -177,21 +178,29 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                       setSearch('');
                     }}
                     style={{
-                      padding: '8px 12px',
+                      padding: '8px 10px',
                       fontSize: 12.5,
                       cursor: 'pointer',
-                      background: isSelected ? '#fbf8f2' : 'transparent',
-                      color: isSelected ? 'var(--gold-primary)' : 'var(--text-main)',
+                      borderRadius: 6,
+                      background: isSelected ? '#f6eedb' : 'transparent',
+                      color: isSelected ? '#8c6428' : 'var(--text-main)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      fontWeight: isSelected ? 600 : 400
+                      fontWeight: isSelected ? 600 : 400,
+                      transition: 'background 0.12s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) e.currentTarget.style.background = '#faf7ef';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) e.currentTarget.style.background = 'transparent';
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {opt.label}
                     </span>
-                    {isSelected && <Check size={14} color="var(--gold-primary)" />}
+                    {isSelected && <Check size={14} color="#8c6428" strokeWidth={2.5} />}
                   </div>
                 );
               })}

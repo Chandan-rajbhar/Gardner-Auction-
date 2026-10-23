@@ -8,7 +8,6 @@ import { FormModal } from '../Common/FormModal';
 import { FormField } from '../Common/FormField';
 import { 
   Plus, 
-  FileText, 
   List, 
   Grid, 
   ExternalLink, 
@@ -351,17 +350,6 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {onNavigateReports && (
-            <button 
-              type="button" 
-              className="btn btn-secondary"
-              onClick={onNavigateReports}
-            >
-              <FileText size={15} />
-              <span>Reports</span>
-            </button>
-          )}
-
           <button 
             type="button" 
             className="btn btn-gold"

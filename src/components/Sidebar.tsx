@@ -66,10 +66,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isLive?: boolean;
   }> = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { id: 'live_clerking', label: 'Auction Day', icon: Gavel, badge: 'LIVE', isLive: true },
     { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
+    { id: 'live_clerking', label: 'Auction Day', icon: Gavel, badge: 'LIVE', isLive: true },
     { id: 'users', label: 'Customers', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
-    // { id: 'admins', label: 'Admins', icon: ShieldCheck },
+    { id: 'admins', label: 'Admins', icon: ShieldCheck },
   ];
 
   const financeNav: Array<{
@@ -80,6 +80,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }> = [
     { id: 'payments', label: 'Settlement & Invoices', icon: CreditCard },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+  ];
+
+  const systemNav: Array<{
+    id: NavigationSection;
+    label: string;
+    icon: React.ElementType;
+    badge?: string | number;
+  }> = [
     { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
     { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
   ];
@@ -174,6 +182,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="sidebar-links-list">
               {financeNav.map(item => {
+                const Icon = item.icon;
+                const isActive = currentSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={`sidebar-nav-button ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentSection(item.id);
+                      onClose();
+                    }}
+                    title={item.label}
+                    aria-label={item.label}
+                  >
+                    <Icon size={19} className="sidebar-nav-icon" />
+                    <span className="sidebar-nav-label">{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span className="sidebar-badge">{item.badge}</span>
+                    )}
+                    {isActive && <div className="sidebar-active-gold-pill" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section: System Management */}
+          <div className="sidebar-nav-group">
+            <div className="sidebar-section-header">
+              <span>SYSTEM MANAGEMENT</span>
+            </div>
+            <div className="sidebar-links-list">
+              {systemNav.map(item => {
                 const Icon = item.icon;
                 const isActive = currentSection === item.id;
                 return (

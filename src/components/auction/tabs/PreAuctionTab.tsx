@@ -1,12 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useAuctionDetail } from '../../../context/AuctionDetailContext';
 import { PreAuctionSubTab, FeaturedImage, AuctionLink, AuctionExpense } from '../../../types/auctionDetail';
 import { FormField } from '../../Common/FormField';
 import { SearchableSelect } from '../../Common/SearchableSelect';
+import { ShadcnSelect, ShadcnSelectOption } from '../../ui/ShadcnSelect';
+import { ModernCheckbox } from '../../ui/ModernCheckbox';
+import { ModernRadio, ModernRadioGroup } from '../../ui/ModernRadio';
 import { FormModal } from '../../Common/FormModal';
 import { ConfirmModal } from '../../Common/ConfirmModal';
 import { LotsView } from '../../views/LotsView';
 import { LotItem } from '../../../types';
+import { validateAuctionPublishReadiness } from '../../../utils/publishValidation';
 import { 
   Upload, 
   Trash2, 
@@ -21,6 +25,8 @@ import {
   ExternalLink,
   DollarSign,
   AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
   Move,
   Search,
   X,
@@ -48,7 +54,8 @@ import {
   Coins,
   Truck,
   BookOpen,
-  Info
+  Info,
+  CreditCard
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
@@ -56,6 +63,48 @@ import { LotFormModal } from '../LotFormModal';
 import { supabase } from '../../../lib/supabase';
 import { useToast } from '../../../context/ToastContext';
 import { lotsService } from '../../../services/lotsService';
+
+const CURRENCY_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'USD', label: 'USD ($)', badge: '$' },
+  { value: 'CAD', label: 'CAD (C$)', badge: 'C$' },
+  { value: 'EUR', label: 'EUR (€)', badge: '€' },
+  { value: 'GBP', label: 'GBP (£)', badge: '£' },
+];
+
+const COUNTRY_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'United States', label: 'United States', badge: 'USA' },
+  { value: 'Canada', label: 'Canada', badge: 'CAN' },
+  { value: 'United Kingdom', label: 'United Kingdom', badge: 'UK' },
+  { value: 'Australia', label: 'Australia', badge: 'AUS' },
+  { value: 'Germany', label: 'Germany', badge: 'DEU' },
+];
+
+const AVAILABILITY_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'No Shipping', label: 'No Shipping', badge: 'Pickup Only' },
+  { value: 'Shipping Offered On All Lots', label: 'Shipping Offered On All Lots', badge: 'Delivery' },
+  { value: 'Selected Lots Only', label: 'Selected Lots Only', badge: 'Conditional' },
+];
+
+const SELLER_TAX_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'STAX_0% - 0% Seller Tax', label: '0% Seller Tax', badge: 'STAX_0%' },
+  { value: 'STAX_3% - 3% State Consignment Excise', label: '3% State Consignment Excise', badge: 'STAX_3%' },
+];
+
+const BUYER_CHARGE_1_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'CHG_PACK_4.50 - In-House Packaging Surcharge $4.50', label: 'In-House Packaging $4.50', badge: 'CHG_PACK_4.50' },
+  { value: 'CHG_INSUR_10 - Registered Postal Insurance $10.00', label: 'Postal Insurance $10.00', badge: 'CHG_INSUR_10' },
+];
+
+const BUYER_CHARGE_2_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'CHG_VAULT_5 - Secure Vault Handling $5.00', label: 'Secure Vault $5.00', badge: 'CHG_VAULT_5' },
+];
+
+const TIMEZONE_SELECT_OPTIONS: ShadcnSelectOption[] = [
+  { value: '(UTC-07:00) Mountain Time (US & Canada)', label: '(UTC-07:00) Mountain Time (US & Canada)', badge: 'MT' },
+  { value: '(UTC-08:00) Pacific Time (US & Canada)', label: '(UTC-08:00) Pacific Time (US & Canada)', badge: 'PT' },
+  { value: '(UTC-06:00) Central Time (US & Canada)', label: '(UTC-06:00) Central Time (US & Canada)', badge: 'CT' },
+  { value: '(UTC-05:00) Eastern Time (US & Canada)', label: '(UTC-05:00) Eastern Time (US & Canada)', badge: 'ET' },
+];
 
 interface PreAuctionTabProps {
   currentTab: PreAuctionSubTab;
@@ -284,6 +333,11 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
     l.auctionId === auction.id || (auction.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
   );
 
+  // Centralized publish-readiness verification
+  const readiness = useMemo(() => {
+    return validateAuctionPublishReadiness(auction, filteredAuctionLots, state.isDirty);
+  }, [auction, filteredAuctionLots, state.isDirty]);
+
   const handleDeleteAllLots = async () => {
     setIsDeletingAllLots(true);
     try {
@@ -497,7 +551,6 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
           {[
             { key: 'details', label: 'Details' },
             { key: 'upload-settings', label: 'Upload Settings' },
-            { key: 'preview', label: 'Preview' },
             { key: 'lots', label: 'Lots', badge: filteredAuctionLots.length, badgeType: 'neutral' },
             { key: 'lot-images', label: 'Lot Images' },
             { 
@@ -505,7 +558,8 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
               label: 'Expenses', 
               badge: `$${(auction.expenses || []).reduce((s, e) => s + (e.amount || 0), 0).toLocaleString()}`, 
               badgeType: 'green' 
-            }
+            },
+            { key: 'preview', label: 'Preview' }
           ].map(tab => {
             const isActive = currentTab === tab.key;
             return (
@@ -736,27 +790,19 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                     <label className="ecomm-form-label">
                       <span>Currency <span className="ecomm-required-star">*</span></span>
                     </label>
-                    <select 
-                      value={auction.currency}
-                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'currency', value: e.target.value })}
-                      className="ecomm-select"
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="CAD">CAD (C$)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="GBP">GBP (£)</option>
-                    </select>
+                    <ShadcnSelect
+                      value={auction.currency || 'USD'}
+                      onChange={(val) => dispatch({ type: 'UPDATE_FIELD', field: 'currency', value: val })}
+                      options={CURRENCY_SELECT_OPTIONS}
+                      fullWidth
+                    />
                   </div>
                   <div style={{ paddingBottom: 8 }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--ecomm-text-dark)' }}>
-                      <input 
-                        type="checkbox"
-                        checked={auction.taxExemptAll}
-                        onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'taxExemptAll', value: e.target.checked })}
-                        style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
-                      />
-                      <span>Mark entire auction as Tax Exempt</span>
-                    </label>
+                    <ModernCheckbox
+                      checked={Boolean(auction.taxExemptAll)}
+                      onChange={(checked) => dispatch({ type: 'UPDATE_FIELD', field: 'taxExemptAll', value: checked })}
+                      label="Mark entire auction as Tax Exempt"
+                    />
                   </div>
                 </div>
 
@@ -868,30 +914,23 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
                   <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
                     <label className="ecomm-form-label">Country</label>
-                    <select 
+                    <ShadcnSelect
                       value={auction.country || ''}
-                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'country', value: e.target.value })}
-                      className="ecomm-select"
-                    >
-                      <option value="">Select country...</option>
-                      <option value="United States">United States</option>
-                      <option value="Canada">Canada</option>
-                      <option value="United Kingdom">United Kingdom</option>
-                    </select>
+                      onChange={(val) => dispatch({ type: 'UPDATE_FIELD', field: 'country', value: val })}
+                      options={COUNTRY_SELECT_OPTIONS}
+                      placeholder="Select country..."
+                      fullWidth
+                    />
                   </div>
                 </div>
 
                 {/* Consolidated Invoicing Row */}
                 <div className="consolidated-invoicing-row">
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
-                    <input 
-                      type="checkbox"
-                      checked={Boolean(auction.useConsolidatedInvoicing)}
-                      onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'useConsolidatedInvoicing', value: e.target.checked })}
-                      style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
-                    />
-                    <span>Use Consolidated Invoicing (Combines Seller & Buyer Invoices)</span>
-                  </label>
+                  <ModernCheckbox
+                    checked={Boolean(auction.useConsolidatedInvoicing)}
+                    onChange={(checked) => dispatch({ type: 'UPDATE_FIELD', field: 'useConsolidatedInvoicing', value: checked })}
+                    label="Use Consolidated Invoicing (Combines Seller & Buyer Invoices)"
+                  />
                   <span className="recommended-pill">Recommended</span>
                 </div>
               </div>
@@ -907,16 +946,13 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
                 <div className="ecomm-form-group">
                   <label className="ecomm-form-label">Availability</label>
-                  <select 
+                  <ShadcnSelect
                     value={auction.shippingAvailability || ''}
-                    onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAvailability', value: e.target.value })}
-                    className="ecomm-select"
-                  >
-                    <option value="">Select availability...</option>
-                    <option value="Shipping Offered On All Lots">Shipping Offered On All Lots</option>
-                    <option value="Selected Lots Only">Selected Lots Only</option>
-                    <option value="No Shipping">No Shipping</option>
-                  </select>
+                    onChange={(val) => dispatch({ type: 'UPDATE_SHIPPING', field: 'shippingAvailability', value: val })}
+                    options={AVAILABILITY_SELECT_OPTIONS}
+                    placeholder="Select availability..."
+                    fullWidth
+                  />
                 </div>
 
                 <div className="ecomm-form-group">
@@ -938,42 +974,25 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   padding: 14,
                   marginTop: 10
                 }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ecomm-text-dark)' }}>
-                    <input 
-                      type="checkbox"
-                      checked={Boolean(auction.addHandlingCharge)}
-                      onChange={(e) => dispatch({ type: 'UPDATE_SHIPPING', field: 'addHandlingCharge', value: e.target.checked })}
-                      style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)', width: 16, height: 16, cursor: 'pointer' }}
-                    />
-                    <span>Add Handling Charge</span>
-                  </label>
+                  <ModernCheckbox
+                    checked={Boolean(auction.addHandlingCharge)}
+                    onChange={(checked) => dispatch({ type: 'UPDATE_SHIPPING', field: 'addHandlingCharge', value: checked })}
+                    label="Add Handling Charge"
+                  />
 
                   {auction.addHandlingCharge && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e4dc', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div>
                         <label className="ecomm-form-label" style={{ marginBottom: 6 }}>Handling Charge Type</label>
-                        <div style={{ display: 'flex', gap: 16 }}>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                            <input 
-                              type="radio"
-                              name="handlingType"
-                              checked={auction.handlingChargeType === 'Fixed'}
-                              onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Fixed' })}
-                              style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)' }}
-                            />
-                            <span style={{ fontWeight: 600 }}>Fixed</span>
-                          </label>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                            <input 
-                              type="radio"
-                              name="handlingType"
-                              checked={auction.handlingChargeType === 'Percentage'}
-                              onChange={() => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: 'Percentage' })}
-                              style={{ accentColor: 'var(--ecomm-primary-gold, #c59b27)' }}
-                            />
-                            <span style={{ fontWeight: 600 }}>Percentage</span>
-                          </label>
-                        </div>
+                        <ModernRadioGroup
+                          value={auction.handlingChargeType || 'Fixed'}
+                          onChange={(val) => dispatch({ type: 'UPDATE_SHIPPING', field: 'handlingChargeType', value: val as any })}
+                          options={[
+                            { value: 'Fixed', label: 'Fixed' },
+                            { value: 'Percentage', label: 'Percentage' }
+                          ]}
+                          variant="inline"
+                        />
                       </div>
 
                       <div className="ecomm-form-group" style={{ marginBottom: 0 }}>
@@ -1383,42 +1402,61 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                   {/* Seller Tax */}
                   <div>
                     <label className="ecomm-form-label" style={{ marginBottom: 4 }}>SELLER TAX</label>
-                    <select
+                    <ShadcnSelect
                       value={auction.lotDefaults.sellerTax || ''}
-                      onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'sellerTax', value: e.target.value })}
-                      className="ecomm-select"
-                    >
-                      <option value="">Select option...</option>
-                      <option value="STAX_0% - 0% Seller Tax">STAX_0% - 0% Seller Tax</option>
-                      <option value="STAX_3% - 3% State Consignment Excise">STAX_3% - 3% State Consignment Excise</option>
-                    </select>
+                      onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'sellerTax', value: val })}
+                      options={
+                        auction.lotDefaults.sellerTax && !SELLER_TAX_SELECT_OPTIONS.some(o => o.value === auction.lotDefaults.sellerTax)
+                          ? [
+                              { value: auction.lotDefaults.sellerTax, label: auction.lotDefaults.sellerTax.split(' - ')[1] || auction.lotDefaults.sellerTax, badge: auction.lotDefaults.sellerTax.split(' - ')[0] },
+                              ...SELLER_TAX_SELECT_OPTIONS
+                            ]
+                          : SELLER_TAX_SELECT_OPTIONS
+                      }
+                      placeholder="Select option..."
+                      clearable
+                      fullWidth
+                    />
                   </div>
 
                   {/* Buyer Lot Charges 1 & 2 */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div>
                       <label className="ecomm-form-label" style={{ marginBottom: 4 }}>BUYER LOT CHARGE 1</label>
-                      <select
+                      <ShadcnSelect
                         value={auction.lotDefaults.buyerLotCharge1 || ''}
-                        onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge1', value: e.target.value })}
-                        className="ecomm-select"
-                      >
-                        <option value="">Select charge...</option>
-                        <option value="CHG_PACK_4.50 - In-House Packaging Surcharge $4.50">CHG_PACK_4.50 - In-House Packaging $4.50</option>
-                        <option value="CHG_INSUR_10 - Registered Postal Insurance $10.00">CHG_INSUR_10 - Postal Insurance $10.00</option>
-                      </select>
+                        onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge1', value: val })}
+                        options={
+                          auction.lotDefaults.buyerLotCharge1 && !BUYER_CHARGE_1_SELECT_OPTIONS.some(o => o.value === auction.lotDefaults.buyerLotCharge1)
+                            ? [
+                                { value: auction.lotDefaults.buyerLotCharge1, label: auction.lotDefaults.buyerLotCharge1.split(' - ')[1] || auction.lotDefaults.buyerLotCharge1, badge: auction.lotDefaults.buyerLotCharge1.split(' - ')[0] },
+                                ...BUYER_CHARGE_1_SELECT_OPTIONS
+                              ]
+                            : BUYER_CHARGE_1_SELECT_OPTIONS
+                        }
+                        placeholder="Select charge..."
+                        clearable
+                        fullWidth
+                      />
                     </div>
 
                     <div>
                       <label className="ecomm-form-label" style={{ marginBottom: 4 }}>BUYER LOT CHARGE 2</label>
-                      <select
+                      <ShadcnSelect
                         value={auction.lotDefaults.buyerLotCharge2 || ''}
-                        onChange={(e) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge2', value: e.target.value })}
-                        className="ecomm-select"
-                      >
-                        <option value="">Select charge...</option>
-                        <option value="CHG_VAULT_5 - Secure Vault Handling $5.00">CHG_VAULT_5 - Secure Vault $5.00</option>
-                      </select>
+                        onChange={(val) => dispatch({ type: 'UPDATE_LOT_DEFAULTS', field: 'buyerLotCharge2', value: val })}
+                        options={
+                          auction.lotDefaults.buyerLotCharge2 && !BUYER_CHARGE_2_SELECT_OPTIONS.some(o => o.value === auction.lotDefaults.buyerLotCharge2)
+                            ? [
+                                { value: auction.lotDefaults.buyerLotCharge2, label: auction.lotDefaults.buyerLotCharge2.split(' - ')[1] || auction.lotDefaults.buyerLotCharge2, badge: auction.lotDefaults.buyerLotCharge2.split(' - ')[0] },
+                                ...BUYER_CHARGE_2_SELECT_OPTIONS
+                              ]
+                            : BUYER_CHARGE_2_SELECT_OPTIONS
+                        }
+                        placeholder="Select charge..."
+                        clearable
+                        fullWidth
+                      />
                     </div>
                   </div>
                 </div>
@@ -1561,24 +1599,34 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 8 }}>
                   Bidder Credit Card Registration
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[
-                    { val: 'Authentication', label: 'Authentication (Needed for Batch Credit Card Processing) [default]' },
-                    { val: 'Verification', label: 'Verification (Credit Card Verified - Not Retained)' },
-                    { val: 'Contact Info Only', label: 'Contact Info Only' },
-                    { val: 'No Registration', label: 'No Registration' }
-                  ].map(item => (
-                    <label key={item.val} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                      <input 
-                        type="radio"
-                        name="ccReg"
-                        checked={auction.uploadSettings.ccRegistrationType === item.val}
-                        onChange={() => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'ccRegistrationType', value: item.val })}
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
-                </div>
+                <ModernRadioGroup
+                  value={auction.uploadSettings.ccRegistrationType}
+                  onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'ccRegistrationType', value: val })}
+                  options={[
+                    {
+                      value: 'Authentication',
+                      label: 'Authentication (Batch Processing)',
+                      description: 'Needed for batch card processing. Validates active billing credentials.',
+                      badge: 'Default'
+                    },
+                    {
+                      value: 'Verification',
+                      label: 'Verification Only',
+                      description: 'Credit card verified on file — sensitive CVV/number not retained.'
+                    },
+                    {
+                      value: 'Contact Info Only',
+                      label: 'Contact Info Only',
+                      description: 'Standard address and phone verification without card capture.'
+                    },
+                    {
+                      value: 'No Registration',
+                      label: 'No Registration Required',
+                      description: 'Open public bidding without prior credential verification.'
+                    }
+                  ]}
+                  variant="card"
+                />
               </div>
 
               {/* Sub-section: Bidder Authentication Selected Options */}
@@ -1605,28 +1653,29 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                 </span>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                   {[
-                    { key: 'mastercard', label: 'Mastercard' },
-                    { key: 'visa', label: 'Visa' },
-                    { key: 'amex', label: 'American Express' },
-                    { key: 'discover', label: 'Discover' }
+                    { key: 'mastercard', label: 'Mastercard', badge: 'MC' },
+                    { key: 'visa', label: 'Visa', badge: 'VISA' },
+                    { key: 'amex', label: 'American Express', badge: 'AMEX' },
+                    { key: 'discover', label: 'Discover', badge: 'DISC' }
                   ].map(card => (
-                    <label key={card.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox"
-                        checked={(auction.uploadSettings.acceptedCards as any)[card.key]}
-                        onChange={(e) => {
-                          dispatch({
-                            type: 'UPDATE_UPLOAD_SETTINGS',
-                            field: 'acceptedCards',
-                            value: {
-                              ...auction.uploadSettings.acceptedCards,
-                              [card.key]: e.target.checked
-                            }
-                          });
-                        }}
-                      />
-                      <span>{card.label}</span>
-                    </label>
+                    <ModernCheckbox
+                      key={card.key}
+                      variant="card"
+                      checked={Boolean((auction.uploadSettings.acceptedCards as any)[card.key])}
+                      onChange={(checked) => {
+                        dispatch({
+                          type: 'UPDATE_UPLOAD_SETTINGS',
+                          field: 'acceptedCards',
+                          value: {
+                            ...auction.uploadSettings.acceptedCards,
+                            [card.key]: checked
+                          }
+                        });
+                      }}
+                      label={card.label}
+                      badge={card.badge}
+                      icon={<CreditCard size={16} />}
+                    />
                   ))}
                 </div>
               </div>
@@ -1670,76 +1719,76 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
 
               {/* Bidding Type */}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>Bidding Type</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {[
-                    'No Internet Bidding',
-                    'Absentee Bidding (bids brought to live auction)',
-                    'Internet Only Auction',
-                    'Webcast (Live Internet Bidding)'
-                  ].map(bt => (
-                    <label key={bt} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
-                      <input 
-                        type="radio"
-                        name="biddingType"
-                        checked={auction.uploadSettings.biddingType.startsWith(bt.split(' ')[0])}
-                        onChange={() => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'biddingType', value: bt })}
-                      />
-                      <span>{bt}</span>
-                    </label>
-                  ))}
-                </div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: 'var(--text-main)' }}>
+                  Bidding Type
+                </label>
+                <ModernRadioGroup
+                  value={
+                    ['No Internet Bidding', 'Absentee Bidding', 'Internet Only Auction', 'Webcast'].find(b => 
+                      auction.uploadSettings.biddingType.startsWith(b.split(' ')[0])
+                    ) || 'Internet Only Auction'
+                  }
+                  onChange={(val) => {
+                    const fullMap: Record<string, string> = {
+                      'No Internet Bidding': 'No Internet Bidding',
+                      'Absentee Bidding': 'Absentee Bidding (bids brought to live auction)',
+                      'Internet Only Auction': 'Internet Only Auction',
+                      'Webcast': 'Webcast (Live Internet Bidding)'
+                    };
+                    dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'biddingType', value: fullMap[val] || val });
+                  }}
+                  options={[
+                    { value: 'No Internet Bidding', label: 'No Internet Bidding', description: 'Floor / rostrum bids only' },
+                    { value: 'Absentee Bidding', label: 'Absentee Bidding', description: 'Pre-bids executed live during the sale' },
+                    { value: 'Internet Only Auction', label: 'Internet Only Auction', description: 'Full timed digital syndication & soft-close', badge: 'Standard' },
+                    { value: 'Webcast', label: 'Webcast (Live Internet Bidding)', description: 'Real-time rostrum streaming audio & bids' }
+                  ]}
+                  variant="card"
+                />
               </div>
 
               {/* Minimum Bid Type */}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>Minimum Bid Type</label>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  {['Public Bidding', 'Sealed Bid'].map(m => (
-                    <label key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                      <input 
-                        type="radio"
-                        name="minBidType"
-                        checked={auction.uploadSettings.minBidType === m}
-                        onChange={() => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'minBidType', value: m })}
-                      />
-                      <span>{m}</span>
-                    </label>
-                  ))}
-                </div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: 'var(--text-main)' }}>
+                  Minimum Bid Type
+                </label>
+                <ModernRadioGroup
+                  value={auction.uploadSettings.minBidType || 'Public Bidding'}
+                  onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'minBidType', value: val })}
+                  options={[
+                    { value: 'Public Bidding', label: 'Public Bidding' },
+                    { value: 'Sealed Bid', label: 'Sealed Bid' }
+                  ]}
+                  variant="inline"
+                />
               </div>
 
               {/* Bid Amount Type */}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>Bid Amount Type</label>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  {['Maximum Bidding', 'Fixed / Flat Bidding'].map(amt => (
-                    <label key={amt} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                      <input 
-                        type="radio"
-                        name="bidAmountType"
-                        checked={auction.uploadSettings.bidAmountType === amt}
-                        onChange={() => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'bidAmountType', value: amt })}
-                      />
-                      <span>{amt}</span>
-                    </label>
-                  ))}
-                </div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: 'var(--text-main)' }}>
+                  Bid Amount Type
+                </label>
+                <ModernRadioGroup
+                  value={auction.uploadSettings.bidAmountType || 'Maximum Bidding'}
+                  onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'bidAmountType', value: val })}
+                  options={[
+                    { value: 'Maximum Bidding', label: 'Maximum Bidding' },
+                    { value: 'Fixed / Flat Bidding', label: 'Fixed / Flat Bidding' }
+                  ]}
+                  variant="inline"
+                />
               </div>
 
               {/* Timezone */}
               <FormField label="Timezone">
-                <select 
-                  value={auction.uploadSettings.timezone}
-                  onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'timezone', value: e.target.value })}
-                  className="catalog-filter-select"
-                  style={{ width: '100%', height: 36 }}
-                >
-                  <option value="(UTC-07:00) Mountain Time (US & Canada)">(UTC-07:00) Mountain Time (US & Canada)</option>
-                  <option value="(UTC-08:00) Pacific Time (US & Canada)">(UTC-08:00) Pacific Time (US & Canada)</option>
-                  <option value="(UTC-06:00) Central Time (US & Canada)">(UTC-06:00) Central Time (US & Canada)</option>
-                  <option value="(UTC-05:00) Eastern Time (US & Canada)">(UTC-05:00) Eastern Time (US & Canada)</option>
-                </select>
+                <ShadcnSelect
+                  value={auction.uploadSettings.timezone || '(UTC-07:00) Mountain Time (US & Canada)'}
+                  onChange={(val) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'timezone', value: val })}
+                  options={TIMEZONE_SELECT_OPTIONS}
+                  searchable
+                  searchPlaceholder="Search timezones..."
+                  fullWidth
+                />
               </FormField>
 
               {/* Open & Close Bidding Date-Time */}
@@ -1750,14 +1799,14 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       type="date"
                       value={auction.uploadSettings.openBiddingDate}
                       onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'openBiddingDate', value: e.target.value })}
-                      style={{ flex: 1, height: 36, border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '0 6px' }}
+                      style={{ flex: 1, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
                     />
                     <input 
                       type="text"
                       placeholder="10:00 AM"
                       value={auction.uploadSettings.openBiddingTime}
                       onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'openBiddingTime', value: e.target.value })}
-                      style={{ width: 80, height: 36, border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '0 6px' }}
+                      style={{ width: 88, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
                     />
                   </div>
                 </FormField>
@@ -1768,14 +1817,14 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                       type="date"
                       value={auction.uploadSettings.closeBiddingDate}
                       onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'closeBiddingDate', value: e.target.value })}
-                      style={{ flex: 1, height: 36, border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '0 6px' }}
+                      style={{ flex: 1, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
                     />
                     <input 
                       type="text"
                       placeholder="07:00 PM"
                       value={auction.uploadSettings.closeBiddingTime}
                       onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'closeBiddingTime', value: e.target.value })}
-                      style={{ width: 80, height: 36, border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '0 6px' }}
+                      style={{ width: 88, height: 38, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', fontSize: 13 }}
                     />
                   </div>
                 </FormField>
@@ -1789,19 +1838,17 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
                     value={auction.uploadSettings.softCloseSeconds}
                     onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'softCloseSeconds', value: parseInt(e.target.value) || 15 })}
                     className="catalog-search-input"
-                    style={{ width: '100%', height: 36 }}
+                    style={{ width: '100%', height: 38, borderRadius: 6 }}
                   />
                 </FormField>
 
-                <div style={{ paddingTop: 10 }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox"
-                      checked={auction.uploadSettings.autoSyncStagger}
-                      onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'autoSyncStagger', value: e.target.checked })}
-                    />
-                    <span>Auto-Sync Grouped Lot Stagger Time</span>
-                  </label>
+                <div style={{ paddingTop: 12 }}>
+                  <ModernCheckbox
+                    checked={Boolean(auction.uploadSettings.autoSyncStagger)}
+                    onChange={(checked) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'autoSyncStagger', value: checked })}
+                    label="Auto-Sync Grouped Lot Stagger Time"
+                    description="Align close delays for sequential lots"
+                  />
                 </div>
               </div>
             </div>
@@ -1813,32 +1860,29 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
               </h3>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.uploadSettings.showImmediateBidStatus}
-                    onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'showImmediateBidStatus', value: e.target.checked })}
-                  />
-                  <span>Show Immediate Bid Status (won/lost and winning amount) on Closed Lots</span>
-                </label>
+                <ModernCheckbox
+                  variant="card"
+                  checked={Boolean(auction.uploadSettings.showImmediateBidStatus)}
+                  onChange={(checked) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'showImmediateBidStatus', value: checked })}
+                  label="Show Immediate Bid Status on Closed Lots"
+                  description="Display won/lost status and winning hammer amount right as lots conclude"
+                />
 
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.uploadSettings.hideBidderUsernames}
-                    onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'hideBidderUsernames', value: e.target.checked })}
-                  />
-                  <span>Mask Bidder Usernames on Public Simulcast Screens</span>
-                </label>
+                <ModernCheckbox
+                  variant="card"
+                  checked={Boolean(auction.uploadSettings.hideBidderUsernames)}
+                  onChange={(checked) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'hideBidderUsernames', value: checked })}
+                  label="Mask Bidder Usernames on Public Simulcast Screens"
+                  description="Anonymize public-facing bidder handles with paddle numbers only"
+                />
 
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox"
-                    checked={auction.uploadSettings.allowRetractBids}
-                    onChange={(e) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'allowRetractBids', value: e.target.checked })}
-                  />
-                  <span>Allow Operator Bid Retraction Overrides during Soft-Close</span>
-                </label>
+                <ModernCheckbox
+                  variant="card"
+                  checked={Boolean(auction.uploadSettings.allowRetractBids)}
+                  onChange={(checked) => dispatch({ type: 'UPDATE_UPLOAD_SETTINGS', field: 'allowRetractBids', value: checked })}
+                  label="Allow Operator Bid Retraction Overrides during Soft-Close"
+                  description="Permit saleroom clerk overrides to cancel miskeyed floor bids"
+                />
               </div>
             </div>
           </div>
