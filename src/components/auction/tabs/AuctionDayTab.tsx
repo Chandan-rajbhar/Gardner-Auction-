@@ -173,6 +173,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [checkInStatusFilter, setCheckInStatusFilter] = useState<'all' | 'checked_in' | 'pending'>('all');
   const [selectedRegIds, setSelectedRegIds] = useState<Set<string>>(new Set());
   const [checkInSortField, setCheckInSortField] = useState<'bidCardNumber' | 'companyName' | 'bidderName' | 'email' | 'hearAboutUs' | 'permissionText' | 'isCheckedIn'>('bidCardNumber');
+  const [checkInSortOrder, setCheckInSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pageSize, setPageSize] = useState<number>(20);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
