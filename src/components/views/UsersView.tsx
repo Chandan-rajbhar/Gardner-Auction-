@@ -27,7 +27,8 @@ import {
   CreditCard,
   Sparkles,
   Pencil,
-  Trash2
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { ShadcnDatePicker } from '../ui/ShadcnDatePicker';
@@ -58,6 +59,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
   // Supabase dynamic users state
   const [supabaseUsers, setSupabaseUsers] = useState<UserBidder[]>([]);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Modals state
@@ -94,6 +96,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
   // 1. Fetch Customers dynamically from Supabase public.users
   const fetchSupabaseUsers = async () => {
     setIsLoadingDb(true);
+    setFetchError(null);
     try {
       const { data, error } = await supabase
         .from('users')
@@ -102,6 +105,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       if (error) {
         console.warn('[UsersView] Error fetching from Supabase users:', error.message);
+        setFetchError(error.message);
+        setSupabaseUsers([]);
         return;
       }
 
@@ -158,9 +163,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
           };
         });
         setSupabaseUsers(mappedUsers);
+      } else {
+        setSupabaseUsers([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('[UsersView] Exception querying Supabase:', err);
+      setFetchError(err?.message || 'Failed to load customer records.');
+      setSupabaseUsers([]);
     } finally {
       setIsLoadingDb(false);
     }
@@ -207,12 +216,10 @@ export const UsersView: React.FC<UsersViewProps> = ({
   const getPhone1 = (u: UserBidder): string => u.phone1 || u.phone || '—';
   const getEmail = (u: UserBidder): string => u.email || '—';
 
-  // Merge live Supabase users with any mock users not in Supabase yet
+  // Exclusively display verified Supabase customer records from database
   const customerList = useMemo(() => {
-    const sbEmailSet = new Set(supabaseUsers.map(u => (u.email || '').toLowerCase().trim()));
-    const remainingMock = users.filter(u => u.type !== 'consignor' && !sbEmailSet.has((u.email || '').toLowerCase().trim()));
-    return [...supabaseUsers, ...remainingMock];
-  }, [supabaseUsers, users]);
+    return supabaseUsers;
+  }, [supabaseUsers]);
 
   // Apply search
   const filteredUsers = useMemo(() => {
@@ -970,6 +977,39 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       )}
 
+      {/* Error Alert Banner with Retry */}
+      {fetchError && (
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#991b1b',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-md)',
+          fontSize: 13,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+          boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={18} color="#dc2626" />
+            <span>Unable to load customer records: {fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchSupabaseUsers}
+            className="btn btn-secondary"
+            style={{ fontSize: 12, padding: '5px 12px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            <RefreshCw size={12} />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
       {/* Search Bar & Sync indicator */}
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg-card)', padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
         <div className="input-search-wrapper" style={{ flex: 1, minWidth: 260 }}>
@@ -1075,10 +1115,62 @@ export const UsersView: React.FC<UsersViewProps> = ({
             </tr>
           </thead>
           <tbody>
-            {sortedUsers.length === 0 ? (
+            {isLoadingDb && sortedUsers.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
-                  No customer records found matching your filters.
+                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Loader2 size={20} className="animate-spin" style={{ color: 'var(--gold-primary)' }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 500 }}>Loading customer records from database...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : fetchError ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#b91c1c' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                      <AlertCircle size={18} color="#dc2626" />
+                      <span>{fetchError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchSupabaseUsers}
+                      className="btn btn-secondary"
+                      style={{ fontSize: 12, padding: '5px 12px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <RefreshCw size={12} />
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : sortedUsers.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 21, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                      <User size={20} />
+                    </div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 14.5 }}>
+                      {searchTerm ? 'No matching customers found' : 'No customer records in database'}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 400 }}>
+                      {searchTerm
+                        ? `No customers match your search term "${searchTerm}". Try a different keyword.`
+                        : 'No customer accounts exist yet in Supabase. Register your first customer using the New Customer button or Import CSV.'}
+                    </div>
+                    {!searchTerm && (
+                      <button
+                        type="button"
+                        onClick={openNewCustomerModal}
+                        className="btn btn-gold"
+                        style={{ marginTop: 6, fontSize: 12, padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      >
+                        <Plus size={13} />
+                        <span>New Customer</span>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ) : (

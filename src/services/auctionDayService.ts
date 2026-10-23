@@ -228,19 +228,19 @@ class AuctionDayService {
     } catch (_) {}
 
     // Fallback to auction.dayStats if dedicated tables returned empty
-    if (registrations.length === 0 && auction.dayStats?.registrations) {
+    if (registrations.length === 0 && Array.isArray(auction.dayStats?.registrations)) {
       registrations = [...auction.dayStats.registrations];
     }
-    if (alternateBids.length === 0 && auction.dayStats?.alternateBids) {
+    if (alternateBids.length === 0 && Array.isArray(auction.dayStats?.alternateBids)) {
       alternateBids = [...auction.dayStats.alternateBids];
     }
-    if (siteStats.length === 0 && auction.dayStats?.siteStats) {
+    if (siteStats.length === 0 && Array.isArray(auction.dayStats?.siteStats)) {
       siteStats = [...auction.dayStats.siteStats];
     }
-    if (deposits.length === 0 && auction.dayStats?.deposits) {
+    if (deposits.length === 0 && Array.isArray(auction.dayStats?.deposits)) {
       deposits = [...auction.dayStats.deposits];
     }
-    if (auction.dayStats?.lotStats) {
+    if (Array.isArray(auction.dayStats?.lotStats)) {
       lotStats = [...auction.dayStats.lotStats];
     }
 

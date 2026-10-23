@@ -36,7 +36,7 @@ import { LogsView } from './components/views/LogsView';
 import { SettingsView } from './components/views/SettingsView';
 import { ProfileView } from './components/views/ProfileView';
 import { CheckCircle2, RefreshCw, X, Radio, ArrowLeft } from 'lucide-react';
-import { recordBidToSupabase } from './lib/supabase';
+import { recordBidToSupabase, supabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
 import { auctionService } from './services/auctionService';
 import { StageType, AuctionDaySubTab } from './types/auctionDetail';
@@ -226,10 +226,10 @@ const AdminConsole: React.FC = () => {
     ? isMobileMenuOpen
     : !isSidebarCollapsed;
 
-  // Application Data States
-  const [auctions, setAuctions] = useState<Auction[]>(INITIAL_AUCTIONS);
+  // Application Data States - Initialized cleanly without mock records
+  const [auctions, setAuctions] = useState<Auction[]>([]);
   const [lots, setLots] = useState<LotItem[]>(INITIAL_LOTS);
-  const [bidders, setBidders] = useState<UserBidder[]>(INITIAL_USERS);
+  const [bidders, setBidders] = useState<UserBidder[]>([]);
   const [bids, setBids] = useState<LiveBid[]>(INITIAL_BIDS);
   const [invoices, setInvoices] = useState<InvoiceSettlement[]>(INITIAL_INVOICES);
   const [consignors, setConsignors] = useState<ConsignorSettlement[]>(INITIAL_CONSIGNOR_SETTLEMENTS);
@@ -237,14 +237,21 @@ const AdminConsole: React.FC = () => {
 
   const [activeLotId, setActiveLotId] = useState<string>('lot-001');
 
-  // Load 10+ auctions from auctionService and subscribe to live changes
+  // Load genuine auctions from Supabase via auctionService and subscribe to live changes
   useEffect(() => {
+    let isMounted = true;
     const loadAllAuctions = async () => {
       try {
         const details = await auctionService.getAuctions();
-        if (details && details.length > 0) {
+        if (isMounted && details) {
           const mapped = details.map(mapDetailToAuction);
           setAuctions(mapped);
+          if (mapped.length > 0) {
+            setSelectedAuctionId(prev => {
+              if (prev && mapped.some(a => a.id === prev)) return prev;
+              return mapped[0].id;
+            });
+          }
         }
       } catch (err) {
         console.warn('[App] Could not load auctions from service:', err);
@@ -257,7 +264,92 @@ const AdminConsole: React.FC = () => {
     });
 
     return () => {
+      isMounted = false;
       unsubscribe();
+    };
+  }, []);
+
+  // Load genuine customers from Supabase for live badges & synchronization
+  useEffect(() => {
+    let isMounted = true;
+    const loadRealCustomers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data && isMounted) {
+          const customerRecords = data.filter((row: any) => {
+            const role = (row.role || '').toLowerCase();
+            return role !== 'super_admin' && role !== 'admin' && role !== 'clerk' && role !== 'consignor_manager';
+          });
+
+          const mapped: UserBidder[] = customerRecords.map((row: any) => {
+            const fullName = row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Customer';
+            const firstName = row.first_name || (fullName ? fullName.split(' ')[0] : '');
+            const lastName = row.last_name || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
+            const customerCode = row.customer_code || (row.permanent_bidder_number ? `CUST-${row.permanent_bidder_number}` : `CUST-${row.id.slice(0, 6).toUpperCase()}`);
+            const phone1 = row.phone_1 || row.phone || '';
+
+            return {
+              id: row.id,
+              customerCode,
+              firstName,
+              lastName,
+              name: fullName,
+              email: row.email || '',
+              phone1,
+              phone: phone1,
+              company: row.company_name || undefined,
+              paddleNumber: row.permanent_bidder_number || customerCode.replace('CUST-', '') || 'Pending',
+              siteOrigin: 'Website Direct',
+              registrationDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+              status: 'verified',
+              creditCardAuthorized: true,
+              cardLast4: '4488',
+              bidLimit: 100000,
+              totalBidsPlaced: 0,
+              lotsWon: 0,
+              totalSpent: 0,
+              type: row.is_seller ? 'both' : 'bidder',
+              address: row.address_1 || '',
+              cityStateZip: `${row.city || ''} ${row.state || ''} ${row.zip || ''}`.trim(),
+              notes: row.title || 'Supabase registered account',
+              driversLicenseNumber: row.drivers_license_number || undefined,
+              taxId: row.tax_id || undefined,
+              taxIdExpirationDate: row.tax_id_expiration_date || undefined,
+              taxExemptAllPurchases: row.tax_exempt_all_purchases || false,
+              isSeller: row.is_seller || false,
+              address1: row.address_1 || undefined,
+              address2: row.address_2 || undefined,
+              city: row.city || undefined,
+              state: row.state || undefined,
+              zip: row.zip || undefined,
+              country: row.country || 'United States',
+              isPermanentBidder: row.is_permanent_bidder || false
+            };
+          });
+
+          setBidders(mapped);
+        }
+      } catch (err) {
+        console.warn('[App] Could not load customers from Supabase:', err);
+      }
+    };
+
+    loadRealCustomers();
+
+    const channel = supabase
+      .channel('realtime_app_customers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        loadRealCustomers();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -345,7 +437,37 @@ const AdminConsole: React.FC = () => {
     };
   }, []);
 
-  const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0];
+  const defaultEmptyAuction: Auction = {
+    id: 'auc-none',
+    code: 'AUC-NONE',
+    title: 'No Active Auction',
+    category: 'General',
+    status: 'preview',
+    startDate: new Date().toISOString(),
+    endDate: new Date().toISOString(),
+    location: 'Saleroom',
+    address: '',
+    cityStateZip: '',
+    country: 'United States',
+    lotCount: 0,
+    checkInCount: 0,
+    uniqueSellers: 0,
+    presaleMin: 0,
+    presaleMax: 0,
+    avgEstimate: 0,
+    avgSalesPrice: 0,
+    buyersPremiumCash: 15,
+    buyersPremiumCredit: 18,
+    taxRate: 0,
+    description: '',
+    terms: '',
+    bpExplanation: '',
+    taxExemptInfo: '',
+    hibidSyncStatus: 'synced',
+    syndications: []
+  };
+
+  const currentAuction = auctions.find(a => a.id === selectedAuctionId) || auctions[0] || defaultEmptyAuction;
   const activeLotOnBlock = lots.find(l => l.id === activeLotId) || lots.find(l => l.status === 'on_block') || lots[0];
 
   const currentAdminName = user?.name || 'Todd Gardner';

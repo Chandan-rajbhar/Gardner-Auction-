@@ -53,7 +53,7 @@ import {
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { auctionService } from '../../../services/auctionService';
 import { LotFormModal } from '../LotFormModal';
-import { INITIAL_USERS } from '../../../data/mockData';
+import { supabase } from '../../../lib/supabase';
 import { useToast } from '../../../context/ToastContext';
 import { lotsService } from '../../../services/lotsService';
 
@@ -81,6 +81,40 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   const { state, dispatch, errors, saveAuction } = useAuctionDetail();
   const { showToast } = useToast();
   const auction = state.data;
+
+  // Real database consignors / sellers from Supabase users table
+  const [consignorUsers, setConsignorUsers] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchRealConsignors = async () => {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('*')
+          .order('full_name', { ascending: true });
+        if (data && isMounted) {
+          const mapped = data.map((row: any) => {
+            const fullName = row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Consignor';
+            return {
+              id: row.id,
+              name: fullName,
+              company: row.company_name,
+              customerCode: row.customer_code,
+              email: row.email,
+              phone: row.phone,
+              type: row.is_seller ? 'both' : 'bidder'
+            };
+          });
+          setConsignorUsers(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load consignors:', err);
+      }
+    };
+    fetchRealConsignors();
+    return () => { isMounted = false; };
+  }, []);
 
   // Modals for Details Tab
   const [isTipsModalOpen, setIsTipsModalOpen] = useState(false);
@@ -3923,7 +3957,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
         auctions={[auction as any]}
         defaultAuctionId={auction.id}
         lockAuction={true}
-        consignors={INITIAL_USERS}
+        consignors={consignorUsers}
       />
 
       {/* Delete Lot Confirmation Modal */}
