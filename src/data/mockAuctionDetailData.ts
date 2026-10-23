@@ -1,4 +1,157 @@
-import { AuctionDetail, HiBidSiteStat } from '../types/auctionDetail';
+import { AuctionDetail, HiBidSiteStat, BidderDeposit, BidderRegistration } from '../types/auctionDetail';
+
+export const DEFAULT_DEPOSITS: BidderDeposit[] = [
+  {
+    id: 'dep-1',
+    auctionId: 'auc-001',
+    registrationId: 'reg-5001',
+    bidCardNumber: '5001',
+    bidderName: 'Helena Vance',
+    amount: 1500,
+    paymentMethod: 'Credit Card',
+    status: 'Collected',
+    date: '2026-10-21',
+    referenceNumber: 'AUTH_891283',
+    notes: 'Pre-sale floor deposit pre-authorization',
+    receivedBy: 'Clerk Desk'
+  },
+  {
+    id: 'dep-2',
+    auctionId: 'auc-001',
+    registrationId: 'reg-2',
+    bidCardNumber: '2001',
+    bidderName: 'Roger Perry',
+    amount: 2500,
+    paymentMethod: 'Wire Transfer',
+    status: 'Collected',
+    date: '2026-10-20',
+    referenceNumber: 'WIRE-US-99120',
+    notes: 'Wire transfer confirmed by First National Bank of MT',
+    receivedBy: 'Treasury'
+  },
+  {
+    id: 'dep-3',
+    auctionId: 'auc-001',
+    registrationId: 'reg-5003',
+    bidCardNumber: '5003',
+    bidderName: 'Eleanor Rigby',
+    amount: 5000,
+    paymentMethod: 'Check',
+    status: 'Collected',
+    date: '2026-10-22',
+    referenceNumber: 'CHK-44129',
+    notes: 'Certified cashier bank check for high value lots',
+    receivedBy: 'Finance'
+  }
+];
+
+export const DEFAULT_REGISTRATIONS: BidderRegistration[] = [
+  {
+    id: 'reg-1',
+    bidCardNumber: '1000',
+    bidderName: 'Randy A Stratford',
+    companyName: 'Stratford Rare Numismatics',
+    email: 'r.stratford@stratfordvault.com',
+    phone: '406-555-0199',
+    hearAboutUs: 'HiBid Featured Auction',
+    username: 'rstratford_mt',
+    hibidReputation: '5.0 ★ (48 reviews)',
+    bidCount: 14,
+    permissionText: 'Approved - High Limit ($50,000)',
+    dateTime: '10/18/2026 09:24 AM',
+    site: 'highlandergoldandsilver.hibid.com',
+    notes: 'Frequent buyer of high-grade Morgan silver dollars.',
+    shippingRequested: true,
+    bidderNotes: 'Please combine with any floor purchases.',
+    isCheckedIn: true,
+    depositAmount: 0,
+    depositStatus: 'None'
+  },
+  {
+    id: 'reg-2',
+    bidCardNumber: '2001',
+    bidderName: 'Roger Perry',
+    companyName: 'Perry & Sons Precious Metals',
+    email: 'roger@perryvault.com',
+    phone: '406-555-0144',
+    hearAboutUs: 'Direct Catalog Mailing',
+    username: 'roger_perry_vault',
+    hibidReputation: '4.9 ★ (112 reviews)',
+    bidCount: 28,
+    permissionText: 'Approved - Standard ($25,000)',
+    dateTime: '10/19/2026 02:15 PM',
+    site: 'hibid.com/montana',
+    notes: 'Specialist collector of pre-1933 US Gold Double Eagles.',
+    shippingRequested: true,
+    bidderNotes: 'Requires signature on delivery.',
+    isCheckedIn: true,
+    depositAmount: 2500,
+    depositStatus: 'Collected'
+  },
+  {
+    id: 'reg-5001',
+    bidCardNumber: '5001',
+    bidderName: 'Helena Vance',
+    companyName: 'Crown Jewelry Co',
+    email: 'helena@crownjewelry.com',
+    phone: '406-555-0128',
+    hearAboutUs: 'Social Media',
+    username: 'hvance_crown',
+    hibidReputation: '5.0 ★ (24 reviews)',
+    bidCount: 9,
+    permissionText: 'Approved - High Limit ($50,000)',
+    dateTime: '10/20/2026 10:14 AM',
+    site: 'gardner.hibid.com',
+    notes: 'Specializes in estate gold timepieces and antique diamonds.',
+    shippingRequested: false,
+    bidderNotes: 'Will pick up in person at Missoula saleroom.',
+    isCheckedIn: false,
+    depositAmount: 1500,
+    depositStatus: 'Collected'
+  },
+  {
+    id: 'reg-5002',
+    bidCardNumber: '5002',
+    bidderName: 'Marcus Chen',
+    companyName: 'Chen Antiques LLC',
+    email: 'marcus@chenantiques.com',
+    phone: '406-555-0182',
+    hearAboutUs: 'AuctionZip',
+    username: 'mchen_gold',
+    hibidReputation: '4.8 ★ (19 reviews)',
+    bidCount: 4,
+    permissionText: 'Approved - Standard ($25,000)',
+    dateTime: '10/21/2026 11:30 AM',
+    site: 'gardner.hibid.com',
+    notes: 'Interested in early American colonial coinage and silver.',
+    shippingRequested: true,
+    bidderNotes: 'Insured courier delivery requested.',
+    isCheckedIn: false,
+    depositAmount: 0,
+    depositStatus: 'None'
+  },
+  {
+    id: 'reg-5003',
+    bidCardNumber: '5003',
+    bidderName: 'Eleanor Rigby',
+    companyName: 'Rigby Fine Arts & Estate Vault',
+    email: 'eleanor@rigbyfinearts.com',
+    phone: '406-555-0167',
+    hearAboutUs: 'Newspaper',
+    username: 'erigby_estates',
+    hibidReputation: '5.0 ★ (67 reviews)',
+    bidCount: 16,
+    permissionText: 'Approved - VIP ($100,000)',
+    dateTime: '10/22/2026 08:45 AM',
+    site: 'gardner.hibid.com',
+    notes: 'Long-time patron of fine art and high relief gold rarities.',
+    shippingRequested: false,
+    bidderNotes: 'Saleroom representative attending live auction.',
+    isCheckedIn: false,
+    depositAmount: 5000,
+    depositStatus: 'Collected'
+  }
+];
 
 export const DEFAULT_HIBID_SITES: HiBidSiteStat[] = [
   {
@@ -421,7 +574,8 @@ export const MOCK_AUCTIONS_DETAIL: AuctionDetail[] = [
           notes: 'Written order bid received via registered mail.',
           status: 'Active'
         }
-      ]
+      ],
+      deposits: DEFAULT_DEPOSITS
     },
 
     settlements: [
@@ -603,7 +757,8 @@ export const MOCK_AUCTIONS_DETAIL: AuctionDetail[] = [
       avgSalesPrice: 9450.00,
       hibidUrl: 'https://gardner.hibid.com',
       siteStats: DEFAULT_HIBID_SITES,
-      registrations: [],
+      registrations: DEFAULT_REGISTRATIONS,
+      deposits: DEFAULT_DEPOSITS,
       lotStats: [],
       alternateBids: []
     },

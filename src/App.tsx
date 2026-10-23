@@ -88,6 +88,10 @@ const AuctionDaySection: React.FC<{
   handleNextLot: () => void;
   setActiveLotId: (id: string) => void;
   setLots: React.Dispatch<React.SetStateAction<LotItem[]>>;
+  availableAuctions?: Array<{ id: string; code: string; title: string }>;
+  selectedAuctionId?: string;
+  onSelectAuction?: (id: string) => void;
+  onNavigateReports?: () => void;
 }> = ({
   auctionId,
   lots,
@@ -100,7 +104,11 @@ const AuctionDaySection: React.FC<{
   handleReopenLot,
   handleNextLot,
   setActiveLotId,
-  setLots
+  setLots,
+  availableAuctions = [],
+  selectedAuctionId,
+  onSelectAuction,
+  onNavigateReports
 }) => {
   const [currentTab, setCurrentTab] = useState<AuctionDaySubTab>('dashboard');
   const [isLiveRostrumActive, setIsLiveRostrumActive] = useState<boolean>(false);
@@ -127,7 +135,7 @@ const AuctionDaySection: React.FC<{
               }}
             >
               <ArrowLeft size={15} />
-              <span>← Return to Auction Day Console</span>
+              <span>Return to Auction Day Console</span>
             </button>
           </div>
 
@@ -150,23 +158,28 @@ const AuctionDaySection: React.FC<{
           />
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div className="card-header-flex">
-            <div>
-              <h2 className="font-serif" style={{ fontSize: 22, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                Auction Day
-              </h2>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                Rostrum clerking controls, bidder check-in, HiBid syndication monitors, and alternate floor bids
-              </p>
-            </div>
-          </div>
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <AuctionDayTab
             currentTab={currentTab}
             onSelectTab={setCurrentTab}
             onNavigateClerking={() => setIsLiveRostrumActive(true)}
             lots={lots}
+            bidders={bidders}
+            bids={bids}
+            onPlaceBid={handlePlaceBid}
+            onHammerSold={handleHammerSold}
+            onPassLot={handlePassLot}
+            onReopenLot={handleReopenLot}
+            onNextLot={handleNextLot}
+            onSelectLot={(lotId) => {
+              setActiveLotId(lotId);
+              setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: 'on_block' } : l.status === 'on_block' ? { ...l, status: 'upcoming' } : l));
+              lotsService.sendLotToBlock(lotId);
+            }}
+            availableAuctions={availableAuctions}
+            selectedAuctionId={selectedAuctionId}
+            onSelectAuction={onSelectAuction}
+            onNavigateReports={onNavigateReports}
           />
         </div>
       )}
@@ -831,7 +844,7 @@ const AdminConsole: React.FC = () => {
 
           {currentSection === 'live_clerking' && (
             <AuctionDaySection
-              auctionId={selectedAuctionId || 'auc-002'}
+              auctionId={selectedAuctionId || 'auc-001'}
               lots={lots}
               activeLotOnBlock={activeLotOnBlock}
               bids={bids}
@@ -843,6 +856,10 @@ const AdminConsole: React.FC = () => {
               handleNextLot={handleNextLot}
               setActiveLotId={setActiveLotId}
               setLots={setLots}
+              availableAuctions={auctions}
+              selectedAuctionId={selectedAuctionId}
+              onSelectAuction={setSelectedAuctionId}
+              onNavigateReports={() => handleNavigateSection('reports')}
             />
           )}
 

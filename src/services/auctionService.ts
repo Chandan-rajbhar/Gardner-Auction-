@@ -293,7 +293,7 @@ class AuctionService {
           dayStats: {
             ...(emptyBase.dayStats || {}),
             ...(data.day_stats || {}),
-            lotCount
+            lotCount: typeof lotCount === 'number' ? lotCount : (data.day_stats?.lotCount || 0)
           }
         };
 
@@ -361,6 +361,7 @@ class AuctionService {
         auction_links: updated.auctionLinks || [],
         upload_settings: updated.uploadSettings || {},
         lot_defaults: updated.lotDefaults || {},
+        day_stats: updated.dayStats,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 
