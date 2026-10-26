@@ -874,6 +874,9 @@ const AdminConsole: React.FC = () => {
                 setConsignors(prev => prev.map(c => c.id === id ? { ...c, status, checkNumber: `CHK-${Math.floor(900000 + Math.random() * 99999)}` } : c));
               }}
               selectedAuctionId={selectedAuctionId}
+              availableAuctions={auctions}
+              onSelectAuction={setSelectedAuctionId}
+              onNavigateAuctions={() => handleNavigateSection('auctions')}
             />
           )}
 

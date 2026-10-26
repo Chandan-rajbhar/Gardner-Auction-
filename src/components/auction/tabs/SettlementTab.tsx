@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuctionDetail } from '../../../context/AuctionDetailContext';
 import { SettlementCustomer } from '../../../types/auctionDetail';
 import { auctionService } from '../../../services/auctionService';
+import { settlementService } from '../../../services/settlementService';
 import { SettlementCustomerDetail } from './SettlementCustomerDetail';
 import { TableRowActionMenu } from '../../Common/TableRowActionMenu';
+import { ShadcnPagination } from '../../ui/ShadcnPagination';
 import { 
   PackageCheck, 
   Printer, 
@@ -15,18 +17,25 @@ import {
   RefreshCw,
   FileText,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Settings
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
 
 interface SettlementTabProps {
   selectedCustomerId?: string | null;
   onSelectCustomer: (customerId: string | null) => void;
+  onOpenBatchShipments?: () => void;
+  onOpenUpdateInvoices?: () => void;
+  onOpenPrintEmail?: () => void;
 }
 
 export const SettlementTab: React.FC<SettlementTabProps> = ({
   selectedCustomerId,
-  onSelectCustomer
+  onSelectCustomer,
+  onOpenBatchShipments,
+  onOpenUpdateInvoices,
+  onOpenPrintEmail
 }) => {
   const { state, dispatch } = useAuctionDetail();
   const auction = state.data;
@@ -35,6 +44,10 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
   const [customers, setCustomers] = useState<SettlementCustomer[]>([]);
+
+  // Pagination state (Default 20 as requested)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   useEffect(() => {
     if (auction?.settlements) {
@@ -72,6 +85,12 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
     c.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Paginated items
+  const paginatedCustomers = filteredCustomers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   const allSelected = filteredCustomers.length > 0 && filteredCustomers.every(c => selectedIds.includes(c.id));
 
   const toggleSelectAll = () => {
@@ -94,7 +113,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
   const handleBatchProcessCC = async () => {
     if (selectedIds.length === 0) return;
     setIsProcessingBatch(true);
-    await auctionService.batchProcessCreditCards(auction.id, selectedIds);
+    await settlementService.batchProcessCreditCards(auction.id, selectedIds);
     // Reload
     const updated = await auctionService.getAuctionById(auction.id);
     if (updated) {
@@ -103,26 +122,26 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
     }
     setIsProcessingBatch(false);
     setSelectedIds([]);
-    alert(`Successfully processed batch credit card payments for selected accounts!`);
   };
 
   // Batch Shipments
   const handleBatchShipments = async () => {
+    if (onOpenBatchShipments) {
+      onOpenBatchShipments();
+      return;
+    }
     if (selectedIds.length === 0) {
       alert('Please select settlements to mark as shipped.');
       return;
     }
     setIsProcessingBatch(true);
-    for (const cid of selectedIds) {
-      await auctionService.markAllShipped(auction.id, cid);
-    }
+    await settlementService.markBatchShipped(auction.id, selectedIds);
     const updated = await auctionService.getAuctionById(auction.id);
     if (updated) {
       dispatch({ type: 'SET_AUCTION', payload: updated });
       setCustomers(updated.settlements);
     }
     setIsProcessingBatch(false);
-    alert(`Marked all items as shipped for ${selectedIds.length} settlement account(s).`);
   };
 
   return (
@@ -151,10 +170,10 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           }}>
             <RefreshCw size={28} className="animate-spin" color="var(--gold-primary)" />
             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-main)' }}>
-              Processing Batch Card Transactions...
+              Processing Batch Transactions...
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Connecting to payment gateway & HiBid API
+              Updating settlement records in Supabase
             </div>
           </div>
         </div>
@@ -187,7 +206,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => window.print()}
+              onClick={() => onOpenPrintEmail ? onOpenPrintEmail() : window.print()}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', fontSize: 12.5, fontWeight: 600 }}
             >
               <Printer size={15} />
@@ -196,7 +215,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           </div>
         </div>
 
-        {/* Controls Bar: Batch Process, Deselect chip, Search, Total Settlements counter */}
+        {/* Controls Bar: Batch Process, Deselect chip, Search with gear, Total Settlements counter */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button
@@ -222,15 +241,38 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div className="catalog-search-wrapper" style={{ maxWidth: 280, minWidth: 200 }}>
+            <div className="catalog-search-wrapper" style={{ maxWidth: 320, minWidth: 240, position: 'relative' }}>
               <Search size={15} className="catalog-search-icon" />
               <input 
                 type="text"
-                placeholder="Search settlements..."
+                placeholder="Search settlements by bidder, name, invoice..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="catalog-search-input"
+                style={{ paddingRight: 36 }}
               />
+              <button
+                type="button"
+                title="Configure Columns"
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-dim)',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <Settings size={14} />
+              </button>
             </div>
 
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -265,7 +307,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map(customer => {
+              {paginatedCustomers.map(customer => {
                 const isSelected = selectedIds.includes(customer.id);
                 return (
                   <tr 
@@ -300,8 +342,9 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                         className="catalog-checkbox"
                         checked={customer.isCashBuyer}
                         onChange={async (e) => {
-                          customer.isCashBuyer = e.target.checked;
-                          await auctionService.saveSettlementCustomer(auction.id, customer);
+                          const updatedVal = e.target.checked;
+                          customer.isCashBuyer = updatedVal;
+                          await settlementService.updateCashBuyer(auction.id, customer.id, updatedVal);
                           setCustomers([...customers]);
                         }}
                         title="Cash buyer status"
@@ -361,6 +404,11 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                             onClick: () => onSelectCustomer(customer.id)
                           },
                           {
+                            label: 'Update Invoice',
+                            icon: FileText,
+                            onClick: () => onOpenUpdateInvoices ? onOpenUpdateInvoices() : onSelectCustomer(customer.id)
+                          },
+                          {
                             label: 'Print Settlement',
                             icon: Printer,
                             onClick: () => window.print()
@@ -368,7 +416,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                           {
                             label: 'Email Settlement',
                             icon: Mail,
-                            onClick: () => alert(`Emailing settlement invoice #${customer.invoiceNumber} to ${customer.name}...`)
+                            onClick: () => onOpenPrintEmail ? onOpenPrintEmail() : alert(`Emailing settlement invoice #${customer.invoiceNumber} to ${customer.name}...`)
                           },
                           {
                             label: 'Mark as Shipped',
@@ -376,7 +424,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                             disabled: customer.shippedCount >= (customer.totalLotsCount || customer.lotCount || 1),
                             onClick: async () => {
                               setIsProcessingBatch(true);
-                              await auctionService.markAllShipped(auction.id, customer.id);
+                              await settlementService.markBatchShipped(auction.id, [customer.id]);
                               const updated = await auctionService.getAuctionById(auction.id);
                               if (updated) {
                                 dispatch({ type: 'SET_AUCTION', payload: updated });
@@ -395,15 +443,32 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
               {filteredCustomers.length === 0 && (
                 <tr>
                   <td colSpan={10} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-dim)' }}>
-                    No settlements match current filters.
+                    No data available in table
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls matching requirements */}
+        {filteredCustomers.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <ShadcnPagination
+              currentPage={currentPage}
+              totalItems={filteredCustomers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+              pageSizeOptions={[10, 20, 50, 100]}
+              itemLabel="settlements"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 };
-
