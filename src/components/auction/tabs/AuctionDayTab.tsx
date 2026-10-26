@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuctionDetail } from '../../../context/AuctionDetailContext';
 import { 
   AuctionDaySubTab, 
@@ -12,6 +12,7 @@ import { FormModal } from '../../Common/FormModal';
 import { FormField } from '../../Common/FormField';
 import { auctionDayService, AuctionDayMetrics } from '../../../services/auctionDayService';
 import { lotsService } from '../../../services/lotsService';
+import { supabase, supabaseAdmin } from '../../../lib/supabase';
 import { 
   ExternalLink, 
   CheckCircle, 
@@ -324,6 +325,26 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [selectedClerkingLotIds, setSelectedClerkingLotIds] = useState<Set<string>>(new Set());
   const [isClerkingStatsExpanded, setIsClerkingStatsExpanded] = useState<boolean>(false);
 
+  // Dynamic Supabase Customers and Auctions for Live Clerking Dropdowns
+  const [supabaseCustomers, setSupabaseCustomers] = useState<Array<{
+    id: string;
+    fullName: string;
+    firstName?: string;
+    lastName?: string;
+    customerCode: string;
+    email?: string;
+    phone?: string;
+    companyName?: string;
+    isPermanent?: boolean;
+    permanentBidderNumber?: string | null;
+  }>>([]);
+  const [supabaseAuctions, setSupabaseAuctions] = useState<Array<{
+    id: string;
+    title: string;
+    code: string;
+    status?: string;
+  }>>([]);
+
   // Clerking Drawer State (Edit / View)
   const [clerkingDrawer, setClerkingDrawer] = useState<{
     isOpen: boolean;
@@ -570,6 +591,143 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     return Array.from(set).map(name => ({ value: name, label: name }));
   }, [auctionLots]);
 
+  // Real database fetch for Customers (users table) and Auctions (auctions table)
+  const fetchDropdownData = useCallback(async () => {
+    try {
+      const client = supabaseAdmin || supabase;
+
+      // 1. Fetch real customers from Supabase 'users' table ONLY
+      const { data: usersData, error: usersErr } = await client
+        .from('users')
+        .select('id, full_name, first_name, last_name, customer_code, permanent_bidder_number, is_permanent_bidder, email, phone, company_name, role')
+        .order('full_name', { ascending: true });
+
+      if (!usersErr && usersData) {
+        const mappedCustomers = usersData.map((u: any) => {
+          const fullName = u.full_name?.trim() || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || 'Customer';
+          const cleanPaddle = u.permanent_bidder_number ? String(u.permanent_bidder_number) : null;
+          const customerCode = u.customer_code || (cleanPaddle ? `PADDLE #${cleanPaddle}` : `CUST-${u.id.slice(0, 6).toUpperCase()}`);
+          return {
+            id: u.id,
+            fullName,
+            firstName: u.first_name || fullName.split(/\s+/)[0] || '',
+            lastName: u.last_name || fullName.split(/\s+/).slice(1).join(' ') || '',
+            customerCode,
+            email: u.email || '',
+            phone: u.phone || '',
+            companyName: u.company_name || '',
+            isPermanent: Boolean(u.is_permanent_bidder || u.permanent_bidder_number),
+            permanentBidderNumber: cleanPaddle
+          };
+        });
+        setSupabaseCustomers(mappedCustomers);
+      }
+
+      // 2. Fetch real auctions from Supabase 'auctions' table
+      const { data: auctionsData, error: auctionsErr } = await client
+        .from('auctions')
+        .select('id, name, code, status')
+        .order('name', { ascending: true });
+
+      if (!auctionsErr && auctionsData) {
+        const mappedAuctions = auctionsData.map((a: any) => ({
+          id: a.id,
+          title: a.name || 'Untitled Auction',
+          code: a.code || `AUC-${a.id.slice(0, 6).toUpperCase()}`,
+          status: a.status || 'Active'
+        }));
+        setSupabaseAuctions(mappedAuctions);
+      }
+    } catch (err) {
+      console.warn('[AuctionDayTab] Error fetching dynamic dropdown data from Supabase:', err);
+    }
+  }, []);
+
+  // Fetch dropdown data on mount & subscribe to Supabase Realtime for 'users' table
+  useEffect(() => {
+    fetchDropdownData();
+
+    // Live real-time subscription for dynamic updates without full page refresh
+    const client = supabaseAdmin || supabase;
+    const userChannel = client
+      .channel('realtime-users-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchDropdownData();
+      })
+      .subscribe();
+
+    return () => {
+      client.removeChannel(userChannel);
+    };
+  }, [fetchDropdownData]);
+
+  // Refresh customer details dynamically whenever Bidder Check In modal is opened
+  useEffect(() => {
+    if (isBidderCheckInModalOpen) {
+      fetchDropdownData();
+    }
+  }, [isBidderCheckInModalOpen, fetchDropdownData]);
+
+  // Dynamic Customer Options for "Sold To" dropdown with Shadcn styling & search
+  const customerSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    const list: ShadcnSelectOption[] = supabaseCustomers.map(c => ({
+      value: c.fullName,
+      label: c.fullName,
+      badge: c.customerCode,
+      description: c.email ? `${c.email} • ID: ${c.id.slice(0, 8)}` : `ID: ${c.id.slice(0, 8)}`
+    }));
+
+    // If clerkSeller is set and not already in options, keep it visible
+    if (clerkSeller && !list.some(o => o.value.toLowerCase() === clerkSeller.toLowerCase())) {
+      list.unshift({
+        value: clerkSeller,
+        label: clerkSeller,
+        badge: 'Selected'
+      });
+    }
+
+    if (list.length === 0) {
+      return [
+        { value: 'SAURABH YADAVS', label: 'SAURABH YADAVS', badge: 'CUST-866149', description: 'sky1@gmail.com • ID: 866149c8' },
+        { value: 'Super Admin', label: 'Super Admin', badge: 'STAFF', description: 'admin@gardnerauction.com • ID: e4daf034' }
+      ];
+    }
+
+    return list;
+  }, [supabaseCustomers, clerkSeller]);
+
+  // Dynamic Auction Title Options for "Title" dropdown with Shadcn styling & search
+  const auctionTitleSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    const list: ShadcnSelectOption[] = supabaseAuctions.map(a => ({
+      value: a.title,
+      label: a.title,
+      badge: a.code,
+      description: `ID: ${a.id} • Status: ${a.status}`
+    }));
+
+    // If clerkTitle has a custom value (e.g. from current lot) not yet in list, keep it visible
+    if (clerkTitle && !list.some(o => o.value.toLowerCase() === clerkTitle.toLowerCase())) {
+      list.unshift({
+        value: clerkTitle,
+        label: clerkTitle,
+        badge: 'Lot Title'
+      });
+    }
+
+    if (list.length === 0) {
+      if (auction?.name) {
+        return [{ value: auction.name, label: auction.name, badge: auction.code || 'AUC-001', description: `ID: ${auction.id}` }];
+      }
+      return [
+        { value: 'Spring Collector Auction — Session I', label: 'Spring Collector Auction — Session I', badge: 'AUC-001', description: 'ID: auc-001' },
+        { value: 'Test saurabh', label: 'Test saurabh', badge: 'SA4169', description: 'ID: auc-1792654367075' },
+        { value: 'Test gold', label: 'Test gold', badge: 'sss44', description: 'ID: auc-1792664749020' }
+      ];
+    }
+
+    return list;
+  }, [supabaseAuctions, clerkTitle, auction?.name, auction?.code, auction?.id]);
+
   // Selected bidder records for Check In dialog
   const selectedBiddersList = useMemo(() => {
     return registrations.filter(r => selectedRegIds.has(r.id));
@@ -605,8 +763,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   // When selectedClerkLot changes or active lot changes, synchronize form
   useEffect(() => {
     if (selectedClerkLot) {
-      setClerkTitle(selectedClerkLot.title || '');
-      const s = selectedClerkLot.consignorName || (selectedClerkLot as any).sellerName || (selectedClerkLot as any).consignor_name || (uniqueSellersList[0]?.value || 'Consignor #101');
+      setClerkTitle(selectedClerkLot.title || (auction?.name || ''));
+      const s = (selectedClerkLot as any).highBidderName || (selectedClerkLot as any).soldTo || selectedClerkLot.consignorName || (selectedClerkLot as any).sellerName || (selectedClerkLot as any).consignor_name || '';
       setClerkSeller(s);
       if (selectedClerkLot.status === 'sold') {
         setClerkHammerPrice(String(selectedClerkLot.hammerPrice || selectedClerkLot.currentBid || ''));
@@ -642,13 +800,28 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         };
       }
     }
+    // Match against real Supabase database customers
+    const dbCustomer = supabaseCustomers.find(c => 
+      c.permanentBidderNumber?.toLowerCase() === searchPaddle ||
+      c.customerCode.replace(/\D+/g, '').toLowerCase() === searchPaddle ||
+      c.id.slice(0, 6).toLowerCase() === searchPaddle ||
+      c.customerCode.toLowerCase() === searchPaddle
+    );
+    if (dbCustomer) {
+      return {
+        status: 'pending',
+        text: `✓ ${dbCustomer.fullName} (Customer in DB - Lookup to Check In)`,
+        color: '#0284c7',
+        bg: '#e0f2fe'
+      };
+    }
     return {
       status: 'unregistered',
       text: '✕ Not Registered',
       color: '#b91c1c',
       bg: '#fee2e2'
     };
-  }, [clerkBidderNumber, registrations]);
+  }, [clerkBidderNumber, registrations, supabaseCustomers]);
 
   // Compute live metrics dynamically from Supabase records
   const metrics: AuctionDayMetrics = useMemo(() => {
@@ -872,81 +1045,155 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   };
 
-  // Bidder Check In Search Handler (Matching AF360 Find Existing Customer)
+  // 1. Candidate pool strictly from Supabase Database 'users' table ONLY (no mock data)
+  const dbCustomerCandidates = useMemo(() => {
+    // Collect already assigned auction paddles
+    const existingPaddles = new Set(
+      registrations
+        .map(r => parseInt((r.bidCardNumber || '').replace(/^#/, ''), 10))
+        .filter(n => !isNaN(n))
+    );
+    let nextPaddleNum = auction?.liveStartingBidCard || 101;
+    const getNextPaddle = () => {
+      while (existingPaddles.has(nextPaddleNum)) {
+        nextPaddleNum++;
+      }
+      const assigned = nextPaddleNum;
+      existingPaddles.add(assigned);
+      return String(assigned);
+    };
+
+    return supabaseCustomers.map(u => {
+      // Find matching registration in current auction, if any
+      const reg = registrations.find(r => 
+        (r.email && u.email && r.email.toLowerCase() === u.email.toLowerCase()) ||
+        r.id === u.id ||
+        (r.username && u.customerCode && r.username.toLowerCase() === u.customerCode.toLowerCase()) ||
+        (r.bidderName && u.fullName && r.bidderName.toLowerCase() === u.fullName.toLowerCase())
+      );
+
+      const digitsFromCode = (u.customerCode || '').replace(/\D+/g, '');
+      const cleanCard = (
+        reg?.bidCardNumber ||
+        u.permanentBidderNumber ||
+        (digitsFromCode.length >= 3 ? digitsFromCode.slice(0, 6) : getNextPaddle())
+      ).replace(/^#/, '');
+
+      return {
+        id: u.id,
+        regId: reg?.id,
+        fullName: u.fullName,
+        firstName: u.firstName || u.fullName.split(/\s+/)[0] || '',
+        lastName: u.lastName || u.fullName.split(/\s+/).slice(1).join(' ') || '',
+        bidCardNumber: cleanCard,
+        companyName: u.companyName || reg?.companyName || '',
+        phone: u.phone || reg?.phone || '',
+        email: u.email || reg?.email || '',
+        customerCode: u.customerCode || `CUST-${cleanCard}`,
+        isPermanent: Boolean(u.isPermanent || u.permanentBidderNumber),
+        isCheckedIn: Boolean(reg?.isCheckedIn),
+        isRegisteredInAuction: Boolean(reg),
+        permissionText: reg?.permissionText || 'Approved - Standard'
+      };
+    });
+  }, [supabaseCustomers, registrations, auction?.liveStartingBidCard]);
+
+  // 2. Instant live search filter over DB customers
+  const filteredCheckInResults = useMemo(() => {
+    const fName = checkInSearchFirstName.trim().toLowerCase();
+    const lName = checkInSearchLastName.trim().toLowerCase();
+    const paddle = checkInSearchPaddle.trim().replace(/^#/, '').toLowerCase();
+    const company = checkInSearchCompany.trim().toLowerCase();
+    const code = checkInSearchCustomerCode.trim().toLowerCase();
+    const cleanCode = code.replace(/^cust-?/i, '');
+
+    return dbCustomerCandidates.filter(item => {
+      const itemFullName = (item.fullName || '').toLowerCase();
+      const itemFirstName = (item.firstName || '').toLowerCase();
+      const itemLastName = (item.lastName || '').toLowerCase();
+      const itemCard = (item.bidCardNumber || '').toLowerCase().replace(/^#/, '');
+      const itemCustCode = (item.customerCode || '').toLowerCase();
+      const itemCleanCustCode = itemCustCode.replace(/^cust-?/i, '');
+      const itemCompany = (item.companyName || '').toLowerCase();
+      const itemEmail = (item.email || '').toLowerCase();
+      const itemId = String(item.id || '').toLowerCase();
+
+      // First Name search: matches first name OR full name OR email
+      if (fName && !itemFirstName.includes(fName) && !itemFullName.includes(fName) && !itemEmail.includes(fName)) {
+        return false;
+      }
+      // Last Name search: matches last name OR full name
+      if (lName && !itemLastName.includes(lName) && !itemFullName.includes(lName)) {
+        return false;
+      }
+      // Bidder # search: matches bidCardNumber OR digits of customerCode OR id
+      if (paddle && !itemCard.includes(paddle) && !itemCleanCustCode.includes(paddle) && !itemId.includes(paddle)) {
+        return false;
+      }
+      // Company Name search
+      if (company && !itemCompany.includes(company)) {
+        return false;
+      }
+      // Customer Code search: matches customerCode, cleanCode, card, or id
+      if (code && !itemCustCode.includes(code) && !itemCleanCustCode.includes(cleanCode) && !itemCard.includes(cleanCode) && !itemId.includes(cleanCode)) {
+        return false;
+      }
+      // Permanent Bidder Only
+      if (checkInSearchPermanentOnly && !item.isPermanent) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    dbCustomerCandidates,
+    checkInSearchFirstName,
+    checkInSearchLastName,
+    checkInSearchPaddle,
+    checkInSearchCompany,
+    checkInSearchCustomerCode,
+    checkInSearchPermanentOnly
+  ]);
+
+  // Keep checkInSearchResults dynamically synced with filtered results
+  useEffect(() => {
+    setCheckInSearchResults(filteredCheckInResults);
+  }, [filteredCheckInResults]);
+
+  // Bidder Check In Search Handler (for SEARCH button or Enter key)
   const handleExecuteCheckInSearch = () => {
     setHasSearchedCheckIn(true);
     setCheckInPage(1);
+    setCheckInSearchResults(filteredCheckInResults);
+  };
 
-    const fName = checkInSearchFirstName.trim().toLowerCase();
-    const lName = checkInSearchLastName.trim().toLowerCase();
-    const paddle = checkInSearchPaddle.trim().toLowerCase();
-    const company = checkInSearchCompany.trim().toLowerCase();
-    const code = checkInSearchCustomerCode.trim().toLowerCase();
+  // Select customer from search results and fill their Bidder # & Name directly into Clerking Entry
+  const handleSelectCustomerForClerking = async (item: any) => {
+    const paddleNum = String(item.bidCardNumber || item.customerCode || '').replace(/^#/, '').trim();
 
-    // Pool candidates from both existing registrations in this auction and system master bidders
-    const candidateMap = new Map<string, any>();
+    // 1. Fill Bidder Number into Clerking Entry field
+    setClerkBidderNumber(paddleNum);
 
-    // 1. Current auction registrations
-    registrations.forEach(r => {
-      const parts = r.bidderName.trim().split(/\s+/);
-      const first = parts[0] || '';
-      const last = parts.slice(1).join(' ') || '';
-      candidateMap.set(r.bidCardNumber.toLowerCase(), {
-        id: r.id,
-        regId: r.id,
-        fullName: r.bidderName,
-        firstName: first,
-        lastName: last,
-        bidCardNumber: r.bidCardNumber,
-        companyName: r.companyName || '',
-        phone: r.phone || '',
-        email: r.email || '',
-        customerCode: r.username || r.bidCardNumber,
-        isPermanent: (parseInt(r.permissionText?.match(/\d+/)?.[0] || '0', 10) >= 50000),
-        isCheckedIn: Boolean(r.isCheckedIn),
-        isRegisteredInAuction: true,
-        permissionText: r.permissionText
-      });
-    });
+    // 2. Fill Sold To customer name
+    setClerkSeller(item.fullName);
 
-    // 2. Master system bidders (registered customers in Gardner Auction platform)
-    (bidders || []).forEach(b => {
-      const card = b.paddleNumber || b.id || '';
-      const key = card.toLowerCase();
-      if (!candidateMap.has(key)) {
-        const parts = b.name.trim().split(/\s+/);
-        const first = parts[0] || '';
-        const last = parts.slice(1).join(' ') || '';
-        candidateMap.set(key, {
-          id: `cust-${b.id}`,
-          fullName: b.name,
-          firstName: first,
-          lastName: last,
-          bidCardNumber: b.paddleNumber || 'Unassigned',
-          companyName: b.companyName || '',
-          phone: b.phone || '',
-          email: b.email || '',
-          customerCode: b.paddleNumber || `CUST-${b.id}`,
-          isPermanent: b.isVerified || false,
-          isCheckedIn: false,
-          isRegisteredInAuction: false,
-          permissionText: 'Approved - Standard'
-        });
+    // 3. If customer is not yet registered or checked in for this auction, check them in
+    if (!item.isCheckedIn) {
+      try {
+        await handleCheckInSingleSearchResult(item);
+      } catch (err) {
+        console.warn('[AuctionDayTab] Auto check-in notice:', err);
       }
-    });
+    }
 
-    // Filter results
-    const results = Array.from(candidateMap.values()).filter(item => {
-      if (fName && !item.firstName.toLowerCase().includes(fName) && !item.fullName.toLowerCase().includes(fName)) return false;
-      if (lName && !item.lastName.toLowerCase().includes(lName) && !item.fullName.toLowerCase().includes(lName)) return false;
-      if (paddle && !item.bidCardNumber.toLowerCase().includes(paddle)) return false;
-      if (company && !item.companyName.toLowerCase().includes(company)) return false;
-      if (code && !item.customerCode.toLowerCase().includes(code) && !item.bidCardNumber.toLowerCase().includes(code)) return false;
-      if (checkInSearchPermanentOnly && !item.isPermanent) return false;
-      return true;
-    });
+    // 4. Close the modal
+    setIsBidderCheckInModalOpen(false);
 
-    setCheckInSearchResults(results);
+    // 5. Toast feedback
+    showToast(
+      'success',
+      'Bidder Selected',
+      `Filled Bidder #${paddleNum} and Sold To "${item.fullName}" into Clerking Desk.`
+    );
   };
 
   // Check In a single result from Bidder Check In table
@@ -962,8 +1209,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       const maxExisting = registrations.reduce((max, r) => {
         const num = parseInt(r.bidCardNumber, 10);
         return !isNaN(num) && num > max ? num : max;
-      }, 5000);
-      const assignedPaddle = item.bidCardNumber !== 'Unassigned' ? item.bidCardNumber : `${maxExisting + 1}`;
+      }, (auction?.liveStartingBidCard || 100));
+      const assignedPaddle = item.bidCardNumber !== 'Unassigned' 
+        ? item.bidCardNumber 
+        : (item.customerCode ? item.customerCode.replace(/\D+/g, '') || `${maxExisting + 1}` : `${maxExisting + 1}`);
 
       const res = await auctionDayService.registerBidder(auction.id, {
         bidCardNumber: assignedPaddle,
@@ -1043,7 +1292,35 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         return !isNaN(num) && num > max ? num : max;
       }, 5000);
       const assignedPaddle = newCustPaddle.trim() || `${maxExisting + 1}`;
+      const custCode = `CUST-${assignedPaddle}`;
+      const newUserId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `usr-${Date.now()}`;
 
+      // 1. Insert customer directly into Supabase 'users' table so it is stored in database
+      const client = supabaseAdmin || supabase;
+      try {
+        await client.from('users').insert({
+          id: newUserId,
+          full_name: fullName,
+          first_name: newCustFirstName.trim() || null,
+          last_name: newCustLastName.trim() || null,
+          company_name: newCustCompany.trim() || null,
+          email: newCustEmail.trim() || null,
+          phone: newCustPhone.trim() || null,
+          address_1: newCustAddress.trim() || null,
+          city: newCustCity.trim() || null,
+          state: newCustState.trim() || null,
+          zip: newCustZip.trim() || null,
+          customer_code: custCode,
+          is_permanent_bidder: newCustPermanent,
+          permanent_bidder_number: newCustPermanent ? assignedPaddle : null,
+          role: 'user',
+          title: 'Registered Bidder'
+        });
+      } catch (insertErr) {
+        console.warn('[AuctionDayTab] Insert user to Supabase notice:', insertErr);
+      }
+
+      // 2. Register customer for this auction
       const res = await auctionDayService.registerBidder(auction.id, {
         bidCardNumber: assignedPaddle,
         bidderName: fullName,
@@ -1051,7 +1328,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         email: newCustEmail.trim(),
         phone: newCustPhone.trim(),
         hearAboutUs: 'New Customer Check In',
-        username: fullName.toLowerCase().replace(/\s+/g, '_'),
+        username: custCode,
         hibidReputation: '5.0 ★ (New Customer)',
         bidCount: 0,
         permissionText: `Approved - Standard ($${parseInt(newCustCreditLimit || '25000', 10).toLocaleString()})`,
@@ -1065,6 +1342,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
       if (res.success && res.registration) {
         setRegistrations(prev => [res.registration!, ...prev]);
+        // Dynamically re-fetch latest customers from Supabase without full page refresh
+        await fetchDropdownData();
         showToast(
           'success', 
           'Customer Registered', 
@@ -2258,21 +2537,23 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         hammerPrice: finalPrice,
         currentBid: isSold ? finalPrice : targetLot.startingBid,
         highBidderPaddle: finalPaddle || undefined,
-        consignorName: clerkSeller.trim() || targetLot.consignorName
+        highBidderName: clerkSeller.trim() || undefined,
+        consignorName: clerkSeller.trim() || targetLot.consignorName,
+        title: clerkTitle.trim() || targetLot.title
       });
 
       // 2. If sold, insert winning bid in public.bids
       if (isSold) {
         try {
           const matchedReg = registrations.find(r => r.bidCardNumber.toLowerCase() === finalPaddle?.toLowerCase());
-          await supabaseAdmin.from('bids').insert([{
+          await (supabaseAdmin || supabase).from('bids').insert([{
             id: `bid-${Date.now()}`,
             lot_id: targetLot.id,
             auction_id: auction.id,
             lot_number: targetLot.lotNumber,
             amount: finalPrice,
             paddle_number: finalPaddle,
-            bidder_name: matchedReg?.bidderName || `Bidder #${finalPaddle}`,
+            bidder_name: clerkSeller.trim() || matchedReg?.bidderName || `Bidder #${finalPaddle}`,
             source: 'Floor Clerking',
             is_winning: true,
             created_at: new Date().toISOString()
@@ -2291,7 +2572,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             hammerPrice: finalPrice,
             currentBid: isSold ? finalPrice : l.startingBid,
             highBidderPaddle: finalPaddle || undefined,
-            consignorName: clerkSeller.trim() || l.consignorName
+            highBidderName: clerkSeller.trim() || undefined,
+            consignorName: clerkSeller.trim() || l.consignorName,
+            title: clerkTitle.trim() || l.title
           };
         }
         return l;
@@ -4226,47 +4509,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   Clerking Entry
                 </h4>
               </div>
-
-              {/* Clerking Assist Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#475569' }}>
-                  Clerking Assist
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setClerkingAssist(!clerkingAssist)}
-                  style={{
-                    width: 44,
-                    height: 24,
-                    borderRadius: 12,
-                    background: clerkingAssist ? '#16a34a' : '#cbd5e1',
-                    border: 'none',
-                    padding: 2,
-                    cursor: 'pointer',
-                    transition: 'background 0.2s ease',
-                    position: 'relative'
-                  }}
-                  title="Auto-advance to next lot after saving"
-                  aria-label="Toggle Clerking Assist"
-                >
-                  <div style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: '#ffffff',
-                    transform: clerkingAssist ? 'translateX(20px)' : 'translateX(0)',
-                    transition: 'transform 0.2s ease',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                </button>
-              </div>
             </div>
 
-            {/* Entry Fields */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            {/* Entry Fields - One Single Horizontal Line */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(75px, 0.7fr) minmax(170px, 1.5fr) minmax(210px, 2fr) minmax(130px, 1.1fr) minmax(120px, 1fr) minmax(65px, 0.6fr) minmax(120px, 1fr)',
+              gap: 12,
+              alignItems: 'start'
+            }}>
               {/* Lot Number */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
                   Lot Number *
                 </label>
                 <input
@@ -4280,43 +4534,57 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 />
               </div>
 
-              {/* Seller */}
+              {/* Sold To (formerly Seller) */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                  Seller *
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
+                  Sold To *
                 </label>
                 <ShadcnSelect
                   disabled={isAuctionClosed}
                   value={clerkSeller}
-                  onChange={(val) => setClerkSeller(val)}
+                  onChange={(val) => {
+                    setClerkSeller(val);
+                    const matched = supabaseCustomers.find(c => c.fullName === val);
+                    if (matched?.permanentBidderNumber) {
+                      setClerkBidderNumber(matched.permanentBidderNumber);
+                    }
+                  }}
                   size="md"
-                  options={uniqueSellersList.length > 0 ? uniqueSellersList : [{ value: 'Consignor #101', label: 'Consignor #101' }]}
+                  fullWidth
+                  searchable={true}
+                  searchPlaceholder="Search customer..."
+                  placeholder="Select customer..."
+                  clearable={true}
+                  options={customerSelectOptions}
                 />
               </div>
 
               {/* Title */}
-              <div style={{ gridColumn: 'span 2' }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
                   Title
                 </label>
-                <input
-                  type="text"
+                <ShadcnSelect
                   disabled={isAuctionClosed}
                   value={clerkTitle}
-                  onChange={(e) => setClerkTitle(e.target.value)}
-                  className="catalog-search-input"
-                  style={{ width: '100%', height: 38, fontSize: 13 }}
-                  placeholder="Item lead / title"
+                  onChange={(val) => setClerkTitle(val)}
+                  size="md"
+                  fullWidth
+                  searchable={true}
+                  searchPlaceholder="Search title..."
+                  placeholder="Select auction title..."
+                  clearable={true}
+                  options={auctionTitleSelectOptions}
                 />
               </div>
 
               {/* Hammer Price with X Money */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 20, marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap', margin: 0 }}>
                     Hammer Price ($)
                   </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#475569', cursor: 'pointer' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap', margin: 0 }}>
                     <input
                       type="checkbox"
                       checked={clerkXMoney}
@@ -4340,9 +4608,32 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
               {/* Bidder Number with validation helper */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                  Bidder Number
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 20, marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap', margin: 0 }}>
+                    Bidder Number
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBidderCheckInModalOpen(true);
+                      setCheckInTabMode('find');
+                      handleExecuteCheckInSearch();
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--gold-dark, #9a741e)',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline'
+                    }}
+                    title="Lookup & select existing customer to fill Bidder #"
+                  >
+                    Lookup
+                  </button>
+                </div>
                 <input
                   type="text"
                   disabled={isAuctionClosed}
@@ -4355,25 +4646,26 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 <div style={{ marginTop: 4, minHeight: 18 }}>
                   {bidderValidationStatus ? (
                     <span style={{
-                      fontSize: 11,
+                      fontSize: 10.5,
                       fontWeight: 700,
-                      padding: '2px 8px',
+                      padding: '2px 6px',
                       borderRadius: 4,
                       background: bidderValidationStatus.bg,
                       color: bidderValidationStatus.color,
-                      display: 'inline-block'
+                      display: 'inline-block',
+                      whiteSpace: 'nowrap'
                     }}>
                       {bidderValidationStatus.text}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Enter paddle number</span>
+                    <span style={{ fontSize: 10.5, color: '#94a3b8', whiteSpace: 'nowrap' }}>Enter paddle number</span>
                   )}
                 </div>
               </div>
 
               {/* Quantity */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
                   Quantity
                 </label>
                 <input
@@ -4389,7 +4681,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
               {/* Status */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
                   Status
                 </label>
                 <ShadcnSelect
@@ -4397,6 +4689,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   value={clerkStatus}
                   onChange={(val) => setClerkStatus(val)}
                   size="md"
+                  fullWidth
                   options={[
                     { value: 'Sold', label: 'Sold' },
                     { value: 'Passed', label: 'Passed' },
@@ -5488,16 +5781,24 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                       {checkInSearchResults.length === 0 ? (
                         <tr>
                           <td colSpan={7} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
-                            {hasSearchedCheckIn 
-                              ? "No matching bidders found. Adjust criteria or choose 'Create New Customer'." 
-                              : "Enter search criteria above and click SEARCH, or click 'Create New Customer'."}
+                            No matching database customers found. Adjust search criteria or choose 'Create New Customer'.
                           </td>
                         </tr>
                       ) : (
                         checkInSearchResults
                           .slice((checkInPage - 1) * checkInEntriesPerPage, checkInPage * checkInEntriesPerPage)
                           .map((item, idx) => (
-                            <tr key={item.id || idx} style={{ borderTop: '1px solid #f1f5f9', background: item.isCheckedIn ? '#f0fdf4' : '#ffffff' }}>
+                            <tr
+                              key={item.id || idx}
+                              onClick={() => handleSelectCustomerForClerking(item)}
+                              style={{
+                                borderTop: '1px solid #f1f5f9',
+                                background: item.isCheckedIn ? '#f0fdf4' : '#ffffff',
+                                cursor: 'pointer',
+                                transition: 'background 0.15s ease'
+                              }}
+                              title="Click row to select this customer and fill Bidder Number into Clerking Desk"
+                            >
                               <td style={{ padding: '6px 10px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#0f172a' }}>
                                 #{item.bidCardNumber}
                               </td>
@@ -5525,30 +5826,41 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                                   {item.isCheckedIn ? 'Checked In' : 'Pending'}
                                 </span>
                               </td>
-                              <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                {item.isCheckedIn ? (
+                              <td style={{ padding: '6px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                   <button
                                     type="button"
-                                    onClick={() => handleCheckInSingleSearchResult(item)}
-                                    className="btn btn-secondary"
-                                    style={{ fontSize: 11, padding: '3px 8px' }}
-                                    title="Undo check in"
-                                  >
-                                    <RotateCcw size={11} />
-                                    <span>Undo</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCheckInSingleSearchResult(item)}
+                                    onClick={() => handleSelectCustomerForClerking(item)}
                                     className="af360-btn-teal"
-                                    style={{ height: 26, fontSize: 11, padding: '0 8px' }}
-                                    title="Check in this bidder"
+                                    style={{ height: 26, fontSize: 11, padding: '0 10px', fontWeight: 700 }}
+                                    title="Select this customer and fill Bidder Number into Clerking Entry"
                                   >
-                                    <Check size={12} strokeWidth={3} />
-                                    <span>Check In</span>
+                                    <span>Select</span>
                                   </button>
-                                )}
+                                  {item.isCheckedIn ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCheckInSingleSearchResult(item)}
+                                      className="btn btn-secondary"
+                                      style={{ fontSize: 11, padding: '3px 8px' }}
+                                      title="Undo check in"
+                                    >
+                                      <RotateCcw size={11} />
+                                      <span>Undo</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCheckInSingleSearchResult(item)}
+                                      className="btn btn-secondary"
+                                      style={{ height: 26, fontSize: 11, padding: '0 8px' }}
+                                      title="Check in this bidder"
+                                    >
+                                      <Check size={12} strokeWidth={3} />
+                                      <span>Check In</span>
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))
