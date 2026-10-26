@@ -1,120 +1,157 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { InvoiceSettlement, ConsignorSettlement } from '../../types';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { InvoiceSettlement, ConsignorSettlement, NavigationSection } from '../../types';
+import { SettlementCustomer } from '../../types/auctionDetail';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { 
-  Receipt, 
-  DollarSign, 
-  CreditCard, 
-  Printer, 
-  CheckCircle, 
-  CheckCircle2,
-  Clock, 
-  Search, 
+  PackageCheck, 
   FileText, 
-  X,
+  Printer, 
+  Search, 
+  X, 
+  Settings, 
+  Gavel, 
+  CheckCircle, 
+  RotateCw, 
+  Eye, 
+  Send, 
+  ArrowLeft,
+  ChevronDown,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ExternalLink,
   ShieldCheck,
   Building,
   Mail,
-  Eye,
-  PackageCheck,
-  RotateCw,
-  Truck,
-  ArrowLeft,
-  ChevronDown,
-  Settings,
-  Send,
-  Download,
   AlertCircle
 } from 'lucide-react';
-
-import { AuctionDetailProvider } from '../../context/AuctionDetailContext';
-import { SettlementTab } from '../auction/tabs/SettlementTab';
-import { TableRowActionMenu } from '../Common/TableRowActionMenu';
 import { ShadcnSheet } from '../ui/ShadcnSheet';
-import { ShadcnPagination } from '../ui/ShadcnPagination';
-import { ShadcnSelect } from '../ui/ShadcnSelect';
+import { ShadcnSelect, ShadcnSelectOption } from '../ui/ShadcnSelect';
 import { settlementService, BatchShipmentData } from '../../services/settlementService';
 import { auctionService } from '../../services/auctionService';
 import { useToast } from '../../context/ToastContext';
 
+// Handshake icon for Settlement workflow stage
+const HandshakeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-3-3a1 1 0 0 0-1.4 0l-1.3 1.3" />
+    <path d="m14 14-5-5a1 1 0 0 0-1.4 0l-4.3 4.3a1 1 0 0 0 0 1.4l3 3a1 1 0 0 0 1.4 0l2-2" />
+    <path d="M2 13h2l2 2" />
+    <path d="M22 13h-2l-2 2" />
+  </svg>
+);
+
 interface PaymentsViewProps {
-  invoices: InvoiceSettlement[];
-  consignorSettlements: ConsignorSettlement[];
-  onUpdateInvoiceStatus: (id: string, status: InvoiceSettlement['paymentStatus']) => void;
-  onUpdateConsignorStatus: (id: string, status: ConsignorSettlement['status']) => void;
+  invoices?: InvoiceSettlement[];
+  consignorSettlements?: ConsignorSettlement[];
+  onUpdateInvoiceStatus?: (id: string, status: InvoiceSettlement['paymentStatus']) => void;
+  onUpdateConsignorStatus?: (id: string, status: ConsignorSettlement['status']) => void;
   selectedAuctionId?: string;
   availableAuctions?: Array<{ id: string; code: string; title: string; status?: string }>;
   onSelectAuction?: (id: string) => void;
   onNavigateAuctions?: () => void;
+  onNavigateSection?: (section: NavigationSection) => void;
 }
 
+const CARRIER_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'FedEx Ground', label: 'FedEx Ground (Direct Signature)' },
+  { value: 'FedEx Priority Overnight', label: 'FedEx Priority Overnight' },
+  { value: 'UPS Express', label: 'UPS Express Saver' },
+  { value: 'USPS Priority Mail', label: 'USPS Priority Mail Registered' },
+  { value: 'Armored Courier', label: 'Armored Courier (Brinks / Malca-Amit)' },
+  { value: 'Local Saleroom Pickup', label: 'Local Saleroom Pickup (Signed Receipt)' }
+];
+
+const PAYMENT_STATUS_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'Paid', label: 'Paid (Fully Settled)' },
+  { value: 'Pending Wire', label: 'Pending Wire Transfer' },
+  { value: 'Card Authorized', label: 'Card Authorized' },
+  { value: 'Check Received', label: 'Check Received (Clearing)' },
+  { value: 'Unpaid', label: 'Unpaid' }
+];
+
+const PAYMENT_METHOD_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'Wire Transfer', label: 'Bank Wire Transfer' },
+  { value: 'Credit Card', label: 'Credit Card on File (HiBid / Square)' },
+  { value: 'Cash', label: 'Cash (In-Person Floor Settlement)' },
+  { value: 'Company Check', label: 'Cashier\'s Check / Money Order' },
+  { value: 'Escrow', label: 'Third-Party Escrow' }
+];
+
+const DOC_TYPE_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'buyer_invoice', label: 'Buyer Settlement Invoices' },
+  { value: 'seller_statement', label: 'Consignor Payout Statements' },
+  { value: 'summary', label: 'Consolidated Auction Settlement Summary' }
+];
+
+const PAGE_SIZE_OPTIONS: ShadcnSelectOption[] = [
+  { value: '10', label: '10' },
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' }
+];
+
 export const PaymentsView: React.FC<PaymentsViewProps> = ({
-  invoices: propInvoices,
-  consignorSettlements: propConsignorSettlements,
+  invoices: propInvoices = [],
+  consignorSettlements: propConsignorSettlements = [],
   onUpdateInvoiceStatus,
   onUpdateConsignorStatus,
   selectedAuctionId = 'auc-002',
   availableAuctions = [],
   onSelectAuction,
-  onNavigateAuctions
+  onNavigateAuctions,
+  onNavigateSection
 }) => {
   const { showToast } = useToast();
 
-  // Active Tab state: Defaults to AF360 Bidder Settlement
-  const [activeTab, setActiveTab] = useState<'bidder' | 'seller' | 'invoices' | 'consignors'>('bidder');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  // Active Main Workflow Tab: 'bidder' | 'seller'
+  const [activeTab, setActiveTab] = useState<'bidder' | 'seller'>('bidder');
 
   // Auction metadata
   const currentAuctionId = selectedAuctionId;
   const currentAuction = availableAuctions.find(a => a.id === currentAuctionId) || {
     id: currentAuctionId,
-    code: currentAuctionId === 'auc-001' ? 'GA-2026-10-GOLD' : 'GA-2026-10-HISTORIC',
-    title: currentAuctionId === 'auc-001' ? 'Rolex, Fine Jewelry, Historic Numismatics & Rare US Gold' : 'Premier Americana & High Relief Numismatics',
+    code: currentAuctionId === 'auc-001' ? 'GA-2026-10-GOLD' : (currentAuctionId === 'auc-002' ? 'GA-2026-10-HISTORIC' : 'XCXZC'),
+    title: 'Auction Settlement',
     status: 'In Progress'
   };
 
-  // Local state for live mutations
-  const [invoices, setInvoices] = useState<InvoiceSettlement[]>(propInvoices);
-  const [consignorSettlements, setConsignorSettlements] = useState<ConsignorSettlement[]>(propConsignorSettlements);
+  // Dynamic Supabase data states
+  const [bidderSettlements, setBidderSettlements] = useState<SettlementCustomer[]>([]);
+  const [sellerSettlements, setSellerSettlements] = useState<ConsignorSettlement[]>([]);
+  const [isLoadingBidder, setIsLoadingBidder] = useState<boolean>(true);
+  const [isLoadingSeller, setIsLoadingSeller] = useState<boolean>(true);
 
-  useEffect(() => {
-    setInvoices(propInvoices);
-  }, [propInvoices]);
+  // Row selection states
+  const [selectedBidderIds, setSelectedBidderIds] = useState<string[]>([]);
+  const [selectedSellerIds, setSelectedSellerIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    setConsignorSettlements(propConsignorSettlements);
-  }, [propConsignorSettlements]);
+  // Search filter states
+  const [bidderSearchTerm, setBidderSearchTerm] = useState('');
+  const [sellerSearchTerm, setSellerSearchTerm] = useState('');
 
-  // Load seller settlements dynamically from Supabase
-  useEffect(() => {
-    let isMounted = true;
-    settlementService.getSellerSettlements(currentAuctionId).then(data => {
-      if (isMounted && data && data.length > 0) {
-        setConsignorSettlements(data);
-      }
-    });
-    return () => { isMounted = false; };
-  }, [currentAuctionId]);
+  // Sorting states
+  const [bidderSortField, setBidderSortField] = useState<string>('bidderNumber');
+  const [bidderSortAsc, setBidderSortAsc] = useState<boolean>(true);
+  const [sellerSortField, setSellerSortField] = useState<string>('consignorCode');
+  const [sellerSortAsc, setSellerSortAsc] = useState<boolean>(true);
 
-  // Modals & Drawers state
+  // Pagination states
+  const [bidderPage, setBidderPage] = useState<number>(1);
+  const [bidderPageSize, setBidderPageSize] = useState<number>(10);
+  const [sellerPage, setSellerPage] = useState<number>(1);
+  const [sellerPageSize, setSellerPageSize] = useState<number>(10);
+
+  // Column config popover state
+  const [showColumnConfig, setShowColumnConfig] = useState(false);
+
+  // Drawers & modals state
   const [isBatchShipmentsOpen, setIsBatchShipmentsOpen] = useState(false);
   const [isUpdateInvoicesOpen, setIsUpdateInvoicesOpen] = useState(false);
   const [isPrintEmailOpen, setIsPrintEmailOpen] = useState(false);
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceSettlement | null>(null);
 
-  // Invoices filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  // Consignors filter & pagination state
-  const [consignorSearchTerm, setConsignorSearchTerm] = useState('');
-  const [consignorStatusFilter, setConsignorStatusFilter] = useState('all');
-  const [sellerPage, setSellerPage] = useState<number>(1);
-  const [sellerPageSize, setSellerPageSize] = useState<number>(20);
-
-  // Drawer Form States
-  // 1. Batch Shipments Drawer Form
+  // Batch Shipments Drawer state
   const [batchShipSelectedIds, setBatchShipSelectedIds] = useState<string[]>([]);
   const [batchCarrier, setBatchCarrier] = useState('FedEx Ground');
   const [batchTracking, setBatchTracking] = useState('');
@@ -122,8 +159,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [batchNotes, setBatchNotes] = useState('');
   const [isSubmittingBatchShip, setIsSubmittingBatchShip] = useState(false);
 
-  // 2. Update Invoice Drawer Form
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>(invoices[0]?.id || '');
+  // Update Invoices Drawer state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [editInvoiceStatus, setEditInvoiceStatus] = useState<InvoiceSettlement['paymentStatus']>('Paid');
   const [editPaymentMethod, setEditPaymentMethod] = useState('Wire Transfer');
   const [editTaxAmount, setEditTaxAmount] = useState<string>('');
@@ -131,924 +168,1061 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [editInvoiceNotes, setEditInvoiceNotes] = useState('');
   const [isSubmittingInvoiceUpdate, setIsSubmittingInvoiceUpdate] = useState(false);
 
-  // Sync selected invoice form fields when selectedInvoiceId changes
-  useEffect(() => {
-    const inv = invoices.find(i => i.id === selectedInvoiceId);
-    if (inv) {
-      setEditInvoiceStatus(inv.paymentStatus);
-      setEditPaymentMethod(inv.paymentMethod || 'Wire Transfer');
-      setEditTaxAmount(String(inv.taxAmount || 0));
-      setEditShippingFee(String(inv.shippingFee || 0));
-      setEditInvoiceNotes(inv.notes || '');
-    }
-  }, [selectedInvoiceId, invoices]);
-
-  // 3. Print / Email Drawer Form
-  const [printDocType, setPrintDocType] = useState<'buyer_invoice' | 'seller_statement' | 'summary'>('buyer_invoice');
+  // Print / Email Drawer state
+  const [printDocType, setPrintDocType] = useState<string>('buyer_invoice');
   const [printScope, setPrintScope] = useState<'all' | 'selected'>('all');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  // Filtering calculations
-  const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch = 
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.paddleNumber.includes(searchTerm);
-    const matchesStatus = statusFilter === 'all' || inv.paymentStatus === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // =========================================================================
+  // Dynamic Data Fetching from Supabase
+  // =========================================================================
+  const fetchBidderSettlements = useCallback(async () => {
+    setIsLoadingBidder(true);
+    try {
+      const data = await settlementService.getBidderSettlements(currentAuctionId);
+      setBidderSettlements(data || []);
+    } catch (err) {
+      console.error('Failed to load bidder settlements from Supabase:', err);
+      setBidderSettlements([]);
+    } finally {
+      setIsLoadingBidder(false);
+    }
+  }, [currentAuctionId]);
 
-  const filteredConsignors = consignorSettlements.filter(c => {
-    const matchesSearch = 
-      c.consignorCode.toLowerCase().includes(consignorSearchTerm.toLowerCase()) ||
-      c.consignorName.toLowerCase().includes(consignorSearchTerm.toLowerCase()) ||
-      c.auctionCode.toLowerCase().includes(consignorSearchTerm.toLowerCase());
-    const matchesStatus = consignorStatusFilter === 'all' || 
-      (consignorStatusFilter === 'Paid' ? c.status === 'Paid' : c.status !== 'Paid');
-    return matchesSearch && matchesStatus;
-  });
+  const fetchSellerSettlements = useCallback(async () => {
+    setIsLoadingSeller(true);
+    try {
+      const data = await settlementService.getSellerSettlements(currentAuctionId);
+      setSellerSettlements(data || []);
+    } catch (err) {
+      console.error('Failed to load seller settlements from Supabase:', err);
+      setSellerSettlements([]);
+    } finally {
+      setIsLoadingSeller(false);
+    }
+  }, [currentAuctionId]);
 
-  // Paginated Consignors
-  const paginatedConsignors = filteredConsignors.slice(
-    (sellerPage - 1) * sellerPageSize,
-    sellerPage * sellerPageSize
-  );
+  useEffect(() => {
+    fetchBidderSettlements();
+    fetchSellerSettlements();
+    setSelectedBidderIds([]);
+    setSelectedSellerIds([]);
+    setBidderPage(1);
+    setSellerPage(1);
+  }, [fetchBidderSettlements, fetchSellerSettlements]);
 
-  const totalInvoiced = invoices.reduce((acc, inv) => acc + inv.totalDue, 0);
-  const totalPaid = invoices.filter(inv => inv.paymentStatus === 'Paid').reduce((acc, inv) => acc + inv.totalDue, 0);
-  const totalPending = totalInvoiced - totalPaid;
+  // Sync selected invoice in Update Invoices drawer when available
+  useEffect(() => {
+    if (!selectedInvoiceId) {
+      if (bidderSettlements.length > 0) {
+        setSelectedInvoiceId(bidderSettlements[0].id);
+      } else if (propInvoices.length > 0) {
+        setSelectedInvoiceId(propInvoices[0].id);
+      }
+    }
+  }, [bidderSettlements, propInvoices, selectedInvoiceId]);
 
-  // Handlers for Drawer Operations
-  // 1. Submit Batch Shipments
-  const handleApplyBatchShipments = async () => {
-    if (batchShipSelectedIds.length === 0) {
-      showToast('error', 'Selection Required', 'Please select at least one bidder settlement to mark as shipped.');
+  // Filtered & Sorted Bidder Settlements
+  const filteredBidderSettlements = useMemo(() => {
+    let list = bidderSettlements;
+    if (bidderSearchTerm.trim()) {
+      const q = bidderSearchTerm.toLowerCase();
+      list = list.filter(b => 
+        (b.name && b.name.toLowerCase().includes(q)) ||
+        (b.bidderNumber && b.bidderNumber.toLowerCase().includes(q)) ||
+        (b.invoiceNumber && b.invoiceNumber.toLowerCase().includes(q)) ||
+        (b.invoiceStatus && b.invoiceStatus.toLowerCase().includes(q))
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: any = (a as any)[bidderSortField];
+      let valB: any = (b as any)[bidderSortField];
+
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return bidderSortAsc ? -1 : 1;
+      if (valA > valB) return bidderSortAsc ? 1 : -1;
+      return 0;
+    });
+  }, [bidderSettlements, bidderSearchTerm, bidderSortField, bidderSortAsc]);
+
+  // Paginated Bidder Settlements
+  const paginatedBidderSettlements = useMemo(() => {
+    const start = (bidderPage - 1) * bidderPageSize;
+    return filteredBidderSettlements.slice(start, start + bidderPageSize);
+  }, [filteredBidderSettlements, bidderPage, bidderPageSize]);
+
+  // Filtered & Sorted Seller Settlements
+  const filteredSellerSettlements = useMemo(() => {
+    let list = sellerSettlements;
+    if (sellerSearchTerm.trim()) {
+      const q = sellerSearchTerm.toLowerCase();
+      list = list.filter(s => 
+        (s.consignorName && s.consignorName.toLowerCase().includes(q)) ||
+        (s.consignorCode && s.consignorCode.toLowerCase().includes(q)) ||
+        (s.status && s.status.toLowerCase().includes(q)) ||
+        (s.checkNumber && s.checkNumber.toLowerCase().includes(q))
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: any = (a as any)[sellerSortField];
+      let valB: any = (b as any)[sellerSortField];
+
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return sellerSortAsc ? -1 : 1;
+      if (valA > valB) return sellerSortAsc ? 1 : -1;
+      return 0;
+    });
+  }, [sellerSettlements, sellerSearchTerm, sellerSortField, sellerSortAsc]);
+
+  // Paginated Seller Settlements
+  const paginatedSellerSettlements = useMemo(() => {
+    const start = (sellerPage - 1) * sellerPageSize;
+    return filteredSellerSettlements.slice(start, start + sellerPageSize);
+  }, [filteredSellerSettlements, sellerPage, sellerPageSize]);
+
+  // Selection handlers
+  const allBiddersSelected = filteredBidderSettlements.length > 0 && filteredBidderSettlements.every(b => selectedBidderIds.includes(b.id));
+  const toggleSelectAllBidders = () => {
+    if (allBiddersSelected) {
+      setSelectedBidderIds([]);
+    } else {
+      setSelectedBidderIds(filteredBidderSettlements.map(b => b.id));
+    }
+  };
+
+  const toggleSelectOneBidder = (id: string) => {
+    setSelectedBidderIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const allSellersSelected = filteredSellerSettlements.length > 0 && filteredSellerSettlements.every(s => selectedSellerIds.includes(s.id));
+  const toggleSelectAllSellers = () => {
+    if (allSellersSelected) {
+      setSelectedSellerIds([]);
+    } else {
+      setSelectedSellerIds(filteredSellerSettlements.map(s => s.id));
+    }
+  };
+
+  const toggleSelectOneSeller = (id: string) => {
+    setSelectedSellerIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  // Cash Buyer Toggle Handler
+  const handleToggleCashBuyer = async (customer: SettlementCustomer, currentVal: boolean) => {
+    const newVal = !currentVal;
+    // Optimistic UI update
+    setBidderSettlements(prev => prev.map(c => c.id === customer.id ? { ...c, isCashBuyer: newVal } : c));
+    try {
+      await settlementService.updateCashBuyer(currentAuctionId, customer.id, newVal);
+      showToast('success', 'Updated', `Cash Buyer status for #${customer.bidderNumber} updated.`);
+    } catch (_) {
+      // Revert on error
+      setBidderSettlements(prev => prev.map(c => c.id === customer.id ? { ...c, isCashBuyer: currentVal } : c));
+      showToast('error', 'Update Failed', 'Could not persist cash buyer status.');
+    }
+  };
+
+  // Batch Shipments Submit Handler
+  const handleSaveBatchShipments = async () => {
+    const targetIds = batchShipSelectedIds.length > 0 ? batchShipSelectedIds : selectedBidderIds;
+    if (targetIds.length === 0) {
+      showToast('warning', 'Selection Required', 'Please select at least one settlement to ship.');
       return;
     }
 
     setIsSubmittingBatchShip(true);
     try {
-      await settlementService.markBatchShipped(currentAuctionId, batchShipSelectedIds, {
+      const shipData: BatchShipmentData = {
         carrier: batchCarrier,
-        trackingNumber: batchTracking || `TRK-${Math.floor(10000000 + Math.random() * 90000000)}`,
+        trackingNumber: batchTracking || `TRK-${Date.now().toString().slice(-8)}`,
         shipDate: batchShipDate,
         notes: batchNotes
-      });
-
-      showToast('success', 'Batch Shipments Processed', `Marked ${batchShipSelectedIds.length} bidder settlement(s) as shipped via ${batchCarrier}.`);
+      };
+      await settlementService.markBatchShipped(currentAuctionId, targetIds, shipData);
+      showToast('success', 'Batch Shipments Processed', `Marked ${targetIds.length} settlement(s) as shipped via ${batchCarrier}.`);
       setIsBatchShipmentsOpen(false);
-      setBatchShipSelectedIds([]);
+      fetchBidderSettlements();
     } catch (_) {
-      showToast('error', 'Error', 'Failed to update shipment records in Supabase.');
+      showToast('error', 'Shipment Error', 'Failed to update shipments in Supabase.');
     } finally {
       setIsSubmittingBatchShip(false);
     }
   };
 
-  // 2. Submit Update Invoice
+  // Update Invoice Submit Handler
   const handleSaveInvoiceUpdate = async () => {
-    if (!selectedInvoiceId) return;
+    if (!selectedInvoiceId) {
+      showToast('warning', 'Invoice Required', 'Please select an invoice to update.');
+      return;
+    }
+
     setIsSubmittingInvoiceUpdate(true);
     try {
-      const parsedTax = parseFloat(editTaxAmount) || 0;
-      const parsedShipping = parseFloat(editShippingFee) || 0;
-
       await settlementService.updateInvoice(currentAuctionId, selectedInvoiceId, {
         paymentStatus: editInvoiceStatus,
         paymentMethod: editPaymentMethod,
-        taxAmount: parsedTax,
-        shippingFee: parsedShipping,
+        taxAmount: editTaxAmount ? parseFloat(editTaxAmount) : undefined,
+        shippingFee: editShippingFee ? parseFloat(editShippingFee) : undefined,
         notes: editInvoiceNotes
       });
 
-      onUpdateInvoiceStatus(selectedInvoiceId, editInvoiceStatus);
-      setInvoices(prev => prev.map(inv => {
-        if (inv.id === selectedInvoiceId) {
-          const newTotal = inv.hammerSubtotal + inv.buyersPremium + parsedTax + parsedShipping;
-          return {
-            ...inv,
-            paymentStatus: editInvoiceStatus,
-            paymentMethod: editPaymentMethod,
-            taxAmount: parsedTax,
-            shippingFee: parsedShipping,
-            totalDue: newTotal,
-            notes: editInvoiceNotes
-          };
-        }
-        return inv;
-      }));
+      if (onUpdateInvoiceStatus) {
+        onUpdateInvoiceStatus(selectedInvoiceId, editInvoiceStatus);
+      }
 
-      showToast('success', 'Invoice Updated', `Updated invoice ${invoices.find(i => i.id === selectedInvoiceId)?.invoiceNumber || ''} in Supabase.`);
+      showToast('success', 'Invoice Updated', `Invoice payment status updated to ${editInvoiceStatus}.`);
       setIsUpdateInvoicesOpen(false);
+      fetchBidderSettlements();
     } catch (_) {
-      showToast('error', 'Error', 'Failed to update invoice in Supabase.');
+      showToast('error', 'Update Failed', 'Failed to update invoice in Supabase.');
     } finally {
       setIsSubmittingInvoiceUpdate(false);
     }
   };
 
-  // 3. Submit Send Email
-  const handleSendEmail = () => {
-    if (!recipientEmail.trim() || !recipientEmail.includes('@')) {
-      showToast('error', 'Invalid Email', 'Please enter a valid recipient email address.');
+  // Print / Email Submit Handler
+  const handleSendEmail = async () => {
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      showToast('warning', 'Valid Email Required', 'Please provide a valid recipient email address.');
       return;
     }
 
     setIsSendingEmail(true);
-    setTimeout(() => {
-      setIsSendingEmail(false);
-      showToast('success', 'Email Sent', `Settlement document successfully emailed to ${recipientEmail}.`);
+    try {
+      await new Promise(r => setTimeout(r, 600));
+      showToast('success', 'Document Dispatched', `Settlement documentation sent to ${recipientEmail}.`);
       setIsPrintEmailOpen(false);
       setRecipientEmail('');
-    }, 700);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // Update Invoices select options
+  const updateInvoiceOptions: ShadcnSelectOption[] = useMemo(() => {
+    if (bidderSettlements.length > 0) {
+      return bidderSettlements.map(b => ({
+        value: b.id,
+        label: `${b.invoiceNumber || 'INV'} - ${b.name} (#${b.bidderNumber}) • ${formatCurrency(b.balance)}`
+      }));
+    }
+    return propInvoices.map(i => ({
+      value: i.id,
+      label: `${i.invoiceNumber} - ${i.buyerName} (#${i.paddleNumber}) • ${formatCurrency(i.totalDue)}`
+    }));
+  }, [bidderSettlements, propInvoices]);
+
+  // Sorting helpers
+  const handleBidderSort = (field: string) => {
+    if (bidderSortField === field) {
+      setBidderSortAsc(!bidderSortAsc);
+    } else {
+      setBidderSortField(field);
+      setBidderSortAsc(true);
+    }
+  };
+
+  const handleSellerSort = (field: string) => {
+    if (sellerSortField === field) {
+      setSellerSortAsc(!sellerSortAsc);
+    } else {
+      setSellerSortField(field);
+      setSellerSortAsc(true);
+    }
+  };
+
+  const renderSortIcon = (field: string, currentField: string, isAsc: boolean) => {
+    if (field !== currentField) {
+      return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: 4, display: 'inline' }} />;
+    }
+    return isAsc 
+      ? <ArrowUp size={12} style={{ color: 'var(--gold-primary, #a37a3b)', marginLeft: 4, display: 'inline' }} />
+      : <ArrowDown size={12} style={{ color: 'var(--gold-primary, #a37a3b)', marginLeft: 4, display: 'inline' }} />;
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: '20px 24px', background: 'var(--bg-app, #f9f8f5)', minHeight: '100%', boxSizing: 'border-box' }}>
       {/* =========================================================================
-          1. AUCTION SETTLEMENT HEADER (Matches AF360 Top Header & Actions)
+          1. AUCTION HEADER & ACTIONS (Matches Gardner Dashboard Executive Styling)
           ========================================================================= */}
-      <div className="card-luxury" style={{ padding: '16px 22px', background: '#ffffff' }}>
-        <div className="auction-day-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <h2 className="font-serif" style={{ fontSize: 20, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                {currentAuction.title} - Settlement
-              </h2>
-              <span style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 12,
-                background: currentAuction.status === 'Closed' ? '#fee2e2' : '#dcfce7',
-                color: currentAuction.status === 'Closed' ? '#b91c1c' : '#15803d',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4
-              }}>
-                ● {currentAuction.status || 'In Progress'}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 5 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onNavigateAuctions) {
-                    onNavigateAuctions();
-                  } else {
-                    try { window.history.pushState({}, '', '/auctions'); } catch (_) {}
-                    window.location.href = '/auctions';
-                  }
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--gold-dark, #9a741e)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}
-              >
-                <span>↵ Return to All Auctions</span>
-              </button>
-
-              {/* {availableAuctions.length > 1 && onSelectAuction && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                  <span>Switch Auction:</span>
-                  <select
-                    value={currentAuctionId}
-                    onChange={(e) => onSelectAuction(e.target.value)}
-                    style={{
-                      fontSize: 12,
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      border: '1px solid #cbd5e1',
-                      background: '#f8fafc',
-                      color: 'var(--text-main)',
-                      fontWeight: 600
-                    }}
-                  >
-                    {availableAuctions.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.code} - {a.title.slice(0, 30)}...
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )} */}
-            </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 14,
+        marginBottom: 20
+      }}>
+        {/* Left: Auction Code & Return to All Auctions */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--gold-primary, #a37a3b)', fontSize: 18, lineHeight: 1 }}>❖</span>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-main, #0f172a)', letterSpacing: '-0.01em' }}>
+              {currentAuction.code || 'GA-2026-10-GOLD'}
+            </h1>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigateAuctions) {
+                onNavigateAuctions();
+              } else if (onNavigateSection) {
+                onNavigateSection('auctions');
+              } else {
+                window.location.href = '/auctions';
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--gold-dark, #9a741e)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '3px 0 0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <span>↵ Return to All Auctions</span>
+          </button>
+        </div>
 
-          {/* Action Buttons: Batch Shipments, Update Invoices, Print / Email */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setIsBatchShipmentsOpen(true)}
-              id="btn-batch-shipments"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 600 }}
-            >
-              <PackageCheck size={16} color="var(--gold-primary)" />
-              <span>BATCH SHIPMENTS</span>
-            </button>
+        {/* Right: 3 Dashboard Action Buttons (BATCH SHIPMENTS, UPDATE INVOICES, PRINT / EMAIL) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setBatchShipSelectedIds(selectedBidderIds.length > 0 ? selectedBidderIds : bidderSettlements.map(b => b.id));
+              setIsBatchShipmentsOpen(true);
+            }}
+            id="btn-batch-shipments"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 600 }}
+          >
+            <PackageCheck size={16} color="var(--gold-primary, #a37a3b)" />
+            <span>BATCH SHIPMENTS</span>
+          </button>
 
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setIsUpdateInvoicesOpen(true)}
-              id="btn-update-invoices"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 600 }}
-            >
-              <FileText size={16} color="var(--gold-primary)" />
-              <span>UPDATE INVOICES</span>
-            </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsUpdateInvoicesOpen(true)}
+            id="btn-update-invoices"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 600 }}
+          >
+            <FileText size={16} color="var(--gold-primary, #a37a3b)" />
+            <span>UPDATE INVOICES</span>
+          </button>
 
-            <button
-              type="button"
-              className="btn btn-gold"
-              onClick={() => setIsPrintEmailOpen(true)}
-              id="btn-print-email"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 700 }}
-            >
-              <Printer size={16} />
-              <span>PRINT / EMAIL</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-gold"
+            onClick={() => setIsPrintEmailOpen(true)}
+            id="btn-print-email"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 700 }}
+          >
+            <Printer size={16} />
+            <span>PRINT / EMAIL</span>
+          </button>
         </div>
       </div>
 
       {/* =========================================================================
-          2. SETTLEMENT SUB-TABS (Matches AF360 Dual Tabs: Bidder & Seller)
+          2. SETTLEMENT WORKFLOW SUBTABS (Bidder Settlement, Seller Settlement)
           ========================================================================= */}
-      <div className="af360-tabs" style={{ marginBottom: 2 }}>
-        <button 
+      <div style={{ display: 'flex', gap: 6, marginBottom: -1, position: 'relative', zIndex: 1 }}>
+        <button
           type="button"
-          className={`af360-tab ${activeTab === 'bidder' ? 'active' : ''}`}
           onClick={() => setActiveTab('bidder')}
           id="tab-bidder-settlement"
+          style={{
+            padding: '9px 20px',
+            fontSize: 13,
+            fontWeight: activeTab === 'bidder' ? 700 : 600,
+            color: activeTab === 'bidder' ? '#ffffff' : '#334155',
+            background: activeTab === 'bidder' ? '#0e121b' : '#ffffff',
+            border: '1px solid',
+            borderColor: activeTab === 'bidder' ? '#0e121b' : '#cbd5e1',
+            borderTop: activeTab === 'bidder' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid #cbd5e1',
+            borderBottom: activeTab === 'bidder' ? 'none' : '1px solid #cbd5e1',
+            borderTopLeftRadius: 6,
+            borderTopRightRadius: 6,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.15s ease'
+          }}
         >
-          Bidder Settlement
+          <span>Bidder Settlement</span>
         </button>
-        <button 
+
+        <button
           type="button"
-          className={`af360-tab ${activeTab === 'seller' ? 'active' : ''}`}
           onClick={() => setActiveTab('seller')}
           id="tab-seller-settlement"
+          style={{
+            padding: '9px 20px',
+            fontSize: 13,
+            fontWeight: activeTab === 'seller' ? 700 : 600,
+            color: activeTab === 'seller' ? '#ffffff' : '#334155',
+            background: activeTab === 'seller' ? '#0e121b' : '#ffffff',
+            border: '1px solid',
+            borderColor: activeTab === 'seller' ? '#0e121b' : '#cbd5e1',
+            borderTop: activeTab === 'seller' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid #cbd5e1',
+            borderBottom: activeTab === 'seller' ? 'none' : '1px solid #cbd5e1',
+            borderTopLeftRadius: 6,
+            borderTopRightRadius: 6,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.15s ease'
+          }}
         >
-          Seller Settlement
-        </button>
-        <button 
-          type="button"
-          className={`af360-tab ${activeTab === 'invoices' ? 'active' : ''}`}
-          onClick={() => setActiveTab('invoices')}
-        >
-          Buyer Invoices ({invoices.length})
-        </button>
-        <button 
-          type="button"
-          className={`af360-tab ${activeTab === 'consignors' ? 'active' : ''}`}
-          onClick={() => setActiveTab('consignors')}
-        >
-          Consignor Statements ({consignorSettlements.length})
+          <span>Seller Settlement</span>
         </button>
       </div>
 
       {/* =========================================================================
-          3. FINANCIAL SUMMARY METRIC CARDS
+          4. MAIN WORKSPACE CONTAINER
           ========================================================================= */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-        <div className="metric-card-af360">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <div style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: '#f0fdf4',
-              border: '1.5px solid #bbf7d0',
-              display: 'flex',
+      <div style={{
+        background: '#ffffff',
+        border: '1px solid var(--border-subtle, #eae5dc)',
+        borderRadius: '0 8px 8px 8px',
+        padding: '20px 24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+      }}>
+        {/* Row 1: Selection Action (Deselect X Settlements) */}
+        <div style={{ marginBottom: 14 }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab === 'bidder') {
+                setSelectedBidderIds([]);
+              } else {
+                setSelectedSellerIds([]);
+              }
+            }}
+            style={{
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#16a34a',
-              flexShrink: 0
-            }}>
-              <DollarSign size={20} />
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Total Invoiced Realization
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                {formatCurrency(totalInvoiced)}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
-                Total realization
-              </div>
-            </div>
-          </div>
+              gap: 7,
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: 4,
+              padding: '6px 14px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#334155',
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+            }}
+          >
+            <X size={13} style={{ strokeWidth: 2.5 }} />
+            <span>
+              Deselect {activeTab === 'bidder' ? selectedBidderIds.length : selectedSellerIds.length} Settlements
+            </span>
+          </button>
         </div>
 
-        <div className="metric-card-af360">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <div style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: '#ecfdf5',
-              border: '1.5px solid #a7f3d0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#059669',
-              flexShrink: 0
-            }}>
-              <CheckCircle2 size={20} />
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Settled / Wires Received
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: '#059669', lineHeight: 1.2 }}>
-                {formatCurrency(totalPaid)}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
-                Cleared wires & cards
-              </div>
-            </div>
+        {/* Row 2: Search Input with Gear/Settings Icon */}
+        <div style={{ position: 'relative', width: '100%', marginBottom: 14 }}>
+          <div style={{
+            position: 'absolute',
+            left: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#64748b',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <Search size={16} />
           </div>
-        </div>
-
-        <div className="metric-card-af360">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <div style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: '#fffbeb',
-              border: '1.5px solid #fde68a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ca8a04',
-              flexShrink: 0
-            }}>
-              <Clock size={20} />
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Pending Cashiering
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: '#b45309', lineHeight: 1.2 }}>
-                {formatCurrency(totalPending)}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
-                Awaiting cashiering
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          4. TAB CONTENT: BIDDER SETTLEMENT (Default AF360 View)
-          ========================================================================= */}
-      {activeTab === 'bidder' && (
-        <AuctionDetailProvider auctionId={currentAuctionId}>
-          <SettlementTab
-            selectedCustomerId={selectedCustomerId}
-            onSelectCustomer={setSelectedCustomerId}
-            onOpenBatchShipments={() => setIsBatchShipmentsOpen(true)}
-            onOpenUpdateInvoices={() => setIsUpdateInvoicesOpen(true)}
-            onOpenPrintEmail={() => setIsPrintEmailOpen(true)}
+          <input
+            type="text"
+            value={activeTab === 'bidder' ? bidderSearchTerm : sellerSearchTerm}
+            onChange={(e) => {
+              if (activeTab === 'bidder') {
+                setBidderSearchTerm(e.target.value);
+                setBidderPage(1);
+              } else {
+                setSellerSearchTerm(e.target.value);
+                setSellerPage(1);
+              }
+            }}
+            placeholder={activeTab === 'bidder' ? 'Search settlements by bidder, name, invoice...' : 'Search sellers by code, name, status...'}
+            style={{
+              width: '100%',
+              height: 38,
+              paddingLeft: 38,
+              paddingRight: 40,
+              borderRadius: 4,
+              border: '1px solid #cbd5e1',
+              fontSize: 13,
+              background: '#ffffff',
+              color: '#1e293b',
+              boxSizing: 'border-box'
+            }}
           />
-        </AuctionDetailProvider>
-      )}
+          <button
+            type="button"
+            title="Configure Columns"
+            onClick={() => setShowColumnConfig(prev => !prev)}
+            style={{
+              position: 'absolute',
+              right: 10,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <Settings size={16} />
+          </button>
+        </div>
 
-      {/* =========================================================================
-          5. TAB CONTENT: SELLER SETTLEMENT (AF360 Consignor Settlement View)
-          ========================================================================= */}
-      {activeTab === 'seller' && (
-        <div className="syndication-card">
-          <div className="settlement-header-row" style={{ marginBottom: 16 }}>
-            <div>
-              <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                Seller Settlement Console
-              </h3>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                Consignor commissions, catalog fees, and net settlement disbursement ledger
-              </p>
+        {/* Row 3: Total Settlements: X */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 12 }}>
+          Total Settlements:{activeTab === 'bidder' ? filteredBidderSettlements.length : filteredSellerSettlements.length}
+        </div>
+
+        {/* =====================================================================
+            5. BIDDER SETTLEMENT TABLE
+            ===================================================================== */}
+        {activeTab === 'bidder' && (
+          <div>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 4 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ width: 44, padding: '10px 12px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={allBiddersSelected}
+                        onChange={toggleSelectAllBidders}
+                        aria-label="Select all bidders"
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('bidderNumber')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Bidder # {renderSortIcon('bidderNumber', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('name')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Name {renderSortIcon('name', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('isCashBuyer')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Cash Buyer {renderSortIcon('isCashBuyer', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('lotCount')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Lot Count {renderSortIcon('lotCount', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('shippedCount')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Shipped / Picked Up {renderSortIcon('shippedCount', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('balance')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Balance {renderSortIcon('balance', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleBidderSort('invoiceNumber')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Invoice Number/Status {renderSortIcon('invoiceNumber', bidderSortField, bidderSortAsc)}
+                    </th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      Shipping Requested
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingBidder ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <RotateCw size={16} className="animate-spin" />
+                          <span>Loading settlements from Supabase...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginatedBidderSettlements.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
+                        No data available in table
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedBidderSettlements.map((b) => {
+                      const isSelected = selectedBidderIds.includes(b.id);
+                      return (
+                        <tr 
+                          key={b.id}
+                          style={{
+                            borderBottom: '1px solid #f1f5f9',
+                            background: isSelected ? '#f0fdf4' : '#ffffff',
+                            transition: 'background 0.1s ease'
+                          }}
+                        >
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectOneBidder(b.id)}
+                              aria-label={`Select ${b.name}`}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                            #{b.bidderNumber}
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                            {b.name}
+                            {b.isSeller && (
+                              <span style={{
+                                marginLeft: 6,
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                padding: '1px 6px',
+                                borderRadius: 10
+                              }}>
+                                House
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={b.isCashBuyer}
+                              onChange={() => handleToggleCashBuyer(b, b.isCashBuyer)}
+                              title="Toggle Cash Buyer Status"
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>
+                            {b.lotCount}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: b.shippedCount > 0 ? '#dcfce7' : '#f1f5f9',
+                              color: b.shippedCount > 0 ? '#15803d' : '#64748b'
+                            }}>
+                              {b.shippedCount} of {b.totalLotsCount || b.lotCount || 1}
+                            </span>
+                          </td>
+                          <td style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 700,
+                            color: b.balance > 0 ? '#dc2626' : '#15803d'
+                          }}>
+                            {formatCurrency(b.balance)}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const matchingInvoice = propInvoices.find(inv => inv.id === b.id || inv.invoiceNumber === b.invoiceNumber);
+                                if (matchingInvoice) {
+                                  setPreviewInvoice(matchingInvoice);
+                                } else {
+                                  setPreviewInvoice({
+                                    id: b.id,
+                                    invoiceNumber: b.invoiceNumber || `INV-${b.bidderNumber}`,
+                                    paddleNumber: b.bidderNumber,
+                                    buyerName: b.name,
+                                    itemsCount: b.lotCount,
+                                    hammerSubtotal: b.balance,
+                                    buyersPremium: b.balance * 0.15,
+                                    taxAmount: 0,
+                                    shippingFee: 0,
+                                    totalDue: b.balance,
+                                    paymentStatus: b.invoiceStatus as any || 'Pending',
+                                    isShipped: b.shippedCount > 0,
+                                    shippingRequested: b.shippingRequested,
+                                    lots: []
+                                  });
+                                }
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--gold-dark, #8c6428)',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                            >
+                              {b.invoiceNumber || 'INV-Pending'} ({b.invoiceStatus || 'Pending'})
+                            </button>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: b.shippingRequested ? '#e0f2fe' : '#f1f5f9',
+                              color: b.shippingRequested ? '#0369a1' : '#64748b'
+                            }}>
+                              {b.shippingRequested ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => window.print()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', fontSize: 12.5, fontWeight: 600 }}
-              >
-                <Printer size={15} />
-                <span>Print Statements</span>
-              </button>
-            </div>
-          </div>
+            {/* Pagination Controls */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginTop: 16,
+              fontSize: 13,
+              color: '#475569'
+            }}>
+              {/* Show [ 10 ▾ ] entries */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>Show</span>
+                <div style={{ width: 85 }}>
+                  <ShadcnSelect
+                    value={String(bidderPageSize)}
+                    options={PAGE_SIZE_OPTIONS}
+                    onChange={(val) => {
+                      setBidderPageSize(Number(val));
+                      setBidderPage(1);
+                    }}
+                    size="sm"
+                  />
+                </div>
+                <span>entries</span>
+              </div>
 
-          {/* Controls Bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <select
-                value={consignorStatusFilter}
-                onChange={(e) => {
-                  setConsignorStatusFilter(e.target.value);
-                  setSellerPage(1);
-                }}
-                style={{
-                  background: '#ffffff',
-                  border: '1.5px solid #cbd5e1',
-                  color: 'var(--text-main)',
-                  padding: '7px 14px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600
-                }}
-              >
-                <option value="all">All Settlement Statuses</option>
-                <option value="Paid">Paid Out</option>
-                <option value="Ready for Payout">Ready for Payout</option>
-                <option value="Pending Review">Pending Review</option>
-              </select>
-            </div>
+              {/* Showing X to Y of Z entries */}
+              <div>
+                Showing {filteredBidderSettlements.length === 0 ? 0 : (bidderPage - 1) * bidderPageSize + 1} to {Math.min(bidderPage * bidderPageSize, filteredBidderSettlements.length)} of {filteredBidderSettlements.length} entries
+              </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <div className="catalog-search-wrapper" style={{ maxWidth: 300, minWidth: 220, position: 'relative' }}>
-                <Search size={15} className="catalog-search-icon" />
-                <input 
-                  type="text"
-                  placeholder="Filter consignor, entity, code..."
-                  value={consignorSearchTerm}
-                  onChange={(e) => {
-                    setConsignorSearchTerm(e.target.value);
-                    setSellerPage(1);
-                  }}
-                  className="catalog-search-input"
-                  style={{ paddingRight: 36 }}
-                />
+              {/* Prev / Next controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"
-                  title="Configure Columns"
+                  disabled={bidderPage <= 1}
+                  onClick={() => setBidderPage(p => Math.max(1, p - 1))}
                   style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-dim)',
-                    padding: 4,
-                    display: 'flex',
-                    alignItems: 'center'
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid #cbd5e1',
+                    background: bidderPage <= 1 ? '#f1f5f9' : '#ffffff',
+                    color: bidderPage <= 1 ? '#94a3b8' : '#334155',
+                    cursor: bidderPage <= 1 ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <Settings size={14} />
+                  « PREV
+                </button>
+                <button
+                  type="button"
+                  disabled={bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize))}
+                  onClick={() => setBidderPage(p => p + 1)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid #cbd5e1',
+                    background: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#f1f5f9' : '#ffffff',
+                    color: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#94a3b8' : '#334155',
+                    cursor: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  NEXT »
                 </button>
               </div>
-
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                Total Statements: <strong style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{filteredConsignors.length}</strong>
-              </div>
             </div>
           </div>
+        )}
 
-          {/* Seller Settlement Table */}
-          <div className="settlement-table-scroll">
-            <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 130 }}>CONSIGNOR CODE</th>
-                  <th style={{ minWidth: 190 }}>CONSIGNOR ENTITY</th>
-                  <th style={{ width: 140 }}>AUCTION SALE</th>
-                  <th style={{ width: 95, textAlign: 'center' }}>LOTS SOLD</th>
-                  <th style={{ width: 130, textAlign: 'right' }}>GROSS HAMMER</th>
-                  <th style={{ width: 120, textAlign: 'right' }}>COMMISSION</th>
-                  <th style={{ width: 120, textAlign: 'right' }}>CATALOG FEES</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>NET PAYOUT</th>
-                  <th style={{ width: 125, textAlign: 'center' }}>STATUS</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedConsignors.map(c => (
-                  <tr key={c.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-dark)' }}>
-                      {c.consignorCode}
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {c.consignorName}
-                      </div>
-                      {c.checkNumber && (
-                        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                          Check: {c.checkNumber}
+        {/* =====================================================================
+            6. SELLER SETTLEMENT TABLE
+            ===================================================================== */}
+        {activeTab === 'seller' && (
+          <div>
+            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 4 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ width: 44, padding: '10px 12px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={allSellersSelected}
+                        onChange={toggleSelectAllSellers}
+                        aria-label="Select all sellers"
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('consignorCode')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Consignor # {renderSortIcon('consignorCode', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('consignorName')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Consignor Name {renderSortIcon('consignorName', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('totalLotsSold')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Lots Sold {renderSortIcon('totalLotsSold', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('grossHammer')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Gross Hammer {renderSortIcon('grossHammer', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('commissionAmount')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Commission {renderSortIcon('commissionAmount', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('photographyFees')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Fees {renderSortIcon('photographyFees', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('netPayout')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Net Payout {renderSortIcon('netPayout', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th 
+                      onClick={() => handleSellerSort('status')}
+                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      Status {renderSortIcon('status', sellerSortField, sellerSortAsc)}
+                    </th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>
+                      Check / Reference
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingSeller ? (
+                    <tr>
+                      <td colSpan={10} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <RotateCw size={16} className="animate-spin" />
+                          <span>Loading seller settlements from Supabase...</span>
                         </div>
-                      )}
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {c.auctionCode}
-                    </td>
-                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                      {c.totalLotsSold}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                      {formatCurrency(c.grossHammer)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#dc2626' }}>
-                      -{formatCurrency(c.commissionAmount)}
-                      <span style={{ fontSize: 10.5, color: 'var(--text-dim)', display: 'block' }}>({c.commissionRate}%)</span>
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                      -{formatCurrency(c.photographyFees)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#059669', fontSize: 14 }}>
-                      {formatCurrency(c.netPayout)}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge-consignor-status ${c.status === 'Paid' ? 'paid' : c.status === 'Ready for Payout' ? 'ready' : 'pending'}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <TableRowActionMenu
-                        ariaLabel={`Actions for ${c.consignorName}`}
-                        actions={[
-                          {
-                            label: 'View Statement',
-                            icon: Eye,
-                            onClick: () => {
-                              alert(`Consignor Statement #${c.consignorCode} for ${c.consignorName}\nGross Hammer: ${formatCurrency(c.grossHammer)}\nNet Payout: ${formatCurrency(c.netPayout)}`);
-                            }
-                          },
-                          {
-                            label: 'Print Statement',
-                            icon: Printer,
-                            onClick: () => window.print()
-                          },
-                          {
-                            label: 'Email Statement',
-                            icon: Mail,
-                            onClick: () => {
-                              showToast('success', 'Email Sent', `Consignor statement emailed to ${c.consignorName}.`);
-                            }
-                          },
-                          {
-                            label: 'Mark as Paid',
-                            icon: CheckCircle,
-                            disabled: c.status === 'Paid',
-                            onClick: async () => {
-                              const checkNum = `CHK-${Math.floor(900000 + Math.random() * 99999)}`;
-                              await settlementService.updateSellerSettlementStatus(currentAuctionId, c.id, 'Paid', checkNum);
-                              onUpdateConsignorStatus(c.id, 'Paid');
-                              setConsignorSettlements(prev => prev.map(item => item.id === c.id ? { ...item, status: 'Paid', checkNumber: checkNum } : item));
-                              showToast('success', 'Settlement Paid', `Marked ${c.consignorName} as Paid with ${checkNum}.`);
-                            }
-                          }
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-
-                {filteredConsignors.length === 0 && (
-                  <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-dim)' }}>
-                      No seller settlements match current filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination for Seller Settlements */}
-          {filteredConsignors.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <ShadcnPagination
-                currentPage={sellerPage}
-                totalItems={filteredConsignors.length}
-                pageSize={sellerPageSize}
-                onPageChange={setSellerPage}
-                onPageSizeChange={(newSize) => {
-                  setSellerPageSize(newSize);
-                  setSellerPage(1);
-                }}
-                pageSizeOptions={[10, 20, 50, 100]}
-                itemLabel="statements"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* =========================================================================
-          6. TAB CONTENT: BUYER SETTLEMENT INVOICES (Preserved Extended Ledger)
-          ========================================================================= */}
-      {activeTab === 'invoices' && (
-        <div className="syndication-card">
-          <div className="settlement-header-row" style={{ marginBottom: 16 }}>
-            <div>
-              <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                Buyer Settlement Invoices
-              </h3>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                Reconciliation, buyer's premiums, and cashiering ledger
-              </p>
+                      </td>
+                    </tr>
+                  ) : paginatedSellerSettlements.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
+                        No data available in table
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedSellerSettlements.map((s) => {
+                      const isSelected = selectedSellerIds.includes(s.id);
+                      return (
+                        <tr 
+                          key={s.id}
+                          style={{
+                            borderBottom: '1px solid #f1f5f9',
+                            background: isSelected ? '#f0fdf4' : '#ffffff',
+                            transition: 'background 0.1s ease'
+                          }}
+                        >
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectOneSeller(s.id)}
+                              aria-label={`Select ${s.consignorName}`}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                            {s.consignorCode}
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                            {s.consignorName}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>
+                            {s.totalLotsSold}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
+                            {formatCurrency(s.grossHammer)}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b' }}>
+                            {formatCurrency(s.commissionAmount)}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b' }}>
+                            {formatCurrency(s.photographyFees)}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--gold-dark, #8c6428)' }}>
+                            {formatCurrency(s.netPayout)}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: s.status === 'Paid' ? '#dcfce7' : (s.status === 'Ready for Payout' ? '#e0f2fe' : '#fef3c7'),
+                              color: s.status === 'Paid' ? '#15803d' : (s.status === 'Ready for Payout' ? '#0369a1' : '#92400e')
+                            }}>
+                              {s.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>
+                            {s.checkNumber || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => window.print()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', fontSize: 12.5, fontWeight: 600 }}
-              >
-                <Printer size={15} />
-                <span>Print Invoices</span>
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <select 
-                value={statusFilter} 
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ 
-                  background: '#ffffff', 
-                  border: '1.5px solid #cbd5e1', 
-                  color: 'var(--text-main)', 
-                  padding: '7px 14px', 
-                  borderRadius: 6, 
-                  fontSize: 13,
-                  fontWeight: 600
-                }}
-              >
-                <option value="all">All Payment Statuses</option>
-                <option value="Paid">Paid</option>
-                <option value="Pending Wire">Pending Wire</option>
-                <option value="Card Authorized">Card Authorized</option>
-                <option value="Check Received">Check Received</option>
-                <option value="Unpaid">Unpaid</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <div className="catalog-search-wrapper" style={{ maxWidth: 300, minWidth: 220 }}>
-                <Search size={15} className="catalog-search-icon" />
-                <input 
-                  type="text"
-                  placeholder="Filter invoice, buyer, paddle..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="catalog-search-input"
-                />
+            {/* Pagination Controls */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginTop: 16,
+              fontSize: 13,
+              color: '#475569'
+            }}>
+              {/* Show [ 10 ▾ ] entries */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>Show</span>
+                <div style={{ width: 85 }}>
+                  <ShadcnSelect
+                    value={String(sellerPageSize)}
+                    options={PAGE_SIZE_OPTIONS}
+                    onChange={(val) => {
+                      setSellerPageSize(Number(val));
+                      setSellerPage(1);
+                    }}
+                    size="sm"
+                  />
+                </div>
+                <span>entries</span>
               </div>
 
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                Total Invoices: <strong style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{filteredInvoices.length}</strong>
+              {/* Showing X to Y of Z entries */}
+              <div>
+                Showing {filteredSellerSettlements.length === 0 ? 0 : (sellerPage - 1) * sellerPageSize + 1} to {Math.min(sellerPage * sellerPageSize, filteredSellerSettlements.length)} of {filteredSellerSettlements.length} entries
+              </div>
+
+              {/* Prev / Next controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  disabled={sellerPage <= 1}
+                  onClick={() => setSellerPage(p => Math.max(1, p - 1))}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid #cbd5e1',
+                    background: sellerPage <= 1 ? '#f1f5f9' : '#ffffff',
+                    color: sellerPage <= 1 ? '#94a3b8' : '#334155',
+                    cursor: sellerPage <= 1 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  « PREV
+                </button>
+                <button
+                  type="button"
+                  disabled={sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize))}
+                  onClick={() => setSellerPage(p => p + 1)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid #cbd5e1',
+                    background: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#f1f5f9' : '#ffffff',
+                    color: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#94a3b8' : '#334155',
+                    cursor: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  NEXT »
+                </button>
               </div>
             </div>
           </div>
-
-          <div className="settlement-table-scroll">
-            <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 140 }}>INVOICE NUMBER</th>
-                  <th style={{ minWidth: 180 }}>BUYER NAME</th>
-                  <th style={{ width: 95 }}>PADDLE#</th>
-                  <th style={{ width: 95, textAlign: 'center' }}>ITEMS</th>
-                  <th style={{ width: 130, textAlign: 'right' }}>HAMMER TOTAL</th>
-                  <th style={{ width: 110, textAlign: 'right' }}>BP (15%)</th>
-                  <th style={{ width: 135, textAlign: 'right' }}>TOTAL DUE</th>
-                  <th style={{ width: 140, textAlign: 'center' }}>PAYMENT STATUS</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map(inv => (
-                  <tr key={inv.id}>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewInvoice(inv)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          color: 'var(--gold-dark)',
-                          fontWeight: 700,
-                          fontFamily: 'var(--font-mono)',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6
-                        }}
-                      >
-                        <FileText size={14} />
-                        <span>{inv.invoiceNumber}</span>
-                      </button>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {inv.buyerName}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
-                        {inv.buyerEmail}
-                      </div>
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                      #{inv.paddleNumber}
-                    </td>
-                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                      {inv.itemsCount}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      {formatCurrency(inv.hammerSubtotal)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                      {formatCurrency(inv.buyersPremium)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-main)', fontSize: 14 }}>
-                      {formatCurrency(inv.totalDue)}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge-invoice-status ${inv.paymentStatus === 'Paid' ? 'paid' : inv.paymentStatus === 'Pending Wire' ? 'pending' : 'card'}`}>
-                        {inv.paymentStatus}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <TableRowActionMenu
-                        ariaLabel={`Actions for ${inv.invoiceNumber}`}
-                        actions={[
-                          {
-                            label: 'View Invoice',
-                            icon: Eye,
-                            onClick: () => setPreviewInvoice(inv)
-                          },
-                          {
-                            label: 'Update Invoice',
-                            icon: FileText,
-                            onClick: () => {
-                              setSelectedInvoiceId(inv.id);
-                              setIsUpdateInvoicesOpen(true);
-                            }
-                          },
-                          {
-                            label: 'Mark as Paid',
-                            icon: CheckCircle,
-                            disabled: inv.paymentStatus === 'Paid',
-                            onClick: () => {
-                              onUpdateInvoiceStatus(inv.id, 'Paid');
-                              showToast('success', 'Payment Settled', `Invoice ${inv.invoiceNumber} marked as Paid.`);
-                            }
-                          },
-                          {
-                            label: 'Print Document',
-                            icon: Printer,
-                            onClick: () => window.print()
-                          }
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* =========================================================================
-          7. TAB CONTENT: CONSIGNOR PAYOUT STATEMENTS (Preserved View)
-          ========================================================================= */}
-      {activeTab === 'consignors' && (
-        <div className="syndication-card">
-          <div className="settlement-header-row" style={{ marginBottom: 16 }}>
-            <div>
-              <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0, fontWeight: 700 }}>
-                Consignor Payout Statements
-              </h3>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '3px 0 0' }}>
-                Consignor commissions, catalog fees, and net disbursement ledger
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => window.print()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', fontSize: 12.5, fontWeight: 600 }}
-            >
-              <Printer size={15} />
-              <span>Print Statements</span>
-            </button>
-          </div>
-
-          <div className="settlement-table-scroll">
-            <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 130 }}>CONSIGNOR CODE</th>
-                  <th style={{ minWidth: 190 }}>CONSIGNOR ENTITY</th>
-                  <th style={{ width: 140 }}>AUCTION SALE</th>
-                  <th style={{ width: 95, textAlign: 'center' }}>LOTS SOLD</th>
-                  <th style={{ width: 130, textAlign: 'right' }}>GROSS HAMMER</th>
-                  <th style={{ width: 120, textAlign: 'right' }}>COMMISSION</th>
-                  <th style={{ width: 120, textAlign: 'right' }}>CATALOG FEES</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>NET PAYOUT</th>
-                  <th style={{ width: 125, textAlign: 'center' }}>STATUS</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredConsignors.map(c => (
-                  <tr key={c.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-dark)' }}>
-                      {c.consignorCode}
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {c.consignorName}
-                      </div>
-                      {c.checkNumber && (
-                        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                          Check: {c.checkNumber}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {c.auctionCode}
-                    </td>
-                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                      {c.totalLotsSold}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      {formatCurrency(c.grossHammer)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#dc2626' }}>
-                      -{formatCurrency(c.commissionAmount)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                      -{formatCurrency(c.photographyFees)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#059669', fontSize: 14 }}>
-                      {formatCurrency(c.netPayout)}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge-consignor-status ${c.status === 'Paid' ? 'paid' : c.status === 'Ready for Payout' ? 'ready' : 'pending'}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <TableRowActionMenu
-                        ariaLabel={`Actions for ${c.consignorName}`}
-                        actions={[
-                          {
-                            label: 'Mark as Paid',
-                            icon: CheckCircle,
-                            disabled: c.status === 'Paid',
-                            onClick: () => {
-                              onUpdateConsignorStatus(c.id, 'Paid');
-                              showToast('success', 'Payout Settled', `Marked ${c.consignorName} as Paid.`);
-                            }
-                          },
-                          {
-                            label: 'Print Statement',
-                            icon: Printer,
-                            onClick: () => window.print()
-                          }
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          8. RIGHT-SIDE DRAWER: BATCH SHIPMENTS
+          7. DRAWER: BATCH SHIPMENTS (Uses ShadcnSelect for Carrier)
           ========================================================================= */}
       <ShadcnSheet
         isOpen={isBatchShipmentsOpen}
         onClose={() => setIsBatchShipmentsOpen(false)}
-        title="Batch Shipments Processing"
-        description="Select eligible bidder settlement accounts, configure carrier and tracking, and mark orders as shipped."
+        title="Batch Shipments & Carrier Dispatch"
+        description="Select multiple buyer settlements, assign master shipping tracking, and update status in Supabase."
         size="md"
         isSubmitting={isSubmittingBatchShip}
         footer={
@@ -1065,107 +1239,27 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <button
               type="button"
               className="btn btn-gold"
-              onClick={handleApplyBatchShipments}
-              disabled={isSubmittingBatchShip || batchShipSelectedIds.length === 0}
+              onClick={handleSaveBatchShipments}
+              disabled={isSubmittingBatchShip}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 18px', fontSize: 13, fontWeight: 700 }}
             >
-              {isSubmittingBatchShip ? <RotateCw size={15} className="animate-spin" /> : <Truck size={15} />}
-              <span>Apply Batch Shipments ({batchShipSelectedIds.length})</span>
+              {isSubmittingBatchShip ? <RotateCw size={15} className="animate-spin" /> : <PackageCheck size={15} />}
+              <span>Confirm & Dispatch</span>
             </button>
           </div>
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: 8 }}>
-              Eligible Bidder Settlements ({invoices.length})
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto' }}>
-              {invoices.map(inv => {
-                const isSelected = batchShipSelectedIds.includes(inv.id);
-                return (
-                  <label
-                    key={inv.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: 6,
-                      background: isSelected ? '#fbf8f2' : '#ffffff',
-                      border: isSelected ? '1.5px solid var(--gold-primary)' : '1px solid #e2e8f0',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {
-                          if (isSelected) {
-                            setBatchShipSelectedIds(prev => prev.filter(id => id !== inv.id));
-                          } else {
-                            setBatchShipSelectedIds(prev => [...prev, inv.id]);
-                          }
-                        }}
-                      />
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
-                          {inv.buyerName} (#{inv.paddleNumber})
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {inv.invoiceNumber} • {inv.itemsCount} items
-                        </div>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>
-                      {formatCurrency(inv.totalDue)}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
-              <button
-                type="button"
-                onClick={() => setBatchShipSelectedIds(invoices.map(i => i.id))}
-                style={{ background: 'none', border: 'none', color: 'var(--gold-dark)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}
-              >
-                Select All
-              </button>
-              <button
-                type="button"
-                onClick={() => setBatchShipSelectedIds([])}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 11.5, cursor: 'pointer', padding: 0 }}
-              >
-                Clear Selection
-              </button>
-            </div>
-          </div>
-
           <div>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
               Carrier / Shipping Method
             </label>
-            <select
+            <ShadcnSelect
               value={batchCarrier}
-              onChange={(e) => setBatchCarrier(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #cbd5e1',
-                fontSize: 13,
-                background: '#ffffff'
-              }}
-            >
-              <option value="FedEx Ground">FedEx Ground (Direct Signature)</option>
-              <option value="FedEx Priority Overnight">FedEx Priority Overnight</option>
-              <option value="UPS Express">UPS Express Saver</option>
-              <option value="USPS Priority Mail">USPS Priority Mail Registered</option>
-              <option value="Armored Courier">Armored Courier (Brinks / Malca-Amit)</option>
-              <option value="Local Saleroom Pickup">Local Saleroom Pickup (Signed Receipt)</option>
-            </select>
+              options={CARRIER_OPTIONS}
+              onChange={setBatchCarrier}
+              placeholder="Select Carrier..."
+            />
           </div>
 
           <div>
@@ -1176,7 +1270,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               <button
                 type="button"
                 onClick={() => setBatchTracking(`TRK-${Date.now().toString().slice(-8)}`)}
-                style={{ background: 'none', border: 'none', color: 'var(--gold-dark)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                style={{ background: 'none', border: 'none', color: 'var(--gold-dark, #8c6428)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}
               >
                 Auto-Generate
               </button>
@@ -1192,7 +1286,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 borderRadius: 6,
                 border: '1.5px solid #cbd5e1',
                 fontSize: 13,
-                fontFamily: 'var(--font-mono)'
+                boxSizing: 'border-box'
               }}
             />
           </div>
@@ -1210,7 +1304,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 padding: '8px 12px',
                 borderRadius: 6,
                 border: '1.5px solid #cbd5e1',
-                fontSize: 13
+                fontSize: 13,
+                boxSizing: 'border-box'
               }}
             />
           </div>
@@ -1230,7 +1325,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 borderRadius: 6,
                 border: '1.5px solid #cbd5e1',
                 fontSize: 13,
-                resize: 'vertical'
+                resize: 'vertical',
+                boxSizing: 'border-box'
               }}
             />
           </div>
@@ -1238,13 +1334,13 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       </ShadcnSheet>
 
       {/* =========================================================================
-          9. RIGHT-SIDE DRAWER: UPDATE INVOICES
+          8. DRAWER: UPDATE INVOICES (Uses ShadcnSelect throughout)
           ========================================================================= */}
       <ShadcnSheet
         isOpen={isUpdateInvoicesOpen}
         onClose={() => setIsUpdateInvoicesOpen(false)}
         title="Update Auction Invoices"
-        description="Select an invoice, update payment and cashiering status, adjust fee lines, and persist changes."
+        description="Select an invoice, update payment and cashiering status, adjust fee lines, and persist to Supabase."
         size="md"
         isSubmitting={isSubmittingInvoiceUpdate}
         footer={
@@ -1276,83 +1372,45 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
               Select Invoice
             </label>
-            <select
+            <ShadcnSelect
               value={selectedInvoiceId}
-              onChange={(e) => setSelectedInvoiceId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #cbd5e1',
-                fontSize: 13,
-                background: '#ffffff',
-                fontWeight: 600
-              }}
-            >
-              {invoices.map(inv => (
-                <option key={inv.id} value={inv.id}>
-                  {inv.invoiceNumber} - {inv.buyerName} (#{inv.paddleNumber}) • {formatCurrency(inv.totalDue)}
-                </option>
-              ))}
-            </select>
+              options={updateInvoiceOptions}
+              onChange={setSelectedInvoiceId}
+              placeholder="Select an invoice to edit..."
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
               Payment Status
             </label>
-            <select
+            <ShadcnSelect
               value={editInvoiceStatus}
-              onChange={(e) => setEditInvoiceStatus(e.target.value as any)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #cbd5e1',
-                fontSize: 13,
-                background: '#ffffff'
-              }}
-            >
-              <option value="Paid">Paid (Fully Settled)</option>
-              <option value="Pending Wire">Pending Wire Transfer</option>
-              <option value="Card Authorized">Card Authorized</option>
-              <option value="Check Received">Check Received (Clearing)</option>
-              <option value="Unpaid">Unpaid</option>
-            </select>
+              options={PAYMENT_STATUS_OPTIONS}
+              onChange={(v) => setEditInvoiceStatus(v as any)}
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
               Payment Method
             </label>
-            <select
+            <ShadcnSelect
               value={editPaymentMethod}
-              onChange={(e) => setEditPaymentMethod(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #cbd5e1',
-                fontSize: 13,
-                background: '#ffffff'
-              }}
-            >
-              <option value="Wire Transfer">Bank Wire Transfer</option>
-              <option value="Credit Card">Credit Card on File (HiBid / Square)</option>
-              <option value="Cash">Cash (In-Person Floor Settlement)</option>
-              <option value="Company Check">Cashier's Check / Money Order</option>
-              <option value="Escrow">Third-Party Escrow</option>
-            </select>
+              options={PAYMENT_METHOD_OPTIONS}
+              onChange={setEditPaymentMethod}
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
-                Adjust Sales Tax ($)
+                Tax Amount ($)
               </label>
               <input
                 type="number"
                 step="0.01"
+                placeholder="0.00"
                 value={editTaxAmount}
                 onChange={(e) => setEditTaxAmount(e.target.value)}
                 style={{
@@ -1361,7 +1419,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                   borderRadius: 6,
                   border: '1.5px solid #cbd5e1',
                   fontSize: 13,
-                  fontFamily: 'var(--font-mono)'
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -1372,6 +1430,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               <input
                 type="number"
                 step="0.01"
+                placeholder="0.00"
                 value={editShippingFee}
                 onChange={(e) => setEditShippingFee(e.target.value)}
                 style={{
@@ -1380,7 +1439,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                   borderRadius: 6,
                   border: '1.5px solid #cbd5e1',
                   fontSize: 13,
-                  fontFamily: 'var(--font-mono)'
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -1388,11 +1447,11 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
 
           <div>
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
-              Internal Cashier Notes
+              Settlement Notes
             </label>
             <textarea
               rows={3}
-              placeholder="Add cashier notes or transaction IDs..."
+              placeholder="Add cashier notes or transaction reference..."
               value={editInvoiceNotes}
               onChange={(e) => setEditInvoiceNotes(e.target.value)}
               style={{
@@ -1401,7 +1460,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 borderRadius: 6,
                 border: '1.5px solid #cbd5e1',
                 fontSize: 13,
-                resize: 'vertical'
+                resize: 'vertical',
+                boxSizing: 'border-box'
               }}
             />
           </div>
@@ -1409,13 +1469,13 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       </ShadcnSheet>
 
       {/* =========================================================================
-          10. RIGHT-SIDE DRAWER: PRINT / EMAIL
+          9. DRAWER: PRINT / EMAIL (Uses ShadcnSelect for Document Type)
           ========================================================================= */}
       <ShadcnSheet
         isOpen={isPrintEmailOpen}
         onClose={() => setIsPrintEmailOpen(false)}
-        title="Print / Email Settlement Documents"
-        description="Generate official settlement invoices, consignor payout statements, or dispatch email receipts."
+        title="Print & Dispatch Settlement Statements"
+        description="Generate official settlement documentation for bidders or consignors."
         size="md"
         isSubmitting={isSendingEmail}
         footer={
@@ -1423,19 +1483,11 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setIsPrintEmailOpen(false)}
-              style={{ height: 38, padding: '0 16px', fontSize: 13 }}
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
               onClick={() => window.print()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', fontSize: 13, fontWeight: 600 }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', fontSize: 13 }}
             >
               <Printer size={15} />
-              <span>Print Document</span>
+              <span>Print Directly</span>
             </button>
             <button
               type="button"
@@ -1455,48 +1507,11 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
               Document Type
             </label>
-            <select
+            <ShadcnSelect
               value={printDocType}
-              onChange={(e) => setPrintDocType(e.target.value as any)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #cbd5e1',
-                fontSize: 13,
-                background: '#ffffff'
-              }}
-            >
-              <option value="buyer_invoice">Buyer Settlement Invoices</option>
-              <option value="seller_statement">Consignor Payout Statements</option>
-              <option value="summary">Consolidated Auction Settlement Summary</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
-              Document Scope
-            </label>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="printScope"
-                  checked={printScope === 'all'}
-                  onChange={() => setPrintScope('all')}
-                />
-                <span>All Auction Records</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="printScope"
-                  checked={printScope === 'selected'}
-                  onChange={() => setPrintScope('selected')}
-                />
-                <span>Active / Pending Records</span>
-              </label>
-            </div>
+              options={DOC_TYPE_OPTIONS}
+              onChange={setPrintDocType}
+            />
           </div>
 
           <div>
@@ -1505,7 +1520,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             </label>
             <input
               type="email"
-              placeholder="e.g. accounting@gardnerauction.com or buyer@example.com"
+              placeholder="e.g. accounting@gardner-auction.com"
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
               style={{
@@ -1513,186 +1528,95 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 padding: '8px 12px',
                 borderRadius: 6,
                 border: '1.5px solid #cbd5e1',
-                fontSize: 13
+                fontSize: 13,
+                boxSizing: 'border-box'
               }}
             />
-          </div>
-
-          {/* Document Preview Box */}
-          <div style={{ border: '1.5px dashed #cbd5e1', borderRadius: 8, padding: '16px', background: '#f8fafc' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: 10, marginBottom: 10 }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
-                  GARDNER AUCTION SALEROOM
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                  Certified Auctioneer & Executive Clerking
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
-                {new Date().toLocaleDateString()}
-              </div>
-            </div>
-
-            <div style={{ fontSize: 12.5, color: 'var(--text-main)', marginBottom: 8 }}>
-              <strong>Auction:</strong> {currentAuction.title} ({currentAuction.code})
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-              <strong>Document:</strong> {printDocType === 'buyer_invoice' ? 'Buyer Settlement Invoice' : printDocType === 'seller_statement' ? 'Consignor Payout Statement' : 'Settlement Reconciliation Ledger'}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              <strong>Total Realization:</strong> {formatCurrency(totalInvoiced)}
-            </div>
           </div>
         </div>
       </ShadcnSheet>
 
       {/* =========================================================================
-          11. DETAILED INVOICE PREVIEW MODAL (Preserved Existing Workflow)
+          10. MODAL: INVOICE PREVIEW DETAIL
           ========================================================================= */}
       {previewInvoice && (
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(15, 23, 42, 0.6)',
+          background: 'rgba(15, 23, 42, 0.65)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 999999,
-          backdropFilter: 'blur(4px)',
-          padding: 16
+          padding: 16,
+          backdropFilter: 'blur(3px)'
         }}>
           <div style={{
             background: '#ffffff',
-            borderRadius: 12,
+            borderRadius: 10,
+            maxWidth: 620,
             width: '100%',
-            maxWidth: 680,
             maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
+            overflowY: 'auto',
             boxShadow: 'var(--shadow-modal)',
-            overflow: 'hidden'
+            padding: 24
           }}>
-            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: 14, marginBottom: 16 }}>
               <div>
-                <h3 className="font-serif" style={{ fontSize: 18, color: '#0f172a', margin: 0, fontWeight: 700 }}>
-                  Settlement Invoice #{previewInvoice.invoiceNumber}
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+                  Invoice Detail: {previewInvoice.invoiceNumber}
                 </h3>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                  Buyer: {previewInvoice.buyerName} (Paddle #{previewInvoice.paddleNumber})
-                </div>
+                <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#64748b' }}>
+                  {previewInvoice.buyerName} • Paddle #{previewInvoice.paddleNumber}
+                </p>
               </div>
-              <button 
-                className="btn-icon" 
+              <button
+                type="button"
                 onClick={() => setPreviewInvoice(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4 }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="modal-body" style={{ padding: 24, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
-                      Invoice Information
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                      {previewInvoice.buyerName}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b' }}>
-                      {previewInvoice.buyerEmail}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className={`badge-invoice-status ${previewInvoice.paymentStatus === 'Paid' ? 'paid' : previewInvoice.paymentStatus === 'Pending Wire' ? 'pending' : 'card'}`}>
-                      {previewInvoice.paymentStatus}
-                    </span>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
-                      {previewInvoice.paymentDate ? formatDate(previewInvoice.paymentDate) : 'Awaiting Cashiering'}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', marginBottom: 8, letterSpacing: '0.05em' }}>
-                    Won Lots ({previewInvoice.lots.length})
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b' }}>
-                        <th style={{ padding: '8px 0', width: 60 }}>LOT#</th>
-                        <th style={{ padding: '8px 12px' }}>TITLE</th>
-                        <th style={{ padding: '8px 0', textAlign: 'right' }}>HAMMER PRICE</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewInvoice.lots.map(l => (
-                        <tr key={l.lotNumber} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '10px 0', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>#{l.lotNumber}</td>
-                          <td style={{ padding: '10px 12px', color: '#1e293b' }}>{l.title}</td>
-                          <td style={{ padding: '10px 0', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{formatCurrency(l.hammerPrice)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 14, fontSize: 13 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: 280 }}>
-                    <span style={{ color: '#64748b' }}>Hammer Subtotal:</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{formatCurrency(previewInvoice.hammerSubtotal)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: 280 }}>
-                    <span style={{ color: '#64748b' }}>Buyer's Premium:</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(previewInvoice.buyersPremium)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: 280 }}>
-                    <span style={{ color: '#64748b' }}>Sales Tax:</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(previewInvoice.taxAmount)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: 280 }}>
-                    <span style={{ color: '#64748b' }}>Shipping & Handling:</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(previewInvoice.shippingFee)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: 280, borderTop: '2px solid #0f172a', paddingTop: 10, marginTop: 4, fontWeight: 800, fontSize: 16, color: '#0f172a' }}>
-                    <span>TOTAL SETTLEMENT:</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{formatCurrency(previewInvoice.totalDue)}</span>
-                  </div>
-                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16, fontSize: 13 }}>
+              <div>
+                <span style={{ color: '#64748b' }}>Payment Status:</span>{' '}
+                <strong style={{ color: previewInvoice.paymentStatus === 'Paid' ? '#15803d' : '#b45309' }}>
+                  {previewInvoice.paymentStatus}
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Items Count:</span>{' '}
+                <strong>{previewInvoice.itemsCount}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Hammer Subtotal:</span>{' '}
+                <strong>{formatCurrency(previewInvoice.hammerSubtotal || 0)}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Total Due:</span>{' '}
+                <strong style={{ fontSize: 15, color: '#0f172a' }}>{formatCurrency(previewInvoice.totalDue || 0)}</strong>
               </div>
             </div>
 
-            <div className="modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              {previewInvoice.paymentStatus !== 'Paid' && (
-                <button 
-                  className="btn btn-gold"
-                  onClick={() => {
-                    onUpdateInvoiceStatus(previewInvoice.id, 'Paid');
-                    setPreviewInvoice({ ...previewInvoice, paymentStatus: 'Paid' });
-                    showToast('success', 'Wire Settled', `Invoice ${previewInvoice.invoiceNumber} marked as Paid.`);
-                  }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, height: 38 }}
-                >
-                  <CheckCircle size={15} />
-                  <span>Mark Bank Wire Received</span>
-                </button>
-              )}
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => window.print()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, height: 38 }}
-              >
-                <Printer size={15} />
-                <span>Print Document</span>
-              </button>
-              <button 
-                className="btn btn-secondary" 
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
                 onClick={() => setPreviewInvoice(null)}
-                style={{ fontSize: 13, height: 38 }}
+                style={{ height: 36, padding: '0 16px', fontSize: 13 }}
               >
                 Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-gold"
+                onClick={() => window.print()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', fontSize: 13, fontWeight: 700 }}
+              >
+                <Printer size={15} />
+                <span>Print Invoice</span>
               </button>
             </div>
           </div>

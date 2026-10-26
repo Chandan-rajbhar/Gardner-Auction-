@@ -63,41 +63,6 @@ export class SettlementService {
       }
     } catch (_) {}
 
-    // 3. Fallback to INITIAL_INVOICES mapped to SettlementCustomer if empty
-    if (customers.length === 0) {
-      const relevantInvoices = INITIAL_INVOICES.filter(
-        i => !i.auctionId || i.auctionId === auctionId || auctionId === 'auc-002' || auctionId === 'auc-001'
-      );
-      customers = relevantInvoices.map(inv => ({
-        id: `cust-${inv.paddleNumber}`,
-        auctionId,
-        bidderNumber: inv.paddleNumber,
-        name: inv.buyerName,
-        isSeller: inv.paddleNumber === 'HOUSE',
-        isCashBuyer: inv.paymentMethod === 'Cash',
-        lotCount: inv.itemsCount,
-        shippedCount: 0,
-        totalLotsCount: inv.itemsCount,
-        balance: inv.paymentStatus === 'Paid' ? 0 : inv.totalDue,
-        invoiceNumber: inv.invoiceNumber,
-        invoiceStatus: inv.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-        shippingRequested: true,
-        lots: inv.lots.map((l, idx) => ({
-          id: `slot-${idx + 1}`,
-          lotNumber: l.lotNumber,
-          title: l.title,
-          status: 'Sold',
-          qtySold: 1,
-          isShipped: false,
-          entries: [
-            { id: `ent-hammer-${idx}`, type: 'sold_lot', label: 'Hammer Amount', amount: l.hammerPrice },
-            { id: `ent-bp-${idx}`, type: 'buyers_premium', label: "Buyer's Premium", amount: l.hammerPrice * 0.15 }
-          ]
-        })),
-        charges: []
-      }));
-    }
-
     return customers;
   }
 
@@ -133,8 +98,8 @@ export class SettlementService {
       }
     } catch (_) {}
 
-    // 2. Fall back to INITIAL_CONSIGNOR_SETTLEMENTS
-    return INITIAL_CONSIGNOR_SETTLEMENTS;
+    // 2. Return empty array if no records exist in Supabase
+    return [];
   }
 
   /**

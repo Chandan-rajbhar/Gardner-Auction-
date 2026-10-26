@@ -877,6 +877,7 @@ const AdminConsole: React.FC = () => {
               availableAuctions={auctions}
               onSelectAuction={setSelectedAuctionId}
               onNavigateAuctions={() => handleNavigateSection('auctions')}
+              onNavigateSection={handleNavigateSection}
             />
           )}
 
