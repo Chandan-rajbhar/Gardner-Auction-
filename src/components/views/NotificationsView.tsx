@@ -32,13 +32,39 @@ import {
   SelectTrigger, 
   SelectValue, 
   SelectContent, 
-  SelectItem 
+  SelectItem,
+  ShadcnSelect,
+  ShadcnSelectOption
 } from '../ui/select';
 import { ShadcnSheet } from '../ui/ShadcnSheet';
 import { ShadcnPagination } from '../ui/ShadcnPagination';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 import { RowActionMenu } from '../ui/RowActionMenu';
 import { useToast } from '../../context/ToastContext';
+import { supabase } from '../../lib/supabase';
+
+const NOTIFICATION_CATEGORY_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'auction', label: 'Auction Event' },
+  { value: 'bidder', label: 'Bidder Notice' },
+  { value: 'clerking', label: 'Clerking Rostrum' },
+  { value: 'settlement', label: 'Settlement & Invoice' },
+  { value: 'system', label: 'System Alert' },
+  { value: 'security', label: 'Security Alert' }
+];
+
+const DEFAULT_RECIPIENT_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'super_admin', label: 'Super Admin' }
+];
+
+const RELATED_MODULE_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'auctions', label: 'Pre Auction / Catalog' },
+  { value: 'live_clerking', label: 'Auction Day / Live Clerking' },
+  { value: 'users', label: 'Customers / Bidders' },
+  { value: 'payments', label: 'Settlement & Invoices' },
+  { value: 'reports', label: 'Reports & Analytics' },
+  { value: 'logs', label: 'Activity & Audit Log' },
+  { value: 'settings', label: 'Settings & Portal Config' }
+];
 
 interface NotificationsViewProps {
   onNavigateSection?: (section: NavigationSection) => void;
@@ -76,7 +102,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
   const [selectedNotificationForEdit, setSelectedNotificationForEdit] = useState<NotificationRecord | null>(null);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
-  const [editForm, setEditForm] = useState({ title: '', message: '', type: 'system', recipient_role: 'admin' });
+  const [editForm, setEditForm] = useState({ title: '', message: '', type: 'system', recipient_role: 'super_admin' });
   const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
@@ -84,11 +110,53 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     title: '',
     message: '',
     type: 'system',
-    recipient_role: 'admin',
+    recipient_role: 'super_admin',
     related_module: 'auctions',
     action_url: ''
   });
   const [isSubmittingCreate, setIsSubmittingCreate] = useState<boolean>(false);
+
+  // Recipient Scope options: only show super admin existing in Supabase database
+  const [recipientRoleOptions, setRecipientRoleOptions] = useState<ShadcnSelectOption[]>(DEFAULT_RECIPIENT_OPTIONS);
+
+  // Fetch only Super Admin existing in Supabase database
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSuperAdminFromDb = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, full_name, email, role')
+          .eq('role', 'super_admin');
+
+        if (!error && data && data.length > 0 && isMounted) {
+          const options: ShadcnSelectOption[] = data.map((u: any) => {
+            const name = u.full_name || 'Super Admin';
+            const label = name === 'Super Admin' ? 'Super Admin' : `${name} (Super Admin)`;
+            return {
+              value: 'super_admin',
+              label,
+              description: u.email || undefined
+            };
+          });
+          setRecipientRoleOptions(options);
+        } else if (isMounted) {
+          setRecipientRoleOptions(DEFAULT_RECIPIENT_OPTIONS);
+        }
+      } catch (err) {
+        console.warn('[NotificationsView] Error fetching super admin from Supabase:', err);
+        if (isMounted) {
+          setRecipientRoleOptions(DEFAULT_RECIPIENT_OPTIONS);
+        }
+      }
+    };
+
+    fetchSuperAdminFromDb();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [selectedNotificationForDelete, setSelectedNotificationForDelete] = useState<NotificationRecord | null>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
@@ -273,7 +341,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
       title: item.title,
       message: item.message,
       type: item.type || 'system',
-      recipient_role: item.recipient_role || 'admin'
+      recipient_role: item.recipient_role || 'super_admin'
     });
     setIsEditOpen(true);
   };
@@ -324,7 +392,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         title: '',
         message: '',
         type: 'system',
-        recipient_role: 'admin',
+        recipient_role: 'super_admin',
         related_module: 'auctions',
         action_url: ''
       });
@@ -1236,9 +1304,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
           <div 
             className="modal-content" 
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 520, width: '100%', background: '#ffffff', borderRadius: 10, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}
+            style={{ maxWidth: 520, width: '100%', background: '#ffffff', borderRadius: 10, overflow: 'visible', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', position: 'relative' }}
           >
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTopLeftRadius: 10, borderTopRightRadius: 10 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
                 Edit Notification
               </h3>
@@ -1279,39 +1347,29 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, position: 'relative', zIndex: 10 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
                       Category / Type
                     </label>
-                    <select
+                    <ShadcnSelect
                       value={editForm.type}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, type: e.target.value }))}
-                      style={{ width: '100%', height: 36, padding: '0 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
-                    >
-                      <option value="auction">Auction</option>
-                      <option value="bidder">Bidder</option>
-                      <option value="clerking">Clerking</option>
-                      <option value="settlement">Settlement</option>
-                      <option value="system">System</option>
-                      <option value="security">Security</option>
-                    </select>
+                      onChange={(val) => setEditForm(prev => ({ ...prev, type: val }))}
+                      options={NOTIFICATION_CATEGORY_OPTIONS}
+                      fullWidth
+                    />
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
                       Recipient Scope
                     </label>
-                    <select
-                      value={editForm.recipient_role}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, recipient_role: e.target.value }))}
-                      style={{ width: '100%', height: 36, padding: '0 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
-                    >
-                      <option value="admin">Administrators</option>
-                      <option value="super_admin">Super Admin Only</option>
-                      <option value="clerk">Clerking Staff</option>
-                      <option value="all">All Saleroom Staff</option>
-                    </select>
+                    <ShadcnSelect
+                      value={editForm.recipient_role || 'super_admin'}
+                      onChange={(val) => setEditForm(prev => ({ ...prev, recipient_role: val }))}
+                      options={recipientRoleOptions}
+                      fullWidth
+                    />
                   </div>
                 </div>
               </div>
@@ -1348,9 +1406,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
           <div 
             className="modal-content" 
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 540, width: '100%', background: '#ffffff', borderRadius: 10, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}
+            style={{ maxWidth: 540, width: '100%', background: '#ffffff', borderRadius: 10, overflow: 'visible', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', position: 'relative' }}
           >
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTopLeftRadius: 10, borderTopRightRadius: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Bell size={18} color="var(--gold-primary)" />
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
@@ -1396,64 +1454,47 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, position: 'relative', zIndex: 20 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
                       Category / Type
                     </label>
-                    <select
+                    <ShadcnSelect
                       value={createForm.type}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, type: e.target.value }))}
-                      style={{ width: '100%', height: 36, padding: '0 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
-                    >
-                      <option value="auction">Auction Event</option>
-                      <option value="bidder">Bidder Notice</option>
-                      <option value="clerking">Clerking Rostrum</option>
-                      <option value="settlement">Settlement & Invoice</option>
-                      <option value="system">System Alert</option>
-                      <option value="security">Security Alert</option>
-                    </select>
+                      onChange={(val) => setCreateForm(prev => ({ ...prev, type: val }))}
+                      options={NOTIFICATION_CATEGORY_OPTIONS}
+                      fullWidth
+                    />
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
                       Recipient Scope
                     </label>
-                    <select
-                      value={createForm.recipient_role}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, recipient_role: e.target.value }))}
-                      style={{ width: '100%', height: 36, padding: '0 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
-                    >
-                      <option value="admin">Administrators</option>
-                      <option value="super_admin">Super Admin Only</option>
-                      <option value="clerk">Clerking Staff</option>
-                      <option value="all">All Saleroom Staff</option>
-                    </select>
+                    <ShadcnSelect
+                      value={createForm.recipient_role || 'super_admin'}
+                      onChange={(val) => setCreateForm(prev => ({ ...prev, recipient_role: val }))}
+                      options={recipientRoleOptions}
+                      fullWidth
+                    />
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, position: 'relative', zIndex: 10 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
                       Related Module
                     </label>
-                    <select
+                    <ShadcnSelect
                       value={createForm.related_module}
-                      onChange={(e) => setCreateForm(prev => ({ 
+                      onChange={(val) => setCreateForm(prev => ({ 
                         ...prev, 
-                        related_module: e.target.value,
-                        action_url: `/${e.target.value}`
+                        related_module: val,
+                        action_url: `/${val}`
                       }))}
-                      style={{ width: '100%', height: 36, padding: '0 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
-                    >
-                      <option value="auctions">Pre Auction / Catalog</option>
-                      <option value="live_clerking">Auction Day / Live Clerking</option>
-                      <option value="users">Customers / Bidders</option>
-                      <option value="payments">Settlement & Invoices</option>
-                      <option value="reports">Reports & Analytics</option>
-                      <option value="logs">Activity & Audit Log</option>
-                      <option value="settings">Settings & Portal Config</option>
-                    </select>
+                      options={RELATED_MODULE_OPTIONS}
+                      fullWidth
+                    />
                   </div>
 
                   <div>
