@@ -15,8 +15,7 @@ import {
   INITIAL_USERS,
   INITIAL_BIDS,
   INITIAL_INVOICES,
-  INITIAL_CONSIGNOR_SETTLEMENTS,
-  INITIAL_LOGS
+  INITIAL_CONSIGNOR_SETTLEMENTS
 } from './data/mockData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -41,6 +40,7 @@ import { recordBidToSupabase, supabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
 import { auctionService } from './services/auctionService';
 import { notificationService } from './services/notificationService';
+import { activityLogService } from './services/activityLogService';
 import { StageType, AuctionDaySubTab } from './types/auctionDetail';
 import { AuctionDayTab } from './components/auction/tabs/AuctionDayTab';
 import { AuctionDetailProvider } from './context/AuctionDetailContext';
@@ -235,7 +235,7 @@ const AdminConsole: React.FC = () => {
   const [bids, setBids] = useState<LiveBid[]>(INITIAL_BIDS);
   const [invoices, setInvoices] = useState<InvoiceSettlement[]>(INITIAL_INVOICES);
   const [consignors, setConsignors] = useState<ConsignorSettlement[]>(INITIAL_CONSIGNOR_SETTLEMENTS);
-  const [logs, setLogs] = useState<ActivityLog[]>(INITIAL_LOGS);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
 
   const [activeLotId, setActiveLotId] = useState<string>('lot-001');
 
@@ -497,6 +497,17 @@ const AdminConsole: React.FC = () => {
       };
       setLogs(prev => [newLog, ...prev]);
 
+      // Emit activity log to Supabase
+      activityLogService.logEvent({
+        operatorService: currentAdminName || 'AF360 HiBid Sync Service',
+        category: 'HiBid Sync',
+        eventAction: 'Manual HiBid AF360 Full Sync Completed',
+        auditDetails: 'Synchronized catalog entries, reserve modifications, and floor check-ins to all HiBid syndication nodes.',
+        status: 'SUCCESS',
+        relatedRecordType: 'auction',
+        relatedRecordId: currentAuction?.id
+      });
+
       // Emit notification to Supabase system
       notificationService.createNotification({
         title: 'HiBid AF360 Full Sync Completed',
@@ -573,6 +584,18 @@ const AdminConsole: React.FC = () => {
       details: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}. Synced with Supabase Edge.`
     };
     setLogs(prev => [audit, ...prev]);
+
+    // Live Clerking Audit Log in Supabase
+    activityLogService.logEvent({
+      operatorService: currentAdminName || 'Todd Gardner',
+      category: 'Clerking',
+      eventAction: `Accepted ${source} Bid: $${amount.toLocaleString()} on Lot #${activeLotOnBlock.lotNumber}`,
+      auditDetails: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}. Synced with Supabase Edge.`,
+      status: 'SUCCESS',
+      relatedRecordType: 'lot',
+      relatedRecordId: activeLotOnBlock.id,
+      metadata: { amount, paddleNumber, bidderName, source }
+    });
 
     // Live Clerking Notification
     notificationService.createNotification({
@@ -662,6 +685,18 @@ const AdminConsole: React.FC = () => {
       details: `Sold to Paddle #${winningPaddle} (${winner.name}). Invoice #${newInvoice.invoiceNumber} generated.${overrideReserve ? ' (Reserve override authorized)' : ''}`
     };
     setLogs(prev => [audit, ...prev]);
+
+    // Live Sale Audit Log in Supabase
+    activityLogService.logEvent({
+      operatorService: currentAdminName || 'Todd Gardner',
+      category: 'Clerking',
+      eventAction: `HAMMER DOWN! Lot #${lot.lotNumber} SOLD for $${finalAmount.toLocaleString()}`,
+      auditDetails: `Sold to Paddle #${winningPaddle} (${winner.name}). Invoice #${newInvoice.invoiceNumber} generated.${overrideReserve ? ' (Reserve override authorized)' : ''}`,
+      status: 'SUCCESS',
+      relatedRecordType: 'lot',
+      relatedRecordId: lotId,
+      metadata: { hammerPrice: finalAmount, winningPaddle, invoiceNumber: newInvoice.invoiceNumber }
+    });
   };
 
   // Pass Lot Handler
