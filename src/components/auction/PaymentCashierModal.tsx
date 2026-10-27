@@ -75,7 +75,8 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
       await settlementService.updateInvoice(auctionId, customer.id, {
         paymentStatus: isFullyPaid ? 'Paid' : (customer.invoiceStatus as any || 'Pending'),
         paymentMethod: paymentType === 'check written' ? 'Check Written' : (paymentType === 'cash' ? 'Cash' : paymentType),
-        notes: `${customer.invoiceStatus || ''}\n[Payment Cashier] ${paymentType}: $${amt.toFixed(2)}${notes ? ' - ' + notes : ''}`.trim()
+        balance: remainingBalance,
+        notes: `[Payment Cashier] ${paymentType}: $${amt.toFixed(2)}${notes ? ' - ' + notes : ''}`.trim()
       });
 
       // Update in memory customer balance

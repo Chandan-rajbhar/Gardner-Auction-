@@ -77,6 +77,7 @@ export const FormModal: React.FC<FormModalProps> = ({
       {onSubmit && (
         <button 
           type="submit" 
+          id="btn-form-modal-submit"
           className="btn btn-gold"
           disabled={isLoading}
           style={{

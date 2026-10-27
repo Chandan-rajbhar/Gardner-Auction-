@@ -108,7 +108,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   consignorSettlements: propConsignorSettlements = [],
   onUpdateInvoiceStatus,
   onUpdateConsignorStatus,
-  selectedAuctionId = 'auc-002',
+  selectedAuctionId = '',
   availableAuctions = [],
   onSelectAuction,
   onNavigateAuctions,
@@ -119,20 +119,23 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   // Active Main Workflow Tab: 'bidder' | 'seller'
   const [activeTab, setActiveTab] = useState<'bidder' | 'seller'>('bidder');
 
-  // Auction metadata
+  // Auction metadata — derive title from real availableAuctions list (no hardcoded fallbacks)
   const currentAuctionId = selectedAuctionId;
   const currentAuction = availableAuctions.find(a => a.id === currentAuctionId) || {
     id: currentAuctionId,
-    code: currentAuctionId === 'auc-001' ? 'GA-2026-10-GOLD' : (currentAuctionId === 'auc-002' ? 'GA-2026-10-HISTORIC' : 'XCXZC'),
-    title: 'Auction Settlement',
-    status: 'In Progress'
+    code: '',
+    title: currentAuctionId ? `Auction ${currentAuctionId}` : 'Settlement',
+    status: ''
   };
+  const currentAuctionName = currentAuction.title || `Auction ${currentAuctionId}`;
 
   // Dynamic Supabase data states
   const [bidderSettlements, setBidderSettlements] = useState<SettlementCustomer[]>([]);
   const [sellerSettlements, setSellerSettlements] = useState<ConsignorSettlement[]>([]);
-  const [isLoadingBidder, setIsLoadingBidder] = useState<boolean>(true);
-  const [isLoadingSeller, setIsLoadingSeller] = useState<boolean>(true);
+  const [isLoadingBidder, setIsLoadingBidder] = useState<boolean>(false);
+  const [isLoadingSeller, setIsLoadingSeller] = useState<boolean>(false);
+  const [bidderFetchError, setBidderFetchError] = useState<string | null>(null);
+  const [sellerFetchError, setSellerFetchError] = useState<string | null>(null);
 
   // Row selection states
   const [selectedBidderIds, setSelectedBidderIds] = useState<string[]>([]);
@@ -263,12 +266,19 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   // Dynamic Data Fetching from Supabase
   // =========================================================================
   const fetchBidderSettlements = useCallback(async () => {
+    if (!currentAuctionId) {
+      setBidderSettlements([]);
+      setIsLoadingBidder(false);
+      return;
+    }
     setIsLoadingBidder(true);
+    setBidderFetchError(null);
     try {
       const data = await settlementService.getBidderSettlements(currentAuctionId);
       setBidderSettlements(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load bidder settlements from Supabase:', err);
+      setBidderFetchError(err?.message || 'Failed to load bidder settlements.');
       setBidderSettlements([]);
     } finally {
       setIsLoadingBidder(false);
@@ -276,12 +286,19 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   }, [currentAuctionId]);
 
   const fetchSellerSettlements = useCallback(async () => {
+    if (!currentAuctionId) {
+      setSellerSettlements([]);
+      setIsLoadingSeller(false);
+      return;
+    }
     setIsLoadingSeller(true);
+    setSellerFetchError(null);
     try {
       const data = await settlementService.getSellerSettlements(currentAuctionId);
       setSellerSettlements(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load seller settlements from Supabase:', err);
+      setSellerFetchError(err?.message || 'Failed to load seller settlements.');
       setSellerSettlements([]);
     } finally {
       setIsLoadingSeller(false);
@@ -322,6 +339,16 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       }
     }
   }, [bidderSettlements, propInvoices, selectedInvoiceId]);
+
+  // Sync drawer fields when selected invoice changes
+  useEffect(() => {
+    if (selectedInvoiceId && bidderSettlements.length > 0) {
+      const match = bidderSettlements.find(b => b.id === selectedInvoiceId);
+      if (match) {
+        setEditInvoiceStatus(match.invoiceStatus === 'Paid' ? 'Paid' : 'Unpaid');
+      }
+    }
+  }, [selectedInvoiceId, bidderSettlements]);
 
   // Filtered & Sorted Bidder Settlements
   const filteredBidderSettlements = useMemo(() => {
@@ -1065,17 +1092,19 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                                     setPreviewInvoice({
                                       id: b.id,
                                       invoiceNumber: b.invoiceNumber || `INV-${b.bidderNumber}`,
+                                      auctionId: currentAuctionId,
+                                      auctionCode: currentAuction?.code || currentAuctionId,
                                       paddleNumber: b.bidderNumber,
                                       buyerName: b.name,
+                                      buyerEmail: '',
                                       itemsCount: b.lotCount,
                                       hammerSubtotal: b.balance,
                                       buyersPremium: b.balance * 0.15,
                                       taxAmount: 0,
                                       shippingFee: 0,
                                       totalDue: b.balance,
-                                      paymentStatus: b.invoiceStatus as any || 'Pending',
-                                      isShipped: b.shippedCount > 0,
-                                      shippingRequested: b.shippingRequested,
+                                      paymentStatus: (b.invoiceStatus === 'Paid' ? 'Paid' : 'Unpaid') as any,
+                                      notes: '',
                                       lots: []
                                     });
                                   }

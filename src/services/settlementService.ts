@@ -1,9 +1,6 @@
 import { supabaseAdmin, supabase } from '../lib/supabase';
 import { SettlementCustomer, SettlementLotItem, SettlementCharge } from '../types/auctionDetail';
 import { InvoiceSettlement, ConsignorSettlement } from '../types';
-import { auctionService } from './auctionService';
-import { lotsService } from './lotsService';
-import { INITIAL_INVOICES, INITIAL_CONSIGNOR_SETTLEMENTS } from '../data/mockData';
 
 export interface BatchShipmentData {
   carrier: string;
@@ -25,400 +22,245 @@ export interface SettlementEmailPayload {
   settlementLink?: string;
 }
 
+export interface ShipmentRecord {
+  id: string;
+  invoiceId: string;
+  auctionId: string;
+  invoiceLotId?: string;
+  carrier?: string;
+  trackingNumber?: string;
+  shipDate?: string;
+  shippedBy?: string;
+  notes?: string;
+  status: 'Pending' | 'Shipped' | 'Picked Up' | 'Returned';
+}
+
 export class SettlementService {
   private get client() {
     return supabaseAdmin || supabase;
   }
 
+  // =========================================================================
+  // Private helpers
+  // =========================================================================
+
   /**
-   * Helper to resolve real lots for an invoice row from Supabase / mock data.
+   * Fetch invoice_lots rows for a given invoice and map to SettlementLotItem[].
    */
-  private resolveLotsForInvoice(
-    row: any,
-    dbLots: any[] = [],
-    cachedSettlements: SettlementCustomer[] = []
-  ): { lots: SettlementLotItem[]; charges: SettlementCharge[] } {
-    // 1. Check if cached settlements already has lots
-    const cached = cachedSettlements.find(
-      s => s.id === row.id || s.bidderNumber === row.paddle_number || s.invoiceNumber === row.invoice_number
-    );
-    if (cached && cached.lots && cached.lots.length > 0) {
-      return { lots: cached.lots, charges: cached.charges || [] };
-    }
+  private async fetchLotsForInvoice(invoiceId: string): Promise<SettlementLotItem[]> {
+    try {
+      const { data, error } = await this.client
+        .from('invoice_lots')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('lot_number', { ascending: true });
 
-    // 2. Check if dbLots has lots won by this paddle
-    const matchingDbLots = dbLots.filter(
-      l => String(l.high_bidder_paddle) === String(row.paddle_number)
-    );
-    if (matchingDbLots.length > 0) {
-      const lots: SettlementLotItem[] = matchingDbLots.map((l, idx) => {
-        const hammer = Number(l.hammer_price || l.current_bid || 0);
-        const bp = hammer * 0.15;
-        return {
-          id: l.id || `slot-${idx + 1}`,
-          lotNumber: Number(l.lot_number) || (100 + idx),
-          title: l.title || 'Fine Numismatic Specimen',
-          status: 'Sold',
-          qtySold: 1,
-          isShipped: Boolean(row.is_shipped),
-          entries: [
-            { id: `ent-hammer-${idx}`, type: 'sold_lot', label: 'Hammer Amount', amount: hammer },
-            { id: `ent-bp-${idx}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: bp }
-          ]
-        };
-      });
-      return { lots, charges: [] };
-    }
+      if (error || !data) return [];
 
-    // 3. Check INITIAL_INVOICES
-    const matchingInitInv = INITIAL_INVOICES.find(
-      i => i.paddleNumber === row.paddle_number || i.invoiceNumber === row.invoice_number
-    );
-    if (matchingInitInv && matchingInitInv.lots && matchingInitInv.lots.length > 0) {
-      const lots: SettlementLotItem[] = matchingInitInv.lots.map((l, idx) => ({
-        id: `slot-${idx + 1}`,
-        lotNumber: l.lotNumber,
-        title: l.title,
-        status: 'Sold',
-        qtySold: 1,
+      return data.map((row: any): SettlementLotItem => ({
+        id: row.id,
+        lotNumber: Number(row.lot_number) || 0,
+        title: row.title || '',
+        status: (row.status as SettlementLotItem['status']) || 'Sold',
+        qtySold: Number(row.qty_sold) || 1,
         isShipped: Boolean(row.is_shipped),
-        entries: [
-          { id: `ent-hammer-${idx}`, type: 'sold_lot', label: 'Hammer Amount', amount: l.hammerPrice },
-          { id: `ent-bp-${idx}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: l.hammerPrice * 0.15 }
-        ]
+        entries: Array.isArray(row.entries) ? row.entries : []
       }));
-      return { lots, charges: [] };
+    } catch {
+      return [];
     }
-
-    // 4. Default: generate representative lot item from invoice row
-    const hammer = Number(row.hammer_subtotal) || Number(row.total_due ? (Number(row.total_due) / 1.15) : 2500);
-    const bp = Number(row.buyers_premium) || (hammer * 0.15);
-    const lots: SettlementLotItem[] = [
-      {
-        id: `slot-${row.id || '1'}`,
-        lotNumber: 101,
-        title: `${row.buyer_name || 'Customer'} - Premier Gold & Numismatic Collection Lot`,
-        status: 'Sold',
-        qtySold: Number(row.items_count) || 1,
-        isShipped: Boolean(row.is_shipped),
-        entries: [
-          { id: `ent-hammer-1`, type: 'sold_lot', label: 'Hammer Amount', amount: hammer },
-          { id: `ent-bp-1`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: bp }
-        ]
-      }
-    ];
-    return { lots, charges: [] };
   }
 
   /**
-   * Load Bidder Settlements for the specified auction.
-   * Pulls from Supabase invoices table, auction settlement records, and real-time sold lots.
+   * Fetch invoice_charges rows for a given invoice and map to SettlementCharge[].
+   */
+  private async fetchChargesForInvoice(invoiceId: string): Promise<SettlementCharge[]> {
+    try {
+      const { data, error } = await this.client
+        .from('invoice_charges')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((row: any): SettlementCharge => ({
+        id: row.id,
+        account: row.account || '',
+        description: row.description || '',
+        amount: Number(row.amount) || 0,
+        type: (row.charge_type as SettlementCharge['type']) || 'buyer',
+        date: row.charge_date || new Date(row.created_at).toLocaleDateString()
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Map a raw invoices DB row to SettlementCustomer, resolving lots and charges.
+   */
+  private async mapInvoiceRowToCustomer(row: any): Promise<SettlementCustomer> {
+    const lots = await this.fetchLotsForInvoice(row.id);
+    const charges = await this.fetchChargesForInvoice(row.id);
+
+    return {
+      id: row.id,
+      auctionId: row.auction_id,
+      bidderNumber: row.paddle_number,
+      name: row.buyer_name,
+      email: row.buyer_email || undefined,
+      isSeller: row.paddle_number === 'HOUSE',
+      isCashBuyer: Boolean(row.is_cash_buyer),
+      lotCount: Number(row.items_count) || lots.length || 0,
+      shippedCount: Number(row.shipped_count) || 0,
+      totalLotsCount: Number(row.total_lots_count) || Number(row.items_count) || lots.length || 0,
+      balance: Number(row.balance !== undefined ? row.balance : (row.payment_status === 'Paid' ? 0 : row.total_due)),
+      invoiceNumber: row.invoice_number,
+      invoiceStatus: row.payment_status === 'Paid' ? 'Paid' : 'Pending',
+      shippingRequested: Boolean(row.shipping_requested !== false),
+      lots,
+      charges
+    };
+  }
+
+  // =========================================================================
+  // PUBLIC API
+  // =========================================================================
+
+  /**
+   * Load Bidder Settlements for the specified auction from Supabase.
+   * Returns an empty array (not mock data) if the table has no records.
    */
   public async getBidderSettlements(auctionId: string): Promise<SettlementCustomer[]> {
-    const client = this.client;
-    let customers: SettlementCustomer[] = [];
+    const { data, error } = await this.client
+      .from('invoices')
+      .select('*')
+      .eq('auction_id', auctionId)
+      .order('created_at', { ascending: false });
 
-    // Preload lots & auction settlements cache
-    let dbLots: any[] = [];
-    let cachedSettlements: SettlementCustomer[] = [];
-    try {
-      const { data: lotsData } = await client.from('lots').select('*');
-      if (lotsData) dbLots = lotsData;
-    } catch (_) {}
-
-    try {
-      const auction = await auctionService.getAuctionById(auctionId);
-      if (auction && auction.settlements) {
-        cachedSettlements = auction.settlements;
-      }
-    } catch (_) {}
-
-    // 1. Attempt loading from dedicated Supabase `invoices` table
-    try {
-      const { data, error } = await client
-        .from('invoices')
-        .select('*')
-        .eq('auction_id', auctionId)
-        .order('created_at', { ascending: false });
-
-      if (!error && data && data.length > 0) {
-        customers = data.map((row: any) => {
-          const { lots, charges } = this.resolveLotsForInvoice(row, dbLots, cachedSettlements);
-          return {
-            id: row.id,
-            auctionId: row.auction_id,
-            bidderNumber: row.paddle_number,
-            name: row.buyer_name,
-            email: row.buyer_email || undefined,
-            isSeller: row.paddle_number === 'HOUSE',
-            isCashBuyer: Boolean(row.is_cash_buyer),
-            lotCount: Number(row.items_count) || lots.length || 0,
-            shippedCount: Number(row.shipped_count) || (row.is_shipped ? Number(row.items_count || lots.length) : 0),
-            totalLotsCount: Number(row.total_lots_count) || Number(row.items_count) || lots.length || 1,
-            balance: Number(row.balance !== undefined ? row.balance : (row.payment_status === 'Paid' ? 0 : row.total_due)),
-            invoiceNumber: row.invoice_number,
-            invoiceStatus: row.payment_status === 'Paid' ? 'Paid' : 'Pending',
-            shippingRequested: Boolean(row.shipping_requested !== false),
-            lots,
-            charges
-          };
-        });
-        return customers;
-      }
-    } catch (_) {}
-
-    // 2. Check if auction record in Supabase / Local storage has settlements
-    if (cachedSettlements && cachedSettlements.length > 0) {
-      return cachedSettlements;
+    if (error) {
+      console.error('[SettlementService] Failed to load invoices:', error.message);
+      throw new Error(`Failed to load bidder settlements: ${error.message}`);
     }
 
-    // 3. If Supabase table is empty for this auction, auto-seed into Supabase
-    const matchingInvoices = INITIAL_INVOICES.filter(
-      i => !i.auctionId || i.auctionId === auctionId || auctionId === 'auc-001' || auctionId === 'auc-002'
+    if (!data || data.length === 0) return [];
+
+    // Resolve lots + charges for each invoice in parallel
+    const customers = await Promise.all(
+      data.map((row: any) => this.mapInvoiceRowToCustomer(row))
     );
-
-    if (matchingInvoices.length > 0) {
-      const rowsToInsert = matchingInvoices.map(inv => ({
-        id: inv.id,
-        invoice_number: inv.invoiceNumber,
-        auction_id: auctionId,
-        auction_code: inv.auctionCode || `GA-${auctionId}`,
-        paddle_number: inv.paddleNumber,
-        buyer_name: inv.buyerName,
-        buyer_email: inv.buyerEmail,
-        items_count: inv.itemsCount,
-        hammer_subtotal: inv.hammerSubtotal,
-        buyers_premium: inv.buyersPremium,
-        tax_amount: inv.taxAmount,
-        shipping_fee: inv.shippingFee,
-        total_due: inv.totalDue,
-        balance: inv.paymentStatus === 'Paid' ? 0 : inv.totalDue,
-        payment_status: inv.paymentStatus,
-        payment_method: inv.paymentMethod,
-        payment_date: inv.paymentDate,
-        is_cash_buyer: inv.paymentMethod === 'Cash',
-        is_shipped: false,
-        shipped_count: 0,
-        total_lots_count: inv.itemsCount,
-        shipping_requested: true,
-        notes: inv.notes
-      }));
-
-      try {
-        const { data: inserted, error: insErr } = await client
-          .from('invoices')
-          .upsert(rowsToInsert, { onConflict: 'id' })
-          .select('*');
-
-        if (!insErr && inserted && inserted.length > 0) {
-          customers = inserted.map((row: any) => {
-            const { lots, charges } = this.resolveLotsForInvoice(row, dbLots, cachedSettlements);
-            return {
-              id: row.id,
-              auctionId: row.auction_id,
-              bidderNumber: row.paddle_number,
-              name: row.buyer_name,
-              email: row.buyer_email || undefined,
-              isSeller: row.paddle_number === 'HOUSE',
-              isCashBuyer: Boolean(row.is_cash_buyer),
-              lotCount: Number(row.items_count) || lots.length || 0,
-              shippedCount: Number(row.shipped_count) || 0,
-              totalLotsCount: Number(row.total_lots_count) || Number(row.items_count) || lots.length || 1,
-              balance: Number(row.balance !== undefined ? row.balance : (row.payment_status === 'Paid' ? 0 : row.total_due)),
-              invoiceNumber: row.invoice_number,
-              invoiceStatus: row.payment_status === 'Paid' ? 'Paid' : 'Pending',
-              shippingRequested: Boolean(row.shipping_requested !== false),
-              lots,
-              charges
-            };
-          });
-          return customers;
-        }
-      } catch (_) {}
-
-      // Fallback: persist to auction settlements in Supabase
-      try {
-        const auction = await auctionService.getAuctionById(auctionId);
-        if (auction) {
-          auction.settlements = matchingInvoices.map(inv => ({
-            id: `cust-${inv.paddleNumber}`,
-            auctionId,
-            bidderNumber: inv.paddleNumber,
-            name: inv.buyerName,
-            email: inv.buyerEmail,
-            isSeller: inv.paddleNumber === 'HOUSE',
-            isCashBuyer: inv.paymentMethod === 'Cash',
-            lotCount: inv.itemsCount,
-            shippedCount: 0,
-            totalLotsCount: inv.itemsCount,
-            balance: inv.paymentStatus === 'Paid' ? 0 : inv.totalDue,
-            invoiceNumber: inv.invoiceNumber,
-            invoiceStatus: inv.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-            shippingRequested: true,
-            lots: inv.lots.map((l, idx) => ({
-              id: `slot-${idx + 1}`,
-              lotNumber: l.lotNumber,
-              title: l.title,
-              status: 'Sold',
-              qtySold: 1,
-              isShipped: false,
-              entries: [
-                { id: `ent-hammer-${idx}`, type: 'sold_lot', label: 'Hammer Amount', amount: l.hammerPrice },
-                { id: `ent-bp-${idx}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: l.hammerPrice * 0.15 }
-              ]
-            })),
-            charges: []
-          }));
-          await auctionService.saveAuction(auction);
-          return auction.settlements;
-        }
-      } catch (_) {}
-
-      // In-memory fallback if network/db down
-      return matchingInvoices.map(inv => ({
-        id: `cust-${inv.paddleNumber}`,
-        auctionId,
-        bidderNumber: inv.paddleNumber,
-        name: inv.buyerName,
-        email: inv.buyerEmail,
-        isSeller: inv.paddleNumber === 'HOUSE',
-        isCashBuyer: inv.paymentMethod === 'Cash',
-        lotCount: inv.itemsCount,
-        shippedCount: 0,
-        totalLotsCount: inv.itemsCount,
-        balance: inv.paymentStatus === 'Paid' ? 0 : inv.totalDue,
-        invoiceNumber: inv.invoiceNumber,
-        invoiceStatus: inv.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-        shippingRequested: true,
-        lots: inv.lots.map((l, idx) => ({
-          id: `slot-${idx + 1}`,
-          lotNumber: l.lotNumber,
-          title: l.title,
-          status: 'Sold',
-          qtySold: 1,
-          isShipped: false,
-          entries: [
-            { id: `ent-hammer-${idx}`, type: 'sold_lot', label: 'Hammer Amount', amount: l.hammerPrice },
-            { id: `ent-bp-${idx}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: l.hammerPrice * 0.15 }
-          ]
-        })),
-        charges: []
-      }));
-    }
 
     return customers;
   }
 
   /**
-   * Load Seller Settlements (Consignor Statements) for specified auction.
+   * Load Seller Settlements (Consignor Statements) for the specified auction.
+   * Returns an empty array if no records exist.
    */
   public async getSellerSettlements(auctionId: string): Promise<ConsignorSettlement[]> {
-    const client = this.client;
+    const { data, error } = await this.client
+      .from('seller_settlements')
+      .select('*')
+      .eq('auction_id', auctionId)
+      .order('created_at', { ascending: false });
 
-    // 1. Attempt loading from dedicated Supabase `seller_settlements` table
-    try {
-      const { data, error } = await client
-        .from('seller_settlements')
-        .select('*')
-        .eq('auction_id', auctionId)
-        .order('created_at', { ascending: false });
-
-      if (!error && data && data.length > 0) {
-        return data.map((row: any) => ({
-          id: row.id,
-          consignorCode: row.consignor_code,
-          consignorName: row.consignor_name,
-          auctionCode: row.auction_code || `GA-${auctionId}`,
-          totalLotsSold: Number(row.total_lots_sold) || 0,
-          grossHammer: Number(row.gross_hammer) || 0,
-          commissionRate: Number(row.commission_rate) || 10,
-          commissionAmount: Number(row.commission_amount) || 0,
-          photographyFees: Number(row.photography_fees) || 0,
-          netPayout: Number(row.net_payout) || 0,
-          status: row.status as ConsignorSettlement['status'],
-          checkNumber: row.check_number
-        }));
-      }
-    } catch (_) {}
-
-    // 2. Auto-seed initial seller settlements to Supabase if empty
-    if (INITIAL_CONSIGNOR_SETTLEMENTS.length > 0) {
-      const sellerRows = INITIAL_CONSIGNOR_SETTLEMENTS.map(c => ({
-        id: c.id,
-        auction_id: auctionId,
-        consignor_code: c.consignorCode,
-        consignor_name: c.consignorName,
-        auction_code: c.auctionCode || `GA-${auctionId}`,
-        total_lots_sold: c.totalLotsSold,
-        gross_hammer: c.grossHammer,
-        commission_rate: c.commissionRate,
-        commission_amount: c.commissionAmount,
-        photography_fees: c.photographyFees,
-        net_payout: c.netPayout,
-        status: c.status,
-        check_number: c.checkNumber
-      }));
-
-      try {
-        const { data: inserted, error: insErr } = await client
-          .from('seller_settlements')
-          .upsert(sellerRows, { onConflict: 'id' })
-          .select('*');
-
-        if (!insErr && inserted && inserted.length > 0) {
-          return inserted.map((row: any) => ({
-            id: row.id,
-            consignorCode: row.consignor_code,
-            consignorName: row.consignor_name,
-            auctionCode: row.auction_code || `GA-${auctionId}`,
-            totalLotsSold: Number(row.total_lots_sold) || 0,
-            grossHammer: Number(row.gross_hammer) || 0,
-            commissionRate: Number(row.commission_rate) || 10,
-            commissionAmount: Number(row.commission_amount) || 0,
-            photographyFees: Number(row.photography_fees) || 0,
-            netPayout: Number(row.net_payout) || 0,
-            status: row.status as ConsignorSettlement['status'],
-            checkNumber: row.check_number
-          }));
-        }
-      } catch (_) {}
-
-      return INITIAL_CONSIGNOR_SETTLEMENTS.map(c => ({
-        ...c,
-        auctionCode: `GA-${auctionId}`
-      }));
+    if (error) {
+      console.error('[SettlementService] Failed to load seller settlements:', error.message);
+      throw new Error(`Failed to load seller settlements: ${error.message}`);
     }
 
-    return [];
+    if (!data || data.length === 0) return [];
+
+    return data.map((row: any): ConsignorSettlement => ({
+      id: row.id,
+      consignorCode: row.consignor_code,
+      consignorName: row.consignor_name,
+      auctionCode: row.auction_code || '',
+      totalLotsSold: Number(row.total_lots_sold) || 0,
+      grossHammer: Number(row.gross_hammer) || 0,
+      commissionRate: Number(row.commission_rate) || 10,
+      commissionAmount: Number(row.commission_amount) || 0,
+      photographyFees: Number(row.photography_fees) || 0,
+      netPayout: Number(row.net_payout) || 0,
+      status: row.status as ConsignorSettlement['status'],
+      checkNumber: row.check_number
+    }));
   }
 
   /**
-   * Toggle Cash Buyer status for a bidder settlement customer and persist to Supabase.
+   * Create a new invoice record in Supabase.
+   * Generates a unique invoice number if not provided.
+   */
+  public async createInvoice(data: {
+    auctionId: string;
+    paddleNumber: string;
+    buyerName: string;
+    buyerEmail?: string;
+    auctionCode?: string;
+  }): Promise<string> {
+    const client = this.client;
+    const ts = Date.now().toString().slice(-6);
+    const invoiceNumber = `INV-GA-${new Date().getFullYear()}-${ts}`;
+    const invoiceId = `inv-${ts}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const { error } = await client.from('invoices').insert([{
+      id: invoiceId,
+      invoice_number: invoiceNumber,
+      auction_id: data.auctionId,
+      auction_code: data.auctionCode || '',
+      paddle_number: data.paddleNumber,
+      buyer_name: data.buyerName,
+      buyer_email: data.buyerEmail || null,
+      items_count: 0,
+      hammer_subtotal: 0,
+      buyers_premium: 0,
+      tax_amount: 0,
+      shipping_fee: 0,
+      total_due: 0,
+      balance: 0,
+      payment_status: 'Pending',
+      is_cash_buyer: false,
+      is_shipped: false,
+      shipped_count: 0,
+      total_lots_count: 0,
+      shipping_requested: true
+    }]);
+
+    if (error) throw new Error(`Failed to create invoice: ${error.message}`);
+    return invoiceId;
+  }
+
+  /**
+   * Toggle Cash Buyer status for a bidder and persist to Supabase.
    */
   public async updateCashBuyer(auctionId: string, customerId: string, isCashBuyer: boolean): Promise<boolean> {
-    try {
-      await this.client
-        .from('invoices')
-        .update({ is_cash_buyer: isCashBuyer, updated_at: new Date().toISOString() })
-        .eq('id', customerId);
-    } catch (_) {}
+    const { error } = await this.client
+      .from('invoices')
+      .update({ is_cash_buyer: isCashBuyer, updated_at: new Date().toISOString() })
+      .eq('id', customerId);
+
+    if (error) {
+      console.error('[SettlementService] updateCashBuyer failed:', error.message);
+      return false;
+    }
 
     try {
-      const auction = await auctionService.getAuctionById(auctionId);
-      if (auction && auction.settlements) {
-        const found = auction.settlements.find(c => c.id === customerId);
-        if (found) {
-          found.isCashBuyer = isCashBuyer;
-          await auctionService.saveAuction(auction);
-        }
-      }
+      await this.client.from('activity_logs').insert([{
+        category: 'SETTLEMENT',
+        event_action: `Cash Buyer status updated for invoice ${customerId}`,
+        operator_service: 'AF360 Settlement Desk',
+        audit_details: `Set isCashBuyer=${isCashBuyer} on invoice ${customerId} (auction ${auctionId}).`,
+        status: 'SUCCESS'
+      }]);
     } catch (_) {}
 
     return true;
   }
 
   /**
-   * Batch mark settlements as shipped with carrier & tracking details.
+   * Batch mark settlements as shipped with carrier and tracking details.
+   * Updates invoice_lots shipping flags and creates shipment_records entries.
    */
   public async markBatchShipped(
     auctionId: string,
@@ -426,42 +268,80 @@ export class SettlementService {
     shipmentData?: BatchShipmentData
   ): Promise<boolean> {
     const client = this.client;
+    const carrier = shipmentData?.carrier || 'Armored Courier';
+    const tracking = shipmentData?.trackingNumber || `TRK-${Date.now().toString().slice(-8)}`;
+    const shipDate = shipmentData?.shipDate || new Date().toISOString().split('T')[0];
+    const notes = shipmentData?.notes || '';
 
-    try {
-      await client
-        .from('invoices')
-        .update({
-          is_shipped: true,
-          shipping_carrier: shipmentData?.carrier || 'Armored Courier',
-          tracking_number: shipmentData?.trackingNumber || `TRK-${Date.now().toString().slice(-8)}`,
-          updated_at: new Date().toISOString()
-        })
-        .in('id', customerIds);
-    } catch (_) {}
+    // For each invoice, update lot shipping flags and invoice counts
+    for (const invoiceId of customerIds) {
+      try {
+        // 1. Get current invoice lots
+        const { data: lots } = await client
+          .from('invoice_lots')
+          .select('id, qty_sold')
+          .eq('invoice_id', invoiceId);
 
-    try {
-      const auction = await auctionService.getAuctionById(auctionId);
-      if (auction && auction.settlements) {
-        auction.settlements.forEach(c => {
-          if (customerIds.includes(c.id)) {
-            c.shippedCount = c.totalLotsCount || c.lotCount || 1;
-            c.lots?.forEach(l => {
-              l.isShipped = true;
-            });
-          }
-        });
-        await auctionService.saveAuction(auction);
+        const totalLots = lots?.length || 1;
+
+        // 2. Mark all invoice_lots as shipped
+        if (lots && lots.length > 0) {
+          const lotIds = lots.map((l: any) => l.id);
+          await client
+            .from('invoice_lots')
+            .update({ is_shipped: true, updated_at: new Date().toISOString() })
+            .in('id', lotIds);
+
+          // 3. Create shipment records for each lot
+          const shipmentRows = lots.map((l: any) => ({
+            id: `shp-${invoiceId}-${l.id}-${Date.now().toString().slice(-6)}`,
+            invoice_id: invoiceId,
+            auction_id: auctionId,
+            invoice_lot_id: l.id,
+            carrier,
+            tracking_number: tracking,
+            ship_date: shipDate,
+            notes,
+            status: 'Shipped'
+          }));
+
+          await client.from('shipment_records').upsert(shipmentRows, { onConflict: 'id' });
+        }
+
+        // 4. Update invoice-level shipped_count + is_shipped
+        await client
+          .from('invoices')
+          .update({
+            is_shipped: true,
+            shipped_count: totalLots,
+            shipping_carrier: carrier,
+            tracking_number: tracking,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', invoiceId);
+      } catch (err) {
+        console.error(`[SettlementService] markBatchShipped error for ${invoiceId}:`, err);
       }
+    }
+
+    try {
+      await client.from('activity_logs').insert([{
+        category: 'SHIPPING',
+        event_action: `Batch Shipment Dispatched (${customerIds.length} orders)`,
+        operator_service: 'AF360 Shipping Desk',
+        audit_details: `Dispatched ${customerIds.length} settlement orders via ${carrier}. Tracking: ${tracking}.`,
+        status: 'SUCCESS'
+      }]);
     } catch (_) {}
 
     return true;
   }
 
   /**
-   * Update invoice details and payment status.
+   * Update invoice payment details and balance; write audit log.
    */
   public async updateInvoice(
-    auctionId: string,
+    _auctionId: string,
     invoiceId: string,
     updates: {
       paymentStatus: 'Paid' | 'Pending Wire' | 'Card Authorized' | 'Check Received' | 'Unpaid';
@@ -469,128 +349,570 @@ export class SettlementService {
       notes?: string;
       shippingFee?: number;
       taxAmount?: number;
+      balance?: number;
     }
   ): Promise<boolean> {
     const client = this.client;
 
-    try {
-      await client
-        .from('invoices')
-        .update({
-          payment_status: updates.paymentStatus,
-          payment_method: updates.paymentMethod,
-          notes: updates.notes,
-          shipping_fee: updates.shippingFee,
-          tax_amount: updates.taxAmount,
-          balance: updates.paymentStatus === 'Paid' ? 0 : undefined,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', invoiceId);
-    } catch (_) {}
+    const updateData: Record<string, unknown> = {
+      payment_status: updates.paymentStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    if (updates.paymentMethod !== undefined) updateData.payment_method = updates.paymentMethod;
+    if (updates.notes !== undefined) updateData.notes = updates.notes;
+    if (updates.shippingFee !== undefined) updateData.shipping_fee = updates.shippingFee;
+    if (updates.taxAmount !== undefined) updateData.tax_amount = updates.taxAmount;
+
+    if (updates.balance !== undefined) {
+      updateData.balance = Math.max(0, updates.balance);
+    } else if (updates.paymentStatus === 'Paid') {
+      updateData.balance = 0.00;
+    }
+
+    const { error } = await client.from('invoices').update(updateData).eq('id', invoiceId);
+
+    if (error) {
+      console.error('[SettlementService] updateInvoice failed:', error.message);
+      return false;
+    }
 
     try {
-      const auction = await auctionService.getAuctionById(auctionId);
-      if (auction && auction.settlements) {
-        const c = auction.settlements.find(s => s.id === invoiceId || s.invoiceNumber === invoiceId);
-        if (c) {
-          c.invoiceStatus = updates.paymentStatus === 'Paid' ? 'Paid' : 'Pending';
-          if (updates.paymentStatus === 'Paid') {
-            c.balance = 0;
-          }
-          await auctionService.saveAuction(auction);
-        }
-      }
+      await client.from('activity_logs').insert([{
+        category: 'FINANCE',
+        event_action: `Invoice Updated #${invoiceId}`,
+        operator_service: 'AF360 Invoice Management',
+        audit_details: `Status: ${updates.paymentStatus}, Method: ${updates.paymentMethod || 'N/A'}, Balance: $${
+          updates.balance !== undefined ? updates.balance.toFixed(2) : (updates.paymentStatus === 'Paid' ? '0.00' : 'Unchanged')
+        }. ${updates.notes || ''}`,
+        status: 'SUCCESS'
+      }]);
     } catch (_) {}
 
     return true;
   }
 
   /**
-   * Mark all items as shipped for a customer and persist to Supabase & cache.
+   * Mark ALL lots in an invoice as shipped and create shipment_records.
    */
   public async markAllShipped(auctionId: string, customerId: string): Promise<boolean> {
     const client = this.client;
 
-    // 1. Update Supabase invoices
     try {
+      const { data: lots } = await client
+        .from('invoice_lots')
+        .select('id, qty_sold')
+        .eq('invoice_id', customerId);
+
+      const totalLots = lots?.length || 1;
+
+      if (lots && lots.length > 0) {
+        const lotIds = lots.map((l: any) => l.id);
+
+        await client
+          .from('invoice_lots')
+          .update({ is_shipped: true, updated_at: new Date().toISOString() })
+          .in('id', lotIds);
+
+        // Create or update shipment_records
+        const shipmentRows = lots.map((l: any) => ({
+          id: `shp-${customerId}-${l.id}-all`,
+          invoice_id: customerId,
+          auction_id: auctionId,
+          invoice_lot_id: l.id,
+          carrier: 'Saleroom Pickup / Dispatch',
+          tracking_number: null,
+          ship_date: new Date().toISOString().split('T')[0],
+          status: 'Shipped'
+        }));
+
+        await client.from('shipment_records').upsert(shipmentRows, { onConflict: 'id' });
+      }
+
       await client
         .from('invoices')
         .update({
           is_shipped: true,
-          shipped_count: 999, // Will be resolved by items_count in query
+          shipped_count: totalLots,
           updated_at: new Date().toISOString()
         })
         .eq('id', customerId);
-    } catch (_) {}
 
-    // 2. Update auction record
-    return auctionService.markAllShipped(auctionId, customerId);
+      await client.from('activity_logs').insert([{
+        category: 'SHIPPING',
+        event_action: `Order Fully Shipped / Handed Over`,
+        operator_service: 'AF360 Shipping Desk',
+        audit_details: `Marked all items (${totalLots}) as shipped for invoice ${customerId} (auction ${auctionId}).`,
+        status: 'SUCCESS'
+      }]);
+    } catch (err) {
+      console.error('[SettlementService] markAllShipped failed:', err);
+      return false;
+    }
+
+    return true;
   }
 
   /**
-   * Add seller or buyer auction charge and persist to Supabase & cache.
+   * Update an individual lot's shipping status and recalculate invoice shipped_count.
+   * Creates or updates the corresponding shipment_record row.
+   */
+  public async updateLotShipping(
+    auctionId: string,
+    customerId: string,
+    lotId: string,
+    isShipped: boolean
+  ): Promise<boolean> {
+    const client = this.client;
+
+    try {
+      // 1. Update invoice_lots row
+      await client
+        .from('invoice_lots')
+        .update({ is_shipped: isShipped, updated_at: new Date().toISOString() })
+        .eq('id', lotId);
+
+      // 2. Recalculate shipped_count on invoice
+      const { data: allLots } = await client
+        .from('invoice_lots')
+        .select('id, is_shipped')
+        .eq('invoice_id', customerId);
+
+      const shippedCount = (allLots || []).filter((l: any) => l.is_shipped).length;
+      const totalCount = (allLots || []).length;
+
+      await client
+        .from('invoices')
+        .update({
+          is_shipped: shippedCount >= totalCount && totalCount > 0,
+          shipped_count: shippedCount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', customerId);
+
+      // 3. Upsert shipment_record for this lot
+      const shipmentId = `shp-${customerId}-${lotId}`;
+      if (isShipped) {
+        await client.from('shipment_records').upsert([{
+          id: shipmentId,
+          invoice_id: customerId,
+          auction_id: auctionId,
+          invoice_lot_id: lotId,
+          ship_date: new Date().toISOString().split('T')[0],
+          status: 'Shipped',
+          updated_at: new Date().toISOString()
+        }], { onConflict: 'id' });
+      } else {
+        await client.from('shipment_records')
+          .update({ status: 'Pending', updated_at: new Date().toISOString() })
+          .eq('id', shipmentId);
+      }
+
+      await client.from('activity_logs').insert([{
+        category: 'SHIPPING',
+        event_action: `Lot ${lotId} shipping updated to ${isShipped ? 'Shipped' : 'Pending'}`,
+        operator_service: 'AF360 Shipping Desk',
+        audit_details: `Invoice ${customerId}: ${shippedCount} of ${totalCount} items shipped.`,
+        status: 'SUCCESS'
+      }]);
+    } catch (err) {
+      console.error('[SettlementService] updateLotShipping failed:', err);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Fetch shipment records for an invoice (for the Shipments tab).
+   */
+  public async getShipmentRecords(invoiceId: string): Promise<ShipmentRecord[]> {
+    try {
+      const { data, error } = await this.client
+        .from('shipment_records')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((row: any): ShipmentRecord => ({
+        id: row.id,
+        invoiceId: row.invoice_id,
+        auctionId: row.auction_id,
+        invoiceLotId: row.invoice_lot_id,
+        carrier: row.carrier,
+        trackingNumber: row.tracking_number,
+        shipDate: row.ship_date,
+        shippedBy: row.shipped_by,
+        notes: row.notes,
+        status: row.status as ShipmentRecord['status']
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Add a named auction charge for a customer, persisted to invoice_charges table.
+   * Also recalculates and updates the invoice balance and total_due.
    */
   public async addCustomerCharge(
     auctionId: string,
     customerId: string,
     chargeData: Omit<SettlementCharge, 'id' | 'date'>
-  ): Promise<boolean> {
+  ): Promise<SettlementCharge | null> {
     const client = this.client;
+    const chargeAmt = Math.max(0, chargeData.amount);
+    const chargeId = `chg-${customerId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const chargeDate = new Date().toLocaleDateString('en-US');
 
-    // 1. Update Supabase invoices balance
     try {
-      const { data: inv } = await client.from('invoices').select('balance, total_due, notes').eq('id', customerId).single();
+      // 1. Insert to invoice_charges
+      const { error: insertErr } = await client.from('invoice_charges').insert([{
+        id: chargeId,
+        invoice_id: customerId,
+        auction_id: auctionId,
+        account: chargeData.account,
+        description: chargeData.description,
+        amount: chargeAmt,
+        charge_type: chargeData.type || 'buyer',
+        charge_date: chargeDate
+      }]);
+
+      if (insertErr) {
+        console.error('[SettlementService] addCustomerCharge insert failed:', insertErr.message);
+        return null;
+      }
+
+      // 2. Recalculate invoice balance + total_due
+      const { data: inv } = await client
+        .from('invoices')
+        .select('balance, total_due')
+        .eq('id', customerId)
+        .single();
+
       if (inv) {
-        const newBal = (Number(inv.balance) || 0) + chargeData.amount;
-        const newTotal = (Number(inv.total_due) || 0) + chargeData.amount;
-        const updatedNotes = `${inv.notes || ''}\n[Charge] ${chargeData.account}: $${chargeData.amount.toFixed(2)} (${chargeData.description})`.trim();
+        const newBal = (Number(inv.balance) || 0) + chargeAmt;
+        const newTotal = (Number(inv.total_due) || 0) + chargeAmt;
         await client.from('invoices').update({
           balance: newBal,
           total_due: newTotal,
-          notes: updatedNotes,
           updated_at: new Date().toISOString()
         }).eq('id', customerId);
       }
-    } catch (_) {}
 
-    // 2. Persist in auctionService
-    return auctionService.addCustomerCharge(auctionId, customerId, chargeData);
+      // 3. Audit log
+      try {
+        await client.from('activity_logs').insert([{
+          category: 'FINANCE',
+          event_action: `Charge Added: $${chargeAmt.toFixed(2)}`,
+          operator_service: 'AF360 Ledger Service',
+          audit_details: `Added ${chargeData.account} charge of $${chargeAmt.toFixed(2)} (${chargeData.description}) to invoice ${customerId}.`,
+          status: 'SUCCESS'
+        }]);
+      } catch (_) {}
+
+      return {
+        id: chargeId,
+        account: chargeData.account,
+        description: chargeData.description,
+        amount: chargeAmt,
+        type: chargeData.type || 'buyer',
+        date: chargeDate
+      };
+    } catch (err) {
+      console.error('[SettlementService] addCustomerCharge failed:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Delete a charge by its invoice_charges.id and recalculate invoice balance.
+   */
+  public async deleteCustomerCharge(
+    auctionId: string,
+    customerId: string,
+    chargeId: string
+  ): Promise<boolean> {
+    const client = this.client;
+
+    try {
+      // 1. Get charge amount before deleting
+      const { data: chg } = await client
+        .from('invoice_charges')
+        .select('amount')
+        .eq('id', chargeId)
+        .single();
+
+      const chargeAmt = Number(chg?.amount) || 0;
+
+      // 2. Delete the charge
+      const { error } = await client
+        .from('invoice_charges')
+        .delete()
+        .eq('id', chargeId);
+
+      if (error) {
+        console.error('[SettlementService] deleteCustomerCharge failed:', error.message);
+        return false;
+      }
+
+      // 3. Recalculate invoice balance + total_due
+      const { data: inv } = await client
+        .from('invoices')
+        .select('balance, total_due')
+        .eq('id', customerId)
+        .single();
+
+      if (inv) {
+        const newBal = Math.max(0, (Number(inv.balance) || 0) - chargeAmt);
+        const newTotal = Math.max(0, (Number(inv.total_due) || 0) - chargeAmt);
+        await client.from('invoices').update({
+          balance: newBal,
+          total_due: newTotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', customerId);
+      }
+
+      // 4. Audit log
+      try {
+        await client.from('activity_logs').insert([{
+          category: 'FINANCE',
+          event_action: `Charge Removed: $${chargeAmt.toFixed(2)}`,
+          operator_service: 'AF360 Ledger Service',
+          audit_details: `Removed charge ${chargeId} (${chargeAmt.toFixed(2)}) from invoice ${customerId} (auction ${auctionId}).`,
+          status: 'SUCCESS'
+        }]);
+      } catch (_) {}
+
+      return true;
+    } catch (err) {
+      console.error('[SettlementService] deleteCustomerCharge error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Refund (remove) a specific entry from an invoice_lots row and recalculate balance.
+   */
+  public async refundLotEntry(
+    auctionId: string,
+    customerId: string,
+    lotId: string,
+    entryId: string
+  ): Promise<boolean> {
+    const client = this.client;
+
+    try {
+      // 1. Fetch the lot's current entries
+      const { data: lotRow, error: fetchErr } = await client
+        .from('invoice_lots')
+        .select('entries')
+        .eq('id', lotId)
+        .single();
+
+      if (fetchErr || !lotRow) {
+        console.error('[SettlementService] refundLotEntry: lot not found', lotId);
+        return false;
+      }
+
+      const entries: any[] = Array.isArray(lotRow.entries) ? lotRow.entries : [];
+      const entryToRemove = entries.find((e: any) => e.id === entryId);
+      if (!entryToRemove) return false;
+
+      const refundAmt = Number(entryToRemove.amount) || 0;
+      const newEntries = entries.filter((e: any) => e.id !== entryId);
+
+      // 2. Update the lot's entries array
+      await client
+        .from('invoice_lots')
+        .update({ entries: newEntries, updated_at: new Date().toISOString() })
+        .eq('id', lotId);
+
+      // 3. Recalculate invoice balance
+      const { data: inv } = await client
+        .from('invoices')
+        .select('balance, total_due')
+        .eq('id', customerId)
+        .single();
+
+      if (inv) {
+        const newBal = Math.max(0, (Number(inv.balance) || 0) - refundAmt);
+        const newTotal = Math.max(0, (Number(inv.total_due) || 0) - refundAmt);
+        await client.from('invoices').update({
+          balance: newBal,
+          total_due: newTotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', customerId);
+      }
+
+      // 4. Audit log
+      try {
+        await client.from('activity_logs').insert([{
+          category: 'REFUND',
+          event_action: `Lot Entry Refunded: $${refundAmt.toFixed(2)}`,
+          operator_service: 'AF360 Ledger Service',
+          audit_details: `Refunded entry ${entryId} (${entryToRemove.label || ''}) on lot ${lotId} for invoice ${customerId} (auction ${auctionId}).`,
+          status: 'SUCCESS'
+        }]);
+      } catch (_) {}
+
+      return true;
+    } catch (err) {
+      console.error('[SettlementService] refundLotEntry error:', err);
+      return false;
+    }
   }
 
   /**
    * Update Consignor/Seller Settlement payout status.
    */
   public async updateSellerSettlementStatus(
-    auctionId: string,
+    _auctionId: string,
     settlementId: string,
     status: ConsignorSettlement['status'],
     checkNumber?: string
   ): Promise<boolean> {
-    const client = this.client;
+    const { error } = await this.client
+      .from('seller_settlements')
+      .update({
+        status,
+        check_number: checkNumber,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', settlementId);
 
-    try {
-      await client
-        .from('seller_settlements')
-        .update({
-          status,
-          check_number: checkNumber,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', settlementId);
-    } catch (_) {}
+    if (error) {
+      console.error('[SettlementService] updateSellerSettlementStatus failed:', error.message);
+      return false;
+    }
 
     return true;
   }
 
   /**
    * Batch process credit cards for selected settlements.
+   * Updates invoice payment status and logs the batch operation.
    */
-  public async batchProcessCreditCards(auctionId: string, customerIds: string[]): Promise<boolean> {
-    return auctionService.batchProcessCreditCards(auctionId, customerIds);
+  public async batchProcessCreditCards(_auctionId: string, customerIds: string[]): Promise<boolean> {
+    const client = this.client;
+
+    for (const invoiceId of customerIds) {
+      try {
+        await client
+          .from('invoices')
+          .update({
+            payment_status: 'Card Authorized',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', invoiceId);
+      } catch (err) {
+        console.error(`[SettlementService] batchProcessCreditCards error for ${invoiceId}:`, err);
+      }
+    }
+
+    try {
+      await client.from('activity_logs').insert([{
+        category: 'FINANCE',
+        event_action: `Batch Credit Card Processing (${customerIds.length} invoices)`,
+        operator_service: 'AF360 Payment Engine',
+        audit_details: `Card authorization batch run for ${customerIds.length} settlement(s).`,
+        status: 'SUCCESS'
+      }]);
+    } catch (_) {}
+
+    return true;
   }
 
   /**
-   * Dispatch settlement statement email with validation and audit logging.
+   * Add a lot item (with its breakdown entries) to an invoice.
+   * Used when creating/editing invoice lot line items.
+   */
+  public async addInvoiceLot(
+    auctionId: string,
+    invoiceId: string,
+    lotData: {
+      lotId?: string;
+      lotNumber: number;
+      title: string;
+      status?: 'Sold' | 'Unsold' | 'Passed';
+      qtySold?: number;
+      entries: Array<{ id: string; type: string; label: string; amount: number; isRefundable?: boolean }>;
+    }
+  ): Promise<SettlementLotItem | null> {
+    const client = this.client;
+    const lotRowId = `ilot-${invoiceId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+
+    try {
+      const { error } = await client.from('invoice_lots').insert([{
+        id: lotRowId,
+        invoice_id: invoiceId,
+        auction_id: auctionId,
+        lot_id: lotData.lotId || null,
+        lot_number: lotData.lotNumber,
+        title: lotData.title,
+        status: lotData.status || 'Sold',
+        qty_sold: lotData.qtySold || 1,
+        is_shipped: false,
+        entries: lotData.entries
+      }]);
+
+      if (error) {
+        console.error('[SettlementService] addInvoiceLot failed:', error.message);
+        return null;
+      }
+
+      // Recalculate invoice totals
+      const hammerTotal = lotData.entries
+        .filter((e: any) => e.type === 'sold_lot')
+        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const bpTotal = lotData.entries
+        .filter((e: any) => e.type === 'buyers_premium')
+        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+
+      const { data: inv } = await client
+        .from('invoices')
+        .select('items_count, hammer_subtotal, buyers_premium, total_due, balance')
+        .eq('id', invoiceId)
+        .single();
+
+      if (inv) {
+        const newItems = (Number(inv.items_count) || 0) + (lotData.qtySold || 1);
+        const newHammer = (Number(inv.hammer_subtotal) || 0) + hammerTotal;
+        const newBp = (Number(inv.buyers_premium) || 0) + bpTotal;
+        const newTotal = (Number(inv.total_due) || 0) + hammerTotal + bpTotal;
+        const newBalance = (Number(inv.balance) || 0) + hammerTotal + bpTotal;
+
+        await client.from('invoices').update({
+          items_count: newItems,
+          total_lots_count: newItems,
+          hammer_subtotal: newHammer,
+          buyers_premium: newBp,
+          total_due: newTotal,
+          balance: newBalance,
+          updated_at: new Date().toISOString()
+        }).eq('id', invoiceId);
+      }
+
+      return {
+        id: lotRowId,
+        lotNumber: lotData.lotNumber,
+        title: lotData.title,
+        status: lotData.status || 'Sold',
+        qtySold: lotData.qtySold || 1,
+        isShipped: false,
+        entries: lotData.entries as any
+      };
+    } catch (err) {
+      console.error('[SettlementService] addInvoiceLot error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Send settlement email through Supabase Edge Function.
+   * NEVER returns success if the actual send fails.
    */
   public async sendSettlementEmail(payload: SettlementEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -603,9 +925,12 @@ export class SettlementService {
     if (!payload.subject || !payload.subject.trim()) {
       return { success: false, error: 'Email subject is required.' };
     }
+    if (!payload.body || !payload.body.trim()) {
+      return { success: false, error: 'Email body cannot be empty.' };
+    }
 
+    // Attempt edge function send
     try {
-      // 1. Try sending via Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('auction-edge', {
         body: {
           action: 'send_settlement_email',
@@ -614,24 +939,27 @@ export class SettlementService {
       });
 
       if (!error && data?.success) {
+        // Record audit log on real success
+        try {
+          await this.client.from('activity_logs').insert([{
+            category: 'SETTLEMENT',
+            event_action: `Settlement Email Sent to ${payload.to}`,
+            operator_service: 'AF360 Email Engine',
+            audit_details: `Sent statement for Invoice #${payload.invoiceNumber} (${payload.customerName}, Paddle #${payload.paddleNumber}). MessageId: ${data.messageId || 'N/A'}.`,
+            status: 'SUCCESS'
+          }]);
+        } catch (_) {}
+
         return { success: true, messageId: data.messageId || `msg-${Date.now()}` };
       }
-    } catch (_) {}
 
-    // 2. Persist immutable administrative audit log event in Supabase
-    try {
-      await this.client.from('activity_logs').insert([{
-        category: 'SETTLEMENT',
-        event_action: `Dispatched Settlement Statement to ${payload.to}`,
-        operator_service: 'AF360 Email Engine',
-        audit_details: `Sent settlement statement for Invoice #${payload.invoiceNumber} (${payload.customerName}, Paddle #${payload.paddleNumber}). Subject: "${payload.subject}".`,
-        status: 'SUCCESS'
-      }]);
-    } catch (_) {}
-
-    // Simulate verified delivery round-trip
-    await new Promise(r => setTimeout(r, 650));
-    return { success: true, messageId: `msg-${Date.now().toString(36)}` };
+      // Edge function returned an error
+      const errMsg = error?.message || data?.error || 'Email service unavailable. Please try again later.';
+      return { success: false, error: errMsg };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to connect to email service.';
+      return { success: false, error: message };
+    }
   }
 }
 
