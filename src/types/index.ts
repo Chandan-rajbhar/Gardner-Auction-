@@ -203,8 +203,33 @@ export type NavigationSection =
   | 'payments'
   | 'reports'
   | 'logs'
+  | 'notifications'
   | 'settings'
   | 'profile';
+
+export type NotificationType = 
+  | 'auction'
+  | 'bidder'
+  | 'clerking'
+  | 'settlement'
+  | 'system'
+  | 'security';
+
+export interface NotificationRecord {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType | string;
+  recipient_id?: string | null;
+  recipient_role?: string;
+  related_module?: NavigationSection | string | null;
+  related_record_id?: string | null;
+  action_url?: string | null;
+  is_read: boolean;
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at?: string;
+}
 
 export interface AdminUserRecord {
   id: string;

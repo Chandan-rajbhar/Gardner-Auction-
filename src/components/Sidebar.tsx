@@ -8,7 +8,9 @@ import {
   Layers, 
   CreditCard,
   BarChart3, 
-  Bell, 
+  Bell,
+  BellRing,
+  FileText,
   Settings, 
   Globe,
   ShieldCheck,
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 import { NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { notificationService } from '../services/notificationService';
 
 interface SidebarProps {
   currentSection: NavigationSection;
@@ -46,6 +49,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, logout } = useAuth();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+
+  // Sync unread notifications count from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const notifs = await notificationService.getNotifications();
+        if (isMounted) {
+          setUnreadNotificationsCount(notifs.filter(n => !n.is_read).length);
+        }
+      } catch (err) {
+        console.warn('[Sidebar] Error fetching unread notifications:', err);
+      }
+    };
+    fetchUnread();
+    const unsubscribe = notificationService.subscribeToNotifications(() => {
+      fetchUnread();
+    });
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -88,7 +115,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ElementType;
     badge?: string | number;
   }> = [
-    { id: 'logs', label: 'Activity & Audit Log', icon: Bell },
+    { 
+      id: 'notifications', 
+      label: 'Notifications', 
+      icon: BellRing, 
+      badge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined 
+    },
+    { id: 'logs', label: 'Activity & Audit Log', icon: FileText },
     { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
   ];
 

@@ -33,12 +33,14 @@ import { LiveClerkingView } from './components/views/LiveClerkingView';
 import { PaymentsView } from './components/views/PaymentsView';
 import { ReportsView } from './components/views/ReportsView';
 import { LogsView } from './components/views/LogsView';
+import { NotificationsView } from './components/views/NotificationsView';
 import { SettingsView } from './components/views/SettingsView';
 import { ProfileView } from './components/views/ProfileView';
 import { CheckCircle2, RefreshCw, X, Radio, ArrowLeft } from 'lucide-react';
 import { recordBidToSupabase, supabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
 import { auctionService } from './services/auctionService';
+import { notificationService } from './services/notificationService';
 import { StageType, AuctionDaySubTab } from './types/auctionDetail';
 import { AuctionDayTab } from './components/auction/tabs/AuctionDayTab';
 import { AuctionDetailProvider } from './context/AuctionDetailContext';
@@ -382,6 +384,8 @@ const AdminConsole: React.FC = () => {
         setCurrentSection('reports');
       } else if (path === '/logs') {
         setCurrentSection('logs');
+      } else if (path === '/notifications') {
+        setCurrentSection('notifications');
       } else if (path === '/settings') {
         setCurrentSection('settings');
       } else if (path === '/profile') {
@@ -492,6 +496,18 @@ const AdminConsole: React.FC = () => {
         details: 'Synchronized catalog entries, reserve modifications, and floor check-ins to all HiBid syndication nodes.'
       };
       setLogs(prev => [newLog, ...prev]);
+
+      // Emit notification to Supabase system
+      notificationService.createNotification({
+        title: 'HiBid AF360 Full Sync Completed',
+        message: 'Synchronized catalog entries, reserve modifications, and floor check-ins to all HiBid syndication nodes.',
+        type: 'system',
+        recipient_id: 'all',
+        recipient_role: 'admin',
+        related_module: 'logs',
+        action_url: '/logs',
+        is_read: false
+      });
     }, 2100);
   };
 
@@ -557,6 +573,19 @@ const AdminConsole: React.FC = () => {
       details: `Paddle #${paddleNumber} (${bidderName}) advanced the bid via ${source}. Synced with Supabase Edge.`
     };
     setLogs(prev => [audit, ...prev]);
+
+    // Live Clerking Notification
+    notificationService.createNotification({
+      title: `Accepted ${source} Bid: $${amount.toLocaleString()} on Lot #${activeLotOnBlock.lotNumber}`,
+      message: `Paddle #${paddleNumber} (${bidderName}) advanced the high bid on "${activeLotOnBlock.title}".`,
+      type: 'clerking',
+      recipient_id: 'all',
+      recipient_role: 'admin',
+      related_module: 'live_clerking',
+      related_record_id: activeLotOnBlock.id,
+      action_url: '/live_clerking',
+      is_read: false
+    });
   };
 
   // Hammer Down / Sold Handler
@@ -753,7 +782,8 @@ const AdminConsole: React.FC = () => {
           onTriggerHiBidSync={triggerHiBidSync}
           isSyncing={isSyncModalOpen && syncStep < 4}
           unreadLogsCount={logs.filter(l => l.severity === 'warning' || l.severity === 'alert').length}
-          onOpenNotifications={() => handleNavigateSection('logs')}
+          onOpenNotifications={() => handleNavigateSection('notifications')}
+          onNavigateSection={handleNavigateSection}
           onNavigateProfile={() => handleNavigateSection('profile')}
         />
 
@@ -894,6 +924,12 @@ const AdminConsole: React.FC = () => {
           {currentSection === 'logs' && (
             <LogsView
               logs={logs}
+              onNavigateSection={handleNavigateSection}
+            />
+          )}
+
+          {currentSection === 'notifications' && (
+            <NotificationsView
               onNavigateSection={handleNavigateSection}
             />
           )}

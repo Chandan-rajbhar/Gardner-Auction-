@@ -1,6 +1,9 @@
+import React, { useState, useEffect } from 'react';
 import { Bell, PanelLeft } from 'lucide-react';
 import { Auction, NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { NotificationDropdown } from './notifications/NotificationDropdown';
+import { notificationService } from '../services/notificationService';
 
 interface TopbarProps {
   currentSection?: NavigationSection;
@@ -12,8 +15,9 @@ interface TopbarProps {
   isSidebarOpen?: boolean;
   onTriggerHiBidSync?: () => void;
   isSyncing?: boolean;
-  unreadLogsCount: number;
-  onOpenNotifications: () => void;
+  unreadLogsCount?: number;
+  onOpenNotifications?: () => void;
+  onNavigateSection?: (section: NavigationSection) => void;
   onNavigateProfile?: () => void;
 }
 
@@ -28,6 +32,7 @@ const getSectionTitle = (section?: NavigationSection): string => {
     case 'payments': return 'Settlement & Invoices';
     case 'reports': return 'Reports & Analytics';
     case 'logs': return 'Activity & Audit Log';
+    case 'notifications': return 'Notifications';
     case 'settings': return 'Settings & Portal Config';
     case 'profile': return 'Administrator Profile';
     default: return 'Dashboard';
@@ -39,12 +44,43 @@ export const Topbar: React.FC<TopbarProps> = ({
   onToggleSidebar,
   onOpenMobileMenu,
   isSidebarOpen = true,
-  unreadLogsCount,
-  onOpenNotifications,
+  unreadLogsCount: _fallbackLogsCount,
+  onOpenNotifications: _legacyOnOpen,
+  onNavigateSection,
   onNavigateProfile
 }) => {
   const { user } = useAuth();
   const handleToggle = onToggleSidebar || onOpenMobileMenu;
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  // Sync unread notification count dynamically from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const notifs = await notificationService.getNotifications();
+        if (isMounted) {
+          const count = notifs.filter(n => !n.is_read).length;
+          setUnreadCount(count);
+        }
+      } catch (err) {
+        console.warn('[Topbar] Error fetching unread notifications:', err);
+      }
+    };
+
+    fetchUnread();
+
+    const unsubscribe = notificationService.subscribeToNotifications(() => {
+      fetchUnread();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <header className="executive-topbar">
@@ -68,18 +104,37 @@ export const Topbar: React.FC<TopbarProps> = ({
 
       {/* Right: Notifications & Administrator Profile */}
       <div className="topbar-right-zone">
-        <button 
-          className="topbar-icon-button" 
-          onClick={onOpenNotifications}
-          title="View Activity Logs & Alerts"
-          aria-label="View notifications"
-          id="btn-topbar-notifications"
-        >
-          <Bell size={18} />
-          {unreadLogsCount > 0 && (
-            <span className="topbar-badge-pill">{unreadLogsCount}</span>
-          )}
-        </button>
+        {/* Notification Bell with Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button 
+            type="button"
+            className={`topbar-icon-button ${isDropdownOpen ? 'active' : ''}`}
+            onClick={() => setIsDropdownOpen(prev => !prev)}
+            title="View Notifications"
+            aria-label="View notifications"
+            aria-expanded={isDropdownOpen}
+            id="btn-topbar-notifications"
+            style={{
+              position: 'relative',
+              background: isDropdownOpen ? 'rgba(203, 161, 53, 0.15)' : undefined,
+              borderColor: isDropdownOpen ? 'var(--gold-primary)' : undefined,
+              color: isDropdownOpen ? 'var(--gold-primary)' : undefined
+            }}
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="topbar-badge-pill" style={{ background: '#ef4444' }}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          <NotificationDropdown
+            isOpen={isDropdownOpen}
+            onClose={() => setIsDropdownOpen(false)}
+            onNavigateSection={onNavigateSection}
+          />
+        </div>
 
         {/* Administrator Profile (Clickable Navigation to Profile Page) */}
         <button
