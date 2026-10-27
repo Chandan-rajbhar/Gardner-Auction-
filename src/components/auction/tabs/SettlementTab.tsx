@@ -18,8 +18,11 @@ import {
   FileText,
   Eye,
   CheckCircle2,
-  Settings
+  Settings,
+  Scale
 } from 'lucide-react';
+import { EmailSettlementModal } from '../../Common/EmailSettlementModal';
+import { SelectColumnsModal, ColumnItem } from '../SelectColumnsModal';
 import { formatCurrency } from '../../../utils/formatters';
 
 interface SettlementTabProps {
@@ -44,6 +47,37 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
   const [customers, setCustomers] = useState<SettlementCustomer[]>([]);
+  const [emailModalCustomer, setEmailModalCustomer] = useState<SettlementCustomer | null>(null);
+
+  // Column config modal state & preferences
+  const DEFAULT_BIDDER_COLUMNS: ColumnItem[] = [
+    { key: 'bidderNumber', label: 'Bidder#', visible: true },
+    { key: 'customerCode', label: 'Customer Code', visible: false },
+    { key: 'name', label: 'Name', visible: true },
+    { key: 'cashBuyer', label: 'Cash Buyer', visible: true },
+    { key: 'lotCount', label: 'Lot Count', visible: true },
+    { key: 'shippedCount', label: 'Shipped / Picked Up', visible: true },
+    { key: 'balance', label: 'Balance', visible: true },
+    { key: 'invoiceNumber', label: 'Invoice Number/Status', visible: true },
+    { key: 'shippingRequested', label: 'Shipping Requested', visible: true }
+  ];
+
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [columns, setColumns] = useState<ColumnItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('af360_bidder_columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_BIDDER_COLUMNS;
+  });
+
+  const isColVisible = (key: string) => {
+    const col = columns.find(c => c.key === key);
+    return col ? col.visible : true;
+  };
 
   // Pagination state (Default 20 as requested)
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -257,6 +291,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
               <button
                 type="button"
                 title="Configure Columns"
+                onClick={() => setIsColumnModalOpen(true)}
                 style={{
                   position: 'absolute',
                   right: 8,
@@ -295,14 +330,15 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                     aria-label="Select all settlements"
                   />
                 </th>
-                <th style={{ width: 95 }}>BIDDER#</th>
-                <th style={{ minWidth: 190 }}>NAME</th>
-                <th style={{ width: 110, textAlign: 'center' }}>CASH BUYER</th>
-                <th style={{ width: 95, textAlign: 'center' }}>LOT COUNT</th>
-                <th style={{ width: 150, textAlign: 'center' }}>SHIPPED / PICKED UP</th>
-                <th style={{ width: 125, textAlign: 'right' }}>BALANCE</th>
-                <th style={{ minWidth: 190 }}>INVOICE NUMBER/STATUS</th>
-                <th style={{ width: 130, textAlign: 'center' }}>SHIPPING REQ</th>
+                {isColVisible('bidderNumber') && <th style={{ width: 95 }}>BIDDER#</th>}
+                {isColVisible('customerCode') && <th style={{ width: 110 }}>CUSTOMER CODE</th>}
+                {isColVisible('name') && <th style={{ minWidth: 190 }}>NAME</th>}
+                {isColVisible('cashBuyer') && <th style={{ width: 110, textAlign: 'center' }}>CASH BUYER</th>}
+                {isColVisible('lotCount') && <th style={{ width: 95, textAlign: 'center' }}>LOT COUNT</th>}
+                {isColVisible('shippedCount') && <th style={{ width: 150, textAlign: 'center' }}>SHIPPED / PICKED UP</th>}
+                {isColVisible('balance') && <th style={{ width: 125, textAlign: 'right' }}>BALANCE</th>}
+                {isColVisible('invoiceNumber') && <th style={{ minWidth: 190 }}>INVOICE NUMBER/STATUS</th>}
+                {isColVisible('shippingRequested') && <th style={{ width: 130, textAlign: 'center' }}>SHIPPING REQ</th>}
                 <th style={{ width: 70, textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
@@ -323,90 +359,106 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                         aria-label={`Select ${customer.name}`}
                       />
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: customer.isSeller ? 'var(--gold-dark)' : 'var(--text-main)' }}>
-                      #{customer.bidderNumber}
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {customer.name}
-                      </div>
-                      {customer.isSeller && (
-                        <span className="badge-house-consignor">
-                          House Consignor
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <input 
-                        type="checkbox"
-                        className="catalog-checkbox"
-                        checked={customer.isCashBuyer}
-                        onChange={async (e) => {
-                          const updatedVal = e.target.checked;
-                          customer.isCashBuyer = updatedVal;
-                          await settlementService.updateCashBuyer(auction.id, customer.id, updatedVal);
-                          setCustomers([...customers]);
-                        }}
-                        title="Cash buyer status"
-                      />
-                    </td>
-                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                      {customer.lotCount}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge-shipped-pill ${customer.shippedCount > 0 ? 'complete' : 'zero'}`}>
-                        {customer.shippedCount} of {customer.totalLotsCount || customer.lotCount || 1}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: customer.balance > 0 ? '#dc2626' : '#059669' }}>
-                      {formatCurrency(customer.balance)}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                        <button
-                          type="button"
-                          onClick={() => onSelectCustomer(customer.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            color: 'inherit',
-                            cursor: 'pointer',
-                            textDecoration: 'none'
-                          }}
-                          title="View customer invoice details"
-                        >
-                          <ExternalLink size={13} color="var(--gold-primary)" />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-main)', fontWeight: 500 }}>
-                            {customer.invoiceNumber}
+                    {isColVisible('bidderNumber') && (
+                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: customer.isSeller ? 'var(--gold-dark)' : 'var(--text-main)' }}>
+                        #{customer.bidderNumber}
+                      </td>
+                    )}
+                    {isColVisible('customerCode') && (
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>
+                        {(customer as any).customerCode || `CC-${customer.bidderNumber}`}
+                      </td>
+                    )}
+                    {isColVisible('name') && (
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                          {customer.name}
+                        </div>
+                        {customer.isSeller && (
+                          <span className="badge-house-consignor">
+                            House Consignor
                           </span>
-                        </button>
-                        <span className={`badge-invoice-status ${customer.invoiceStatus === 'Paid' ? 'paid' : 'pending'}`}>
-                          {customer.invoiceStatus}
+                        )}
+                      </td>
+                    )}
+                    {isColVisible('cashBuyer') && (
+                      <td style={{ textAlign: 'center' }}>
+                        <input 
+                          type="checkbox"
+                          className="catalog-checkbox"
+                          checked={customer.isCashBuyer}
+                          onChange={async (e) => {
+                            const updatedVal = e.target.checked;
+                            customer.isCashBuyer = updatedVal;
+                            await settlementService.updateCashBuyer(auction.id, customer.id, updatedVal);
+                            setCustomers([...customers]);
+                          }}
+                          title="Cash buyer status"
+                        />
+                      </td>
+                    )}
+                    {isColVisible('lotCount') && (
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+                        {customer.lotCount}
+                      </td>
+                    )}
+                    {isColVisible('shippedCount') && (
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={`badge-shipped-pill ${customer.shippedCount > 0 ? 'complete' : 'zero'}`}>
+                          {customer.shippedCount} of {customer.totalLotsCount || customer.lotCount || 1}
                         </span>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge-shipping-req ${customer.shippingRequested ? 'yes' : 'no'}`}>
-                        {customer.shippingRequested ? 'Yes' : 'No'}
-                      </span>
-                    </td>
+                      </td>
+                    )}
+                    {isColVisible('balance') && (
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: customer.balance > 0 ? '#dc2626' : '#059669' }}>
+                        {formatCurrency(customer.balance)}
+                      </td>
+                    )}
+                    {isColVisible('invoiceNumber') && (
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => onSelectCustomer(customer.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              color: 'inherit',
+                              cursor: 'pointer',
+                              textDecoration: 'none'
+                            }}
+                            title="View customer invoice details"
+                          >
+                            <ExternalLink size={13} color="var(--gold-primary)" />
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-main)', fontWeight: 500 }}>
+                              {customer.invoiceNumber}
+                            </span>
+                          </button>
+                          <span className={`badge-invoice-status ${customer.invoiceStatus === 'Paid' ? 'paid' : 'pending'}`}>
+                            {customer.invoiceStatus}
+                          </span>
+                        </div>
+                      </td>
+                    )}
+                    {isColVisible('shippingRequested') && (
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={`badge-shipping-req ${customer.shippingRequested ? 'yes' : 'no'}`}>
+                          {customer.shippingRequested ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                    )}
                     <td style={{ textAlign: 'center' }}>
                       <TableRowActionMenu
                         ariaLabel={`Actions for ${customer.name}`}
                         actions={[
                           {
                             label: 'View Settlement',
-                            icon: Eye,
+                            icon: Scale,
                             onClick: () => onSelectCustomer(customer.id)
-                          },
-                          {
-                            label: 'Update Invoice',
-                            icon: FileText,
-                            onClick: () => onOpenUpdateInvoices ? onOpenUpdateInvoices() : onSelectCustomer(customer.id)
                           },
                           {
                             label: 'Print Settlement',
@@ -416,22 +468,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                           {
                             label: 'Email Settlement',
                             icon: Mail,
-                            onClick: () => onOpenPrintEmail ? onOpenPrintEmail() : alert(`Emailing settlement invoice #${customer.invoiceNumber} to ${customer.name}...`)
-                          },
-                          {
-                            label: 'Mark as Shipped',
-                            icon: PackageCheck,
-                            disabled: customer.shippedCount >= (customer.totalLotsCount || customer.lotCount || 1),
-                            onClick: async () => {
-                              setIsProcessingBatch(true);
-                              await settlementService.markBatchShipped(auction.id, [customer.id]);
-                              const updated = await auctionService.getAuctionById(auction.id);
-                              if (updated) {
-                                dispatch({ type: 'SET_AUCTION', payload: updated });
-                                setCustomers(updated.settlements);
-                              }
-                              setIsProcessingBatch(false);
-                            }
+                            onClick: () => setEmailModalCustomer(customer)
                           }
                         ]}
                       />
@@ -469,6 +506,26 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           </div>
         )}
       </div>
+
+      <EmailSettlementModal
+        isOpen={!!emailModalCustomer}
+        onClose={() => setEmailModalCustomer(null)}
+        customer={emailModalCustomer}
+        auctionTitle={auction?.name || 'Premier Collector Auction'}
+        auctionCode={auction?.code || auction?.id}
+      />
+
+      <SelectColumnsModal
+        isOpen={isColumnModalOpen}
+        onClose={() => setIsColumnModalOpen(false)}
+        columns={columns}
+        onSave={(updated) => {
+          setColumns(updated);
+          try {
+            localStorage.setItem('af360_bidder_columns', JSON.stringify(updated));
+          } catch (_) {}
+        }}
+      />
     </div>
   );
 };

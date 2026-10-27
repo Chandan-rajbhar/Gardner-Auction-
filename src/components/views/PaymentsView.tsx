@@ -23,13 +23,25 @@ import {
   ShieldCheck,
   Building,
   Mail,
-  AlertCircle
+  AlertCircle,
+  MoreVertical,
+  Scale
 } from 'lucide-react';
 import { ShadcnSheet } from '../ui/ShadcnSheet';
 import { ShadcnSelect, ShadcnSelectOption } from '../ui/ShadcnSelect';
+import { 
+  DropdownMenu, 
+  DropdownMenuTrigger, 
+  DropdownMenuContent, 
+  DropdownMenuItem 
+} from '../ui/ShadcnDropdownMenu';
+import { SettlementCustomerDetail } from '../auction/tabs/SettlementCustomerDetail';
+import { EmailSettlementModal } from '../Common/EmailSettlementModal';
+import { SelectColumnsModal, ColumnItem } from '../auction/SelectColumnsModal';
 import { settlementService, BatchShipmentData } from '../../services/settlementService';
 import { auctionService } from '../../services/auctionService';
 import { useToast } from '../../context/ToastContext';
+import { supabase } from '../../lib/supabase';
 
 // Handshake icon for Settlement workflow stage
 const HandshakeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 16, color = 'currentColor' }) => (
@@ -142,8 +154,35 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [sellerPage, setSellerPage] = useState<number>(1);
   const [sellerPageSize, setSellerPageSize] = useState<number>(10);
 
-  // Column config popover state
+  // Column config modal state & preferences (matching live AF360)
+  const DEFAULT_BIDDER_COLUMNS: ColumnItem[] = [
+    { key: 'bidderNumber', label: 'Bidder#', visible: true },
+    { key: 'customerCode', label: 'Customer Code', visible: false },
+    { key: 'name', label: 'Name', visible: true },
+    { key: 'cashBuyer', label: 'Cash Buyer', visible: true },
+    { key: 'lotCount', label: 'Lot Count', visible: true },
+    { key: 'shippedCount', label: 'Shipped / Picked Up', visible: true },
+    { key: 'balance', label: 'Balance', visible: true },
+    { key: 'invoiceNumber', label: 'Invoice Number/Status', visible: true },
+    { key: 'shippingRequested', label: 'Shipping Requested', visible: true }
+  ];
+
   const [showColumnConfig, setShowColumnConfig] = useState(false);
+  const [bidderColumns, setBidderColumns] = useState<ColumnItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('af360_bidder_columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_BIDDER_COLUMNS;
+  });
+
+  const isColVisible = (key: string) => {
+    const col = bidderColumns.find(c => c.key === key);
+    return col ? col.visible : true;
+  };
 
   // Drawers & modals state
   const [isBatchShipmentsOpen, setIsBatchShipmentsOpen] = useState(false);
@@ -173,6 +212,52 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [printScope, setPrintScope] = useState<'all' | 'selected'>('all');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Settlement Details Navigation & Three-Dot Actions states
+  const [viewingSettlementCustomer, setViewingSettlementCustomer] = useState<SettlementCustomer | null>(null);
+  const [emailModalCustomer, setEmailModalCustomer] = useState<SettlementCustomer | null>(null);
+  const [printSettlementCustomer, setPrintSettlementCustomer] = useState<SettlementCustomer | null>(null);
+
+  // Synchronize URL query parameter `settlementId` for functional navigation & browser back button
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const sid = params.get('settlementId');
+      if (sid && bidderSettlements.length > 0) {
+        const match = bidderSettlements.find(b => b.id === sid);
+        if (match) {
+          setViewingSettlementCustomer(match);
+        }
+      } else if (!sid) {
+        setViewingSettlementCustomer(null);
+      }
+    };
+
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    return () => window.removeEventListener('popstate', syncFromUrl);
+  }, [bidderSettlements]);
+
+  // Three-Dot Action Handlers
+  const handleViewSettlement = (b: SettlementCustomer) => {
+    setViewingSettlementCustomer(b);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('settlementId', b.id);
+      window.history.pushState({ settlementId: b.id }, '', url.toString());
+    } catch (_) {}
+  };
+
+  const handlePrintSettlement = (b: SettlementCustomer) => {
+    setPrintSettlementCustomer(b);
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  };
+
+  const handleEmailSettlement = (b: SettlementCustomer) => {
+    setEmailModalCustomer(b);
+  };
 
   // =========================================================================
   // Dynamic Data Fetching from Supabase
@@ -210,7 +295,22 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
     setSelectedSellerIds([]);
     setBidderPage(1);
     setSellerPage(1);
-  }, [fetchBidderSettlements, fetchSellerSettlements]);
+
+    // Dynamic Supabase Realtime Subscription
+    const channel = supabase
+      .channel(`settlements-realtime-${currentAuctionId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+        fetchBidderSettlements();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'seller_settlements' }, () => {
+        fetchSellerSettlements();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchBidderSettlements, fetchSellerSettlements, currentAuctionId]);
 
   // Sync selected invoice in Update Invoices drawer when available
   useEffect(() => {
@@ -447,6 +547,37 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       : <ArrowDown size={12} style={{ color: 'var(--gold-primary, #a37a3b)', marginLeft: 4, display: 'inline' }} />;
   };
 
+  // Dedicated Settlement Details View for selected bidder
+  if (viewingSettlementCustomer) {
+    return (
+      <div style={{ padding: '20px 24px', background: 'var(--bg-app, #f9f8f5)', minHeight: '100%', boxSizing: 'border-box' }}>
+        <SettlementCustomerDetail
+          auctionId={currentAuctionId}
+          customer={viewingSettlementCustomer}
+          onBack={() => {
+            setViewingSettlementCustomer(null);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('settlementId');
+              window.history.pushState({}, '', url.pathname + (url.search ? url.search : ''));
+            } catch (_) {}
+          }}
+          onRefresh={async () => {
+            await fetchBidderSettlements();
+            const refreshed = await settlementService.getBidderSettlements(currentAuctionId);
+            if (refreshed) {
+              setBidderSettlements(refreshed);
+              const found = refreshed.find(c => c.id === viewingSettlementCustomer.id);
+              if (found) {
+                setViewingSettlementCustomer(found);
+              }
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '20px 24px', background: 'var(--bg-app, #f9f8f5)', minHeight: '100%', boxSizing: 'border-box' }}>
       {/* =========================================================================
@@ -548,12 +679,12 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             padding: '9px 20px',
             fontSize: 13,
             fontWeight: activeTab === 'bidder' ? 700 : 600,
-            color: activeTab === 'bidder' ? '#ffffff' : '#334155',
+            color: activeTab === 'bidder' ? '#ffffff' : 'var(--text-main, #0f172a)',
             background: activeTab === 'bidder' ? '#0e121b' : '#ffffff',
             border: '1px solid',
-            borderColor: activeTab === 'bidder' ? '#0e121b' : '#cbd5e1',
-            borderTop: activeTab === 'bidder' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid #cbd5e1',
-            borderBottom: activeTab === 'bidder' ? 'none' : '1px solid #cbd5e1',
+            borderColor: activeTab === 'bidder' ? '#0e121b' : 'var(--border-subtle, #eae5dc)',
+            borderTop: activeTab === 'bidder' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid var(--border-subtle, #eae5dc)',
+            borderBottom: activeTab === 'bidder' ? 'none' : '1px solid var(--border-subtle, #eae5dc)',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
             cursor: 'pointer',
@@ -574,12 +705,12 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             padding: '9px 20px',
             fontSize: 13,
             fontWeight: activeTab === 'seller' ? 700 : 600,
-            color: activeTab === 'seller' ? '#ffffff' : '#334155',
+            color: activeTab === 'seller' ? '#ffffff' : 'var(--text-main, #0f172a)',
             background: activeTab === 'seller' ? '#0e121b' : '#ffffff',
             border: '1px solid',
-            borderColor: activeTab === 'seller' ? '#0e121b' : '#cbd5e1',
-            borderTop: activeTab === 'seller' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid #cbd5e1',
-            borderBottom: activeTab === 'seller' ? 'none' : '1px solid #cbd5e1',
+            borderColor: activeTab === 'seller' ? '#0e121b' : 'var(--border-subtle, #eae5dc)',
+            borderTop: activeTab === 'seller' ? '3px solid var(--gold-primary, #a37a3b)' : '1px solid var(--border-subtle, #eae5dc)',
+            borderBottom: activeTab === 'seller' ? 'none' : '1px solid var(--border-subtle, #eae5dc)',
             borderTopLeftRadius: 6,
             borderTopRightRadius: 6,
             cursor: 'pointer',
@@ -619,14 +750,14 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               alignItems: 'center',
               gap: 7,
               background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--border-medium, #dcd5ca)',
               borderRadius: 4,
               padding: '6px 14px',
               fontSize: 12.5,
               fontWeight: 600,
-              color: '#334155',
+              color: 'var(--text-main, #0f172a)',
               cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              boxShadow: 'var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.03))'
             }}
           >
             <X size={13} style={{ strokeWidth: 2.5 }} />
@@ -667,18 +798,44 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               height: 38,
               paddingLeft: 38,
               paddingRight: 40,
-              borderRadius: 4,
-              border: '1px solid #cbd5e1',
+              borderRadius: 6,
+              border: '1px solid var(--border-medium, #dcd5ca)',
               fontSize: 13,
               background: '#ffffff',
-              color: '#1e293b',
-              boxSizing: 'border-box'
+              color: 'var(--text-main, #0f172a)',
+              boxSizing: 'border-box',
+              outline: 'none'
             }}
           />
           <button
             type="button"
+            title="Sync with Supabase"
+            onClick={() => {
+              fetchBidderSettlements();
+              fetchSellerSettlements();
+              showToast('success', 'Synchronized', 'Settlement records refreshed from Supabase.');
+            }}
+            style={{
+              position: 'absolute',
+              right: 36,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <RotateCw size={15} className={isLoadingBidder || isLoadingSeller ? 'animate-spin' : ''} />
+          </button>
+          <button
+            type="button"
             title="Configure Columns"
-            onClick={() => setShowColumnConfig(prev => !prev)}
+            id="btn-settlement-column-settings"
+            onClick={() => setShowColumnConfig(true)}
             style={{
               position: 'absolute',
               right: 10,
@@ -707,10 +864,10 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             ===================================================================== */}
         {activeTab === 'bidder' && (
           <div>
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 4 }}>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle, #eae5dc)', borderRadius: 6, background: '#ffffff' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <tr style={{ background: '#faf8f5', borderBottom: '1px solid var(--border-subtle, #eae5dc)' }}>
                     <th style={{ width: 44, padding: '10px 12px', textAlign: 'center' }}>
                       <input
                         type="checkbox"
@@ -720,57 +877,81 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                         style={{ cursor: 'pointer' }}
                       />
                     </th>
-                    <th 
-                      onClick={() => handleBidderSort('bidderNumber')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Bidder # {renderSortIcon('bidderNumber', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('name')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Name {renderSortIcon('name', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('isCashBuyer')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Cash Buyer {renderSortIcon('isCashBuyer', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('lotCount')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Lot Count {renderSortIcon('lotCount', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('shippedCount')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Shipped / Picked Up {renderSortIcon('shippedCount', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('balance')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Balance {renderSortIcon('balance', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th 
-                      onClick={() => handleBidderSort('invoiceNumber')}
-                      style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >
-                      Invoice Number/Status {renderSortIcon('invoiceNumber', bidderSortField, bidderSortAsc)}
-                    </th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      Shipping Requested
-                    </th>
+                    {isColVisible('bidderNumber') && (
+                      <th 
+                        onClick={() => handleBidderSort('bidderNumber')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Bidder # {renderSortIcon('bidderNumber', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('customerCode') && (
+                      <th 
+                        onClick={() => handleBidderSort('customerCode')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Customer Code {renderSortIcon('customerCode', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('name') && (
+                      <th 
+                        onClick={() => handleBidderSort('name')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Name {renderSortIcon('name', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('cashBuyer') && (
+                      <th 
+                        onClick={() => handleBidderSort('isCashBuyer')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Cash Buyer {renderSortIcon('isCashBuyer', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('lotCount') && (
+                      <th 
+                        onClick={() => handleBidderSort('lotCount')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Lot Count {renderSortIcon('lotCount', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('shippedCount') && (
+                      <th 
+                        onClick={() => handleBidderSort('shippedCount')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Shipped / Picked Up {renderSortIcon('shippedCount', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('balance') && (
+                      <th 
+                        onClick={() => handleBidderSort('balance')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Balance {renderSortIcon('balance', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('invoiceNumber') && (
+                      <th 
+                        onClick={() => handleBidderSort('invoiceNumber')}
+                        style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Invoice Number/Status {renderSortIcon('invoiceNumber', bidderSortField, bidderSortAsc)}
+                      </th>
+                    )}
+                    {isColVisible('shippingRequested') && (
+                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        Shipping Requested
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {isLoadingBidder ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                      <td colSpan={1 + bidderColumns.filter(c => c.visible).length} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                           <RotateCw size={16} className="animate-spin" />
                           <span>Loading settlements from Supabase...</span>
@@ -779,7 +960,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     </tr>
                   ) : paginatedBidderSettlements.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
+                      <td colSpan={1 + bidderColumns.filter(c => c.visible).length} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
                         No data available in table
                       </td>
                     </tr>
@@ -791,7 +972,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                           key={b.id}
                           style={{
                             borderBottom: '1px solid #f1f5f9',
-                            background: isSelected ? '#f0fdf4' : '#ffffff',
+                            background: isSelected ? 'rgba(163, 122, 59, 0.08)' : '#ffffff',
                             transition: 'background 0.1s ease'
                           }}
                         >
@@ -804,108 +985,183 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                               style={{ cursor: 'pointer' }}
                             />
                           </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
-                            #{b.bidderNumber}
-                          </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
-                            {b.name}
-                            {b.isSeller && (
+                          {isColVisible('bidderNumber') && (
+                            <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                              #{b.bidderNumber}
+                            </td>
+                          )}
+                          {isColVisible('customerCode') && (
+                            <td style={{ padding: '10px 12px', color: '#64748b', fontFamily: 'var(--font-mono, monospace)', fontSize: 12 }}>
+                              {(b as any).customerCode || `CC-${b.bidderNumber}`}
+                            </td>
+                          )}
+                          {isColVisible('name') && (
+                            <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
+                              {b.name}
+                              {b.isSeller && (
+                                <span style={{
+                                  marginLeft: 6,
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  background: '#fef3c7',
+                                  color: '#92400e',
+                                  padding: '1px 6px',
+                                  borderRadius: 10
+                                }}>
+                                  House
+                                </span>
+                              )}
+                            </td>
+                          )}
+                          {isColVisible('cashBuyer') && (
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={b.isCashBuyer}
+                                onChange={() => handleToggleCashBuyer(b, b.isCashBuyer)}
+                                title="Toggle Cash Buyer Status"
+                                style={{ cursor: 'pointer' }}
+                              />
+                            </td>
+                          )}
+                          {isColVisible('lotCount') && (
+                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>
+                              {b.lotCount}
+                            </td>
+                          )}
+                          {isColVisible('shippedCount') && (
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                               <span style={{
-                                marginLeft: 6,
-                                fontSize: 10.5,
-                                fontWeight: 700,
-                                background: '#fef3c7',
-                                color: '#92400e',
-                                padding: '1px 6px',
-                                borderRadius: 10
-                              }}>
-                                House
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={b.isCashBuyer}
-                              onChange={() => handleToggleCashBuyer(b, b.isCashBuyer)}
-                              title="Toggle Cash Buyer Status"
-                              style={{ cursor: 'pointer' }}
-                            />
-                          </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>
-                            {b.lotCount}
-                          </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                            <span style={{
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              padding: '2px 8px',
-                              borderRadius: 12,
-                              background: b.shippedCount > 0 ? '#dcfce7' : '#f1f5f9',
-                              color: b.shippedCount > 0 ? '#15803d' : '#64748b'
-                            }}>
-                              {b.shippedCount} of {b.totalLotsCount || b.lotCount || 1}
-                            </span>
-                          </td>
-                          <td style={{
-                            padding: '10px 12px',
-                            textAlign: 'right',
-                            fontWeight: 700,
-                            color: b.balance > 0 ? '#dc2626' : '#15803d'
-                          }}>
-                            {formatCurrency(b.balance)}
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const matchingInvoice = propInvoices.find(inv => inv.id === b.id || inv.invoiceNumber === b.invoiceNumber);
-                                if (matchingInvoice) {
-                                  setPreviewInvoice(matchingInvoice);
-                                } else {
-                                  setPreviewInvoice({
-                                    id: b.id,
-                                    invoiceNumber: b.invoiceNumber || `INV-${b.bidderNumber}`,
-                                    paddleNumber: b.bidderNumber,
-                                    buyerName: b.name,
-                                    itemsCount: b.lotCount,
-                                    hammerSubtotal: b.balance,
-                                    buyersPremium: b.balance * 0.15,
-                                    taxAmount: 0,
-                                    shippingFee: 0,
-                                    totalDue: b.balance,
-                                    paymentStatus: b.invoiceStatus as any || 'Pending',
-                                    isShipped: b.shippedCount > 0,
-                                    shippingRequested: b.shippingRequested,
-                                    lots: []
-                                  });
-                                }
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                color: 'var(--gold-dark, #8c6428)',
+                                fontSize: 11.5,
                                 fontWeight: 600,
-                                cursor: 'pointer',
-                                textDecoration: 'underline'
-                              }}
-                            >
-                              {b.invoiceNumber || 'INV-Pending'} ({b.invoiceStatus || 'Pending'})
-                            </button>
-                          </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                            <span style={{
-                              fontSize: 11,
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                background: b.shippedCount > 0 ? '#dcfce7' : '#f1f5f9',
+                                color: b.shippedCount > 0 ? '#15803d' : '#64748b'
+                              }}>
+                                {b.shippedCount} of {b.totalLotsCount || b.lotCount || 1}
+                              </span>
+                            </td>
+                          )}
+                          {isColVisible('balance') && (
+                            <td style={{
+                              padding: '10px 12px',
+                              textAlign: 'right',
                               fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: 12,
-                              background: b.shippingRequested ? '#e0f2fe' : '#f1f5f9',
-                              color: b.shippingRequested ? '#0369a1' : '#64748b'
+                              color: b.balance > 0 ? '#dc2626' : '#15803d'
                             }}>
-                              {b.shippingRequested ? 'Yes' : 'No'}
-                            </span>
+                              {formatCurrency(b.balance)}
+                            </td>
+                          )}
+                          {isColVisible('invoiceNumber') && (
+                            <td style={{ padding: '10px 12px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matchingInvoice = propInvoices.find(inv => inv.id === b.id || inv.invoiceNumber === b.invoiceNumber);
+                                  if (matchingInvoice) {
+                                    setPreviewInvoice(matchingInvoice);
+                                  } else {
+                                    setPreviewInvoice({
+                                      id: b.id,
+                                      invoiceNumber: b.invoiceNumber || `INV-${b.bidderNumber}`,
+                                      paddleNumber: b.bidderNumber,
+                                      buyerName: b.name,
+                                      itemsCount: b.lotCount,
+                                      hammerSubtotal: b.balance,
+                                      buyersPremium: b.balance * 0.15,
+                                      taxAmount: 0,
+                                      shippingFee: 0,
+                                      totalDue: b.balance,
+                                      paymentStatus: b.invoiceStatus as any || 'Pending',
+                                      isShipped: b.shippedCount > 0,
+                                      shippingRequested: b.shippingRequested,
+                                      lots: []
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  color: 'var(--gold-dark, #8c6428)',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline'
+                                }}
+                              >
+                                {b.invoiceNumber || 'INV-Pending'} ({b.invoiceStatus || 'Pending'})
+                              </button>
+                            </td>
+                          )}
+                          {isColVisible('shippingRequested') && (
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, minWidth: 96 }}>
+                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                  <span style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 12,
+                                    background: b.shippingRequested ? '#e0f2fe' : '#f1f5f9',
+                                    color: b.shippingRequested ? '#0369a1' : '#64748b'
+                                  }}>
+                                    {b.shippingRequested ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label={`Actions for ${b.name}`}
+                                    id={`menu-trigger-${b.bidderNumber || b.id}`}
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: 4,
+                                      border: '1px solid var(--border-medium, #dcd5ca)',
+                                      background: '#ffffff',
+                                      color: 'var(--text-main, #0f172a)',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      padding: 0,
+                                      transition: 'all 0.12s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = '#fdfaf3';
+                                      e.currentTarget.style.borderColor = 'var(--gold-primary, #a37a3b)';
+                                      e.currentTarget.style.color = 'var(--gold-primary, #a37a3b)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = '#ffffff';
+                                      e.currentTarget.style.borderColor = 'var(--border-medium, #dcd5ca)';
+                                      e.currentTarget.style.color = 'var(--text-main, #0f172a)';
+                                    }}
+                                  >
+                                    <MoreVertical size={15} />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleViewSettlement(b)}>
+                                    <Scale size={15} color="var(--gold-primary, #a37a3b)" />
+                                    <span>VIEW SETTLEMENT</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handlePrintSettlement(b)}>
+                                    <Printer size={15} color="var(--gold-primary, #a37a3b)" />
+                                    <span>PRINT SETTLEMENT</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleEmailSettlement(b)}>
+                                    <Mail size={15} color="var(--gold-primary, #a37a3b)" />
+                                    <span>EMAIL SETTLEMENT</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </td>
+                        )}
                         </tr>
                       );
                     })
@@ -958,9 +1214,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     fontSize: 12,
                     fontWeight: 600,
                     borderRadius: 4,
-                    border: '1px solid #cbd5e1',
-                    background: bidderPage <= 1 ? '#f1f5f9' : '#ffffff',
-                    color: bidderPage <= 1 ? '#94a3b8' : '#334155',
+                    border: '1px solid var(--border-medium, #dcd5ca)',
+                    background: bidderPage <= 1 ? '#f8fafc' : '#ffffff',
+                    color: bidderPage <= 1 ? '#94a3b8' : 'var(--text-main, #0f172a)',
                     cursor: bidderPage <= 1 ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -975,9 +1231,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     fontSize: 12,
                     fontWeight: 600,
                     borderRadius: 4,
-                    border: '1px solid #cbd5e1',
-                    background: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#f1f5f9' : '#ffffff',
-                    color: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#94a3b8' : '#334155',
+                    border: '1px solid var(--border-medium, #dcd5ca)',
+                    background: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#f8fafc' : '#ffffff',
+                    color: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? '#94a3b8' : 'var(--text-main, #0f172a)',
                     cursor: bidderPage >= Math.max(1, Math.ceil(filteredBidderSettlements.length / bidderPageSize)) ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -993,10 +1249,10 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             ===================================================================== */}
         {activeTab === 'seller' && (
           <div>
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 4 }}>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle, #eae5dc)', borderRadius: 6, background: '#ffffff' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <tr style={{ background: '#faf8f5', borderBottom: '1px solid var(--border-subtle, #eae5dc)' }}>
                     <th style={{ width: 44, padding: '10px 12px', textAlign: 'center' }}>
                       <input
                         type="checkbox"
@@ -1083,7 +1339,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                           key={s.id}
                           style={{
                             borderBottom: '1px solid #f1f5f9',
-                            background: isSelected ? '#f0fdf4' : '#ffffff',
+                            background: isSelected ? 'rgba(163, 122, 59, 0.08)' : '#ffffff',
                             transition: 'background 0.1s ease'
                           }}
                         >
@@ -1184,9 +1440,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     fontSize: 12,
                     fontWeight: 600,
                     borderRadius: 4,
-                    border: '1px solid #cbd5e1',
-                    background: sellerPage <= 1 ? '#f1f5f9' : '#ffffff',
-                    color: sellerPage <= 1 ? '#94a3b8' : '#334155',
+                    border: '1px solid var(--border-medium, #dcd5ca)',
+                    background: sellerPage <= 1 ? '#f8fafc' : '#ffffff',
+                    color: sellerPage <= 1 ? '#94a3b8' : 'var(--text-main, #0f172a)',
                     cursor: sellerPage <= 1 ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -1201,9 +1457,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     fontSize: 12,
                     fontWeight: 600,
                     borderRadius: 4,
-                    border: '1px solid #cbd5e1',
-                    background: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#f1f5f9' : '#ffffff',
-                    color: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#94a3b8' : '#334155',
+                    border: '1px solid var(--border-medium, #dcd5ca)',
+                    background: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#f8fafc' : '#ffffff',
+                    color: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? '#94a3b8' : 'var(--text-main, #0f172a)',
                     cursor: sellerPage >= Math.max(1, Math.ceil(filteredSellerSettlements.length / sellerPageSize)) ? 'not-allowed' : 'pointer'
                   }}
                 >
@@ -1619,6 +1875,140 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <span>Print Invoice</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Row-Level Email Settlement Modal */}
+      <EmailSettlementModal
+        isOpen={!!emailModalCustomer}
+        onClose={() => setEmailModalCustomer(null)}
+        customer={emailModalCustomer}
+        auctionTitle={currentAuction.title}
+        auctionCode={currentAuction.code}
+        onSuccess={() => {
+          showToast('success', 'Email Sent', `Settlement statement sent to ${emailModalCustomer?.name}.`);
+          fetchBidderSettlements();
+        }}
+      />
+
+      {/* Select Columns Modal (Configured from search bar settings icon) */}
+      <SelectColumnsModal
+        isOpen={showColumnConfig}
+        onClose={() => setShowColumnConfig(false)}
+        columns={bidderColumns}
+        onSave={(updated) => {
+          setBidderColumns(updated);
+          try {
+            localStorage.setItem('af360_bidder_columns', JSON.stringify(updated));
+          } catch (_) {}
+          showToast('success', 'Columns Saved', 'Table column layout updated.');
+        }}
+      />
+
+      {/* Row-Level Print-Ready Document Layout */}
+      {printSettlementCustomer && (
+        <div id="print-settlement-document" style={{ display: 'none' }}>
+          <style>{`
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              #print-settlement-document,
+              #print-settlement-document * {
+                visibility: visible;
+              }
+              #print-settlement-document {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                padding: 32px;
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              }
+            }
+          `}</style>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: 16, marginBottom: 20 }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, textTransform: 'uppercase' }}>Gardner Auction</h1>
+              <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>Administrative Settlement Statement & Buyer Invoice</div>
+              <div style={{ fontSize: 12, color: '#666' }}>1960 Heritage Way, Suite 400 • Missoula, MT 59801 • Tel: (406) 541-4400</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>INVOICE: {printSettlementCustomer.invoiceNumber || 'INV-Pending'}</div>
+              <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Date: {new Date().toLocaleDateString()}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color: printSettlementCustomer.invoiceStatus === 'Paid' ? '#059669' : '#d97706' }}>
+                Status: {printSettlementCustomer.invoiceStatus}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24, fontSize: 13 }}>
+            <div style={{ border: '1px solid #ddd', padding: 14, borderRadius: 4 }}>
+              <strong style={{ textTransform: 'uppercase', fontSize: 11, color: '#666' }}>Billed Customer:</strong>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{printSettlementCustomer.name}</div>
+              <div style={{ marginTop: 2 }}>Paddle / Account #: <strong>#{printSettlementCustomer.bidderNumber}</strong></div>
+              {printSettlementCustomer.email && <div style={{ marginTop: 2 }}>Email: {printSettlementCustomer.email}</div>}
+              <div style={{ marginTop: 2 }}>Shipping Requested: {printSettlementCustomer.shippingRequested ? 'Yes' : 'No'}</div>
+            </div>
+
+            <div style={{ border: '1px solid #ddd', padding: 14, borderRadius: 4 }}>
+              <strong style={{ textTransform: 'uppercase', fontSize: 11, color: '#666' }}>Auction Information:</strong>
+              <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>{currentAuction.title} ({currentAuction.code})</div>
+              <div style={{ marginTop: 2 }}>Total Lots Won: {printSettlementCustomer.lotCount || printSettlementCustomer.lots.length}</div>
+              <div style={{ marginTop: 2 }}>Fulfillment: {printSettlementCustomer.shippedCount} of {printSettlementCustomer.totalLotsCount || printSettlementCustomer.lots.length || 1} Shipped</div>
+            </div>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 24 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #000', background: '#f5f5f5' }}>
+                <th style={{ textAlign: 'left', padding: '8px' }}>Lot #</th>
+                <th style={{ textAlign: 'left', padding: '8px' }}>Description / Title</th>
+                <th style={{ textAlign: 'center', padding: '8px' }}>Qty</th>
+                <th style={{ textAlign: 'right', padding: '8px' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printSettlementCustomer.lots.map(l => (
+                <tr key={l.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '8px', fontWeight: 700 }}>#{l.lotNumber}</td>
+                  <td style={{ padding: '8px' }}>{l.title}</td>
+                  <td style={{ textAlign: 'center', padding: '8px' }}>{l.qtySold || 1}</td>
+                  <td style={{ textAlign: 'right', padding: '8px' }}>
+                    {formatCurrency(l.entries.reduce((sum, e) => sum + e.amount, 0))}
+                  </td>
+                </tr>
+              ))}
+              {printSettlementCustomer.charges && printSettlementCustomer.charges.map(ch => (
+                <tr key={ch.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '8px', color: '#666' }}>CHG</td>
+                  <td style={{ padding: '8px' }}>{ch.description} ({ch.account})</td>
+                  <td style={{ textAlign: 'center', padding: '8px' }}>1</td>
+                  <td style={{ textAlign: 'right', padding: '8px' }}>{formatCurrency(ch.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 30 }}>
+            <div style={{ width: 280, border: '1px solid #000', padding: 14, borderRadius: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                <span>Subtotal:</span>
+                <strong>{formatCurrency(printSettlementCustomer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: '1px solid #ccc', paddingTop: 8 }}>
+                <span>Balance Due:</span>
+                <span style={{ color: printSettlementCustomer.balance > 0 ? '#b91c1c' : '#15803d' }}>{formatCurrency(printSettlementCustomer.balance)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 11, color: '#666', borderTop: '1px solid #ddd', paddingTop: 12 }}>
+            Thank you for participating with Gardner Auction. Remittance instructions: Wire routing # 092000021 / Account # 882019482. All sales final pursuant to saleroom terms.
           </div>
         </div>
       )}

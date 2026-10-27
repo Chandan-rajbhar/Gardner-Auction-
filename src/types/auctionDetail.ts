@@ -160,6 +160,7 @@ export interface SettlementCustomer {
   auctionId: string;
   bidderNumber: string; // e.g. "1000", "2001", "HOUSE"
   name: string;
+  email?: string;
   isSeller: boolean;
   isCashBuyer: boolean;
   lotCount: number;
