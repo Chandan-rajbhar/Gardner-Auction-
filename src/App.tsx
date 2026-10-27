@@ -894,6 +894,7 @@ const AdminConsole: React.FC = () => {
           {currentSection === 'logs' && (
             <LogsView
               logs={logs}
+              onNavigateSection={handleNavigateSection}
             />
           )}
 
