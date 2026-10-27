@@ -885,6 +885,9 @@ const AdminConsole: React.FC = () => {
             <ReportsView
               auction={currentAuction}
               lots={lots}
+              selectedAuctionId={selectedAuctionId}
+              availableAuctions={auctions}
+              onSelectAuction={setSelectedAuctionId}
             />
           )}
 

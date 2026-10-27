@@ -1,211 +1,474 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Auction, LotItem } from '../../types';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
 import { 
   BarChart3, 
   TrendingUp, 
-  PieChart, 
   Download, 
-  ArrowUpRight, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  Clock,
+  RefreshCw,
+  Building2,
+  Radio,
+  Layers
 } from 'lucide-react';
+import { reportService, ReportAnalyticsData } from '../../services/reportService';
+import { 
+  Select, 
+  SelectTrigger, 
+  SelectValue, 
+  SelectContent, 
+  SelectItem 
+} from '../ui/select';
 
 interface ReportsViewProps {
   auction: Auction;
   lots: LotItem[];
+  selectedAuctionId?: string;
+  availableAuctions?: Auction[];
+  onSelectAuction?: (auctionId: string) => void;
 }
 
-export const ReportsView: React.FC<ReportsViewProps> = ({ auction, lots }) => {
-  const soldLots = lots.filter(l => l.status === 'sold');
-  const totalHammerRealized = soldLots.reduce((acc, l) => acc + (l.hammerPrice || l.currentBid), 0);
-  const sellThroughRate = lots.length > 0 ? ((soldLots.length / lots.length) * 100).toFixed(1) : '0';
+export const ReportsView: React.FC<ReportsViewProps> = ({ 
+  auction, 
+  lots: _initialLots,
+  selectedAuctionId: externalSelectedAuctionId,
+  availableAuctions = [],
+  onSelectAuction
+}) => {
+  // Default to 'all' so consolidated realization ($1,050.00 across all active database lots) is shown on entry
+  const [activeAuctionId, setActiveAuctionId] = useState<string>('all');
+  const [analytics, setAnalytics] = useState<ReportAnalyticsData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Category breakdown
-  const categoryStats = lots.reduce((acc, lot) => {
-    if (!acc[lot.category]) {
-      acc[lot.category] = { count: 0, totalVal: 0 };
+  // Sync internal auction ID if external prop changes
+  useEffect(() => {
+    if (externalSelectedAuctionId && externalSelectedAuctionId !== activeAuctionId && externalSelectedAuctionId !== 'auc-001') {
+      setActiveAuctionId(externalSelectedAuctionId);
     }
-    acc[lot.category].count += 1;
-    acc[lot.category].totalVal += (lot.hammerPrice || lot.currentBid);
-    return acc;
-  }, {} as Record<string, { count: number; totalVal: number }>);
+  }, [externalSelectedAuctionId]);
 
+  // Target auction details for currently active filter
+  const currentTargetAuction = activeAuctionId === 'all'
+    ? null
+    : (availableAuctions.find(a => a.id === activeAuctionId) || (auction?.id === activeAuctionId ? auction : null));
+
+  // Fetch report analytics dynamically from Supabase
+  const loadAnalytics = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    else setRefreshing(true);
+    setError(null);
+
+    try {
+      const data = await reportService.getReportAnalytics(
+        activeAuctionId === 'all' ? null : activeAuctionId, 
+        currentTargetAuction
+      );
+      setAnalytics(data);
+    } catch (err) {
+      console.error('[ReportsView] Error loading analytics from Supabase:', err);
+      setError(err instanceof Error ? err.message : 'Failed to retrieve reports data from database.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [activeAuctionId, currentTargetAuction]);
+
+  // Initial load and on auction selection change
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
+
+  // Subscribe to real-time database updates from Supabase
+  useEffect(() => {
+    const unsubscribe = reportService.subscribeToReportChanges(() => {
+      loadAnalytics(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [loadAnalytics]);
+
+  // Handle Auction Filter Change via shadcn Select
+  const handleAuctionChange = (newAuctionId: string) => {
+    setActiveAuctionId(newAuctionId);
+    if (onSelectAuction && newAuctionId !== 'all') {
+      onSelectAuction(newAuctionId);
+    }
+  };
+
+  // Export Realization CSV using actual dynamic Supabase data
   const handleExportCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      "Lot Number,Title,Category,Estimate Low,Estimate High,Current/Hammer Bid,Status,Consignor\n" +
-      lots.map(l => `"${l.lotNumber}","${l.title.replace(/"/g, '""')}","${l.category}",${l.estimateLow},${l.estimateHigh},${l.hammerPrice || l.currentBid},"${l.status}","${l.consignorName}"`).join("\n");
-    
+    if (!analytics || analytics.rawLots.length === 0) {
+      alert('No auction lots available to export.');
+      return;
+    }
+
+    const headers = [
+      'Lot Number',
+      'Title',
+      'Category',
+      'Certification',
+      'Grade',
+      'Estimate Low ($)',
+      'Estimate High ($)',
+      'Reserve Price ($)',
+      'Realized Hammer / Current Bid ($)',
+      'Status',
+      'Winning Bidder Paddle',
+      'Winning Bidder Name',
+      'Consignor'
+    ];
+
+    const rows = analytics.rawLots.map(l => {
+      const lotNum = l.lotNumber || '';
+      const title = `"${(l.title || '').replace(/"/g, '""')}"`;
+      const cat = `"${(l.category || 'Curated Lot').replace(/"/g, '""')}"`;
+      const cert = `"${(l.certification || 'Raw').replace(/"/g, '""')}"`;
+      const grade = `"${(l.grade || '').replace(/"/g, '""')}"`;
+      const estLow = Number(l.estimateLow) || 0;
+      const estHigh = Number(l.estimateHigh) || 0;
+      const reserve = Number(l.reservePrice) || 0;
+      const realized = Number(l.hammerPrice || l.currentBid) || 0;
+      const status = `"${(l.status || 'upcoming').replace(/"/g, '""')}"`;
+      const paddle = `"${(l.highBidderPaddle || '').replace(/"/g, '""')}"`;
+      const bidderName = `"${(l.highBidderName || '').replace(/"/g, '""')}"`;
+      const consignor = `"${(l.consignorName || 'Estate Consignor').replace(/"/g, '""')}"`;
+
+      return [lotNum, title, cat, cert, grade, estLow, estHigh, reserve, realized, status, paddle, bidderName, consignor].join(',');
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\r\n');
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `AF360_${auction.code}_Realization_Report.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    const filenameCode = currentTargetAuction?.code || (activeAuctionId === 'all' ? 'PORTFOLIO_CONSOLIDATED' : activeAuctionId);
+    link.setAttribute('download', `AF360_${filenameCode}_Realization_Report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header */}
-      <div className="card-header-flex">
-        <div>
-          <h2 className="font-serif" style={{ fontSize: 22, color: 'var(--text-main)' }}>
-            Auction Intelligence & Realization Reports
-          </h2>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
+      {/* Page Header with Action Controls */}
+      <div 
+        className="card-header-flex" 
+        style={{ 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          borderBottom: '1px solid var(--border-subtle)',
+          paddingBottom: 14,
+          marginBottom: 0,
+          gap: 12
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h2 className="font-serif" style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
+              Auction Intelligence & Realization Reports
+            </h2>
+            {refreshing && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--gold-bright)', background: 'rgba(203, 161, 53, 0.08)', padding: '2px 7px', borderRadius: 10, fontWeight: 500 }}>
+                <RefreshCw size={11} className="spin-animation" /> Live updating...
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>
             Price realization curves, hammer vs estimate ratios, and syndication export
           </p>
         </div>
 
-        <button className="btn btn-gold" onClick={handleExportCSV}>
-          <Download size={16} />
-          <span>Export Realization CSV</span>
-        </button>
-      </div>
+        {/* Controls: shadcn/ui Select, Refresh & CSV Export */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* shadcn/ui Dropdown Select for Auction Filtering */}
+          <Select value={activeAuctionId} onValueChange={handleAuctionChange}>
+            <SelectTrigger style={{ height: 35, fontSize: 12.5, minWidth: 240, borderColor: 'var(--border-subtle)' }}>
+              <Building2 size={14} style={{ color: '#64748b', marginRight: 4 }} />
+              <SelectValue placeholder="Select Auction..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Auctions (Consolidated Portfolio)</SelectItem>
+              {availableAuctions.map(a => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.title} ({a.code})
+                </SelectItem>
+              ))}
+              {/* Fallback if availableAuctions does not contain current auction */}
+              {auction && !availableAuctions.some(a => a.id === auction.id) && (
+                <SelectItem value={auction.id}>
+                  {auction.title} ({auction.code})
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
 
-      {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-        <div className="metric-card-af360">
-          <div className="metric-icon-box emerald">
-            <TrendingUp size={22} />
-          </div>
-          <div className="metric-content">
-            <div className="metric-val" style={{ color: 'var(--gold-bright)' }}>
-              {formatCurrency(totalHammerRealized)}
-            </div>
-            <div className="metric-label">Hammer Realized Value</div>
-          </div>
-        </div>
+          {/* Refresh Button */}
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            onClick={() => loadAnalytics(false)}
+            disabled={loading || refreshing}
+            title="Refresh analytics from Supabase"
+            style={{ height: 35, padding: '0 11px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+          >
+            <RefreshCw size={13} className={refreshing ? 'spin-animation' : ''} />
+            <span>Refresh</span>
+          </button>
 
-        <div className="metric-card-af360">
-          <div className="metric-icon-box blue">
-            <CheckCircle2 size={22} />
-          </div>
-          <div className="metric-content">
-            <div className="metric-val">{sellThroughRate}%</div>
-            <div className="metric-label">Sell-Through Rate</div>
-          </div>
-        </div>
-
-        <div className="metric-card-af360">
-          <div className="metric-icon-box">
-            <BarChart3 size={22} />
-          </div>
-          <div className="metric-content">
-            <div className="metric-val">114.2%</div>
-            <div className="metric-label">Hammer vs Low Estimate Ratio</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Category Performance Breakdown */}
-      <div className="syndication-card">
-        <h3 className="font-serif" style={{ fontSize: 17, marginBottom: 16 }}>
-          Numismatic Category Distribution & Realized Depth
-        </h3>
-
-        <div className="table-wrapper">
-          <table className="luxury-table">
-            <thead>
-              <tr>
-                <th>Category Department</th>
-                <th style={{ textAlign: 'center' }}>Cataloged Lots</th>
-                <th style={{ textAlign: 'right' }}>Cumulative Valuation</th>
-                <th style={{ textAlign: 'right' }}>Avg Price / Lot</th>
-                <th style={{ textAlign: 'right' }}>Portfolio Share</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(categoryStats).map(([cat, stat], i) => {
-                const totalAll = Object.values(categoryStats).reduce((a, b) => a + b.totalVal, 0) || 1;
-                const share = ((stat.totalVal / totalAll) * 100).toFixed(1);
-                return (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>{cat}</td>
-                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{stat.count}</td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatCurrency(stat.totalVal)}</td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--gold-light)' }}>
-                      {formatCurrency(stat.totalVal / (stat.count || 1))}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{share}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {/* CSV Export Button */}
+          <button 
+            type="button"
+            className="btn btn-gold" 
+            onClick={handleExportCSV}
+            disabled={loading || !analytics || analytics.rawLots.length === 0}
+            style={{ height: 35, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5 }}
+          >
+            <Download size={14} />
+            <span style={{ fontWeight: 600 }}>Export Realization CSV</span>
+          </button>
         </div>
       </div>
 
-      {/* Bidding Channel Breakdown */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-        <div className="syndication-card">
-          <h3 className="font-serif" style={{ fontSize: 16, marginBottom: 14 }}>
-            Bidding Channel Engagement
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                <span>HiBid Syndicated Network</span>
-                <strong>58.8%</strong>
+      {/* Error Banner */}
+      {error && (
+        <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#991b1b', fontSize: 12.5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '3px 10px', fontSize: 11.5 }} 
+            onClick={() => loadAnalytics(false)}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading Skeleton */}
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="metric-card-af360" style={{ minHeight: 96, padding: '16px 18px', opacity: 0.6 }}>
+                <div style={{ height: 26, width: 26, background: '#f1f5f9', borderRadius: 6 }}></div>
+                <div style={{ height: 22, width: '55%', background: '#f1f5f9', borderRadius: 4, marginTop: 10 }}></div>
+                <div style={{ height: 12, width: '35%', background: '#f1f5f9', borderRadius: 4, marginTop: 5 }}></div>
               </div>
-              <div style={{ height: 8, background: 'var(--bg-darkest)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: '58.8%', height: '100%', background: 'var(--gold-gradient)' }}></div>
+            ))}
+          </div>
+          <div className="syndication-card" style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-muted)', fontSize: 13 }}>
+              <RefreshCw size={14} className="spin-animation" /> Loading analytics from Supabase...
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Content */}
+      {!loading && analytics && (
+        <>
+          {/* Section A: Compact Analytics Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+            {/* 1. Hammer Realized Value */}
+            <div className="metric-card-af360" style={{ padding: '16px 18px', minHeight: 102 }}>
+              <div className="metric-card-top">
+                <div className="metric-icon-box emerald" style={{ width: 32, height: 32, borderRadius: 7 }}>
+                  <TrendingUp size={18} />
+                </div>
+              </div>
+              <div className="metric-content" style={{ marginTop: 8 }}>
+                <div className="metric-val" style={{ color: 'var(--gold-bright)', fontSize: 26, fontWeight: 700 }}>
+                  {formatCurrency(analytics.totalHammerRealized)}
+                </div>
+                <div className="metric-label" style={{ fontSize: 10.5, letterSpacing: '0.05em', marginTop: 3 }}>
+                  Hammer Realized Value
+                </div>
               </div>
             </div>
 
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                <span>Gardner Direct Web Portal</span>
-                <strong>23.4%</strong>
+            {/* 2. Sell-Through Rate */}
+            <div className="metric-card-af360" style={{ padding: '16px 18px', minHeight: 102 }}>
+              <div className="metric-card-top">
+                <div className="metric-icon-box blue" style={{ width: 32, height: 32, borderRadius: 7 }}>
+                  <CheckCircle2 size={18} />
+                </div>
               </div>
-              <div style={{ height: 8, background: 'var(--bg-darkest)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: '23.4%', height: '100%', background: '#38bdf8' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                <span>Saleroom Floor Paddles</span>
-                <strong>12.6%</strong>
-              </div>
-              <div style={{ height: 8, background: 'var(--bg-darkest)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: '12.6%', height: '100%', background: '#f59e0b' }}></div>
+              <div className="metric-content" style={{ marginTop: 8 }}>
+                <div className="metric-val" style={{ fontSize: 26, fontWeight: 700 }}>
+                  {analytics.sellThroughRate !== null ? `${analytics.sellThroughRate.toFixed(1)}%` : '0.0%'}
+                </div>
+                <div className="metric-label" style={{ fontSize: 10.5, letterSpacing: '0.05em', marginTop: 3 }}>
+                  Sell-Through Rate
+                </div>
               </div>
             </div>
 
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                <span>Telephone & Advance Absentee</span>
-                <strong>5.2%</strong>
+            {/* 3. Hammer vs Low Estimate Ratio */}
+            <div className="metric-card-af360" style={{ padding: '16px 18px', minHeight: 102 }}>
+              <div className="metric-card-top">
+                <div className="metric-icon-box amber" style={{ width: 32, height: 32, borderRadius: 7 }}>
+                  <BarChart3 size={18} />
+                </div>
               </div>
-              <div style={{ height: 8, background: 'var(--bg-darkest)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: '5.2%', height: '100%', background: '#94a3b8' }}></div>
+              <div className="metric-content" style={{ marginTop: 8 }}>
+                <div className="metric-val" style={{ fontSize: 26, fontWeight: 700 }}>
+                  {analytics.hammerVsLowEstimateRatio !== null ? `${analytics.hammerVsLowEstimateRatio.toFixed(1)}%` : 'N/A'}
+                </div>
+                <div className="metric-label" style={{ fontSize: 10.5, letterSpacing: '0.05em', marginTop: 3 }}>
+                  Hammer vs Low Estimate Ratio
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="syndication-card">
-          <h3 className="font-serif" style={{ fontSize: 16, marginBottom: 14 }}>
-            Settlement Readiness
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 16 }}>
-            Settlement data is prepared for export to QuickBooks, HiBid batch payment export, and Gardner certified consignor disbursement checks.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
-              <CheckCircle2 size={14} /> Tax calculations compliant with Montana zero general state sales tax + out-of-state marketplace nexus
+          {/* Section B: Numismatic Category Distribution & Realized Depth */}
+          <div className="syndication-card" style={{ padding: '18px 22px' }}>
+            <div style={{ marginBottom: 14 }}>
+              <h3 className="font-serif" style={{ fontSize: 16.5, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                Numismatic Category Distribution & Realized Depth
+              </h3>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
-              <CheckCircle2 size={14} /> 15% Wire / 18% Credit Card Premium separation validated
+
+            {analytics.categoryStats.length === 0 ? (
+              <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', background: '#f8fafc', borderRadius: 6, border: '1px dashed #cbd5e1' }}>
+                <Layers size={24} style={{ margin: '0 auto 6px', opacity: 0.5 }} />
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>No cataloged lot categories found</p>
+                <p style={{ margin: '3px 0 0', fontSize: 12 }}>Lots assigned to this auction will automatically populate here.</p>
+              </div>
+            ) : (
+              <div className="table-wrapper" style={{ boxShadow: 'none', border: '1px solid var(--border-subtle)' }}>
+                <table className="luxury-table" style={{ fontSize: 12.5 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '34%', fontSize: 11, padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category Department</th>
+                      <th style={{ textAlign: 'center', width: '16%', fontSize: 11, padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cataloged Lots</th>
+                      <th style={{ textAlign: 'right', width: '20%', fontSize: 11, padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cumulative Valuation</th>
+                      <th style={{ textAlign: 'right', width: '16%', fontSize: 11, padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg Price / Lot</th>
+                      <th style={{ textAlign: 'right', width: '14%', fontSize: 11, padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Portfolio Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.categoryStats.map((stat, i) => (
+                      <tr key={stat.category || i} style={{ transition: 'background-color 0.15s ease' }}>
+                        <td style={{ fontWeight: 600, color: 'var(--text-main)', padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? 'var(--gold-bright)' : '#38bdf8' }}></span>
+                            <span>{stat.category}</span>
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 500, padding: '10px 14px' }}>
+                          {stat.catalogedLots}
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-main)', padding: '10px 14px' }}>
+                          {formatCurrency(stat.cumulativeValuation)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--gold-light)', fontWeight: 500, padding: '10px 14px' }}>
+                          {stat.cumulativeValuation > 0 ? formatCurrency(stat.avgPrice) : '$0.00'}
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, padding: '10px 14px' }}>
+                          {stat.portfolioShare.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Section C & D: Bidding Channel Engagement & Settlement Readiness */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+            {/* Section C: Bidding Channel Engagement */}
+            <div className="syndication-card" style={{ padding: '18px 22px' }}>
+              <div style={{ marginBottom: 14 }}>
+                <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  Bidding Channel Engagement
+                </h3>
+              </div>
+
+              {analytics.totalChannelActivity === 0 ? (
+                <div style={{ padding: '20px 14px', textAlign: 'center', color: 'var(--text-muted)', background: '#f8fafc', borderRadius: 6, border: '1px dashed #e2e8f0', margin: '8px 0' }}>
+                  <Radio size={20} style={{ margin: '0 auto 5px', opacity: 0.5 }} />
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600 }}>No channel activity recorded yet</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11.5 }}>Bids placed and registered bidders will automatically show channel distribution.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                  {analytics.biddingChannels.map(channel => (
+                    <div key={channel.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>{channel.name}</span>
+                        <strong style={{ fontFamily: 'var(--font-mono)', minWidth: 40, textAlign: 'right', fontSize: 12.5 }}>
+                          {channel.percentage.toFixed(1)}%
+                        </strong>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--bg-darkest, #0f172a)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            width: `${channel.percentage}%`, 
+                            height: '100%', 
+                            background: channel.color,
+                            transition: 'width 0.4s ease'
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#d97706' }}>
-              <CheckCircle2 size={14} /> Consignor reserve integrity confirmed
+
+            {/* Section D: Settlement Readiness */}
+            <div className="syndication-card" style={{ padding: '18px 22px' }}>
+              <div style={{ marginBottom: 12 }}>
+                <h3 className="font-serif" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  Settlement Readiness
+                </h3>
+              </div>
+
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.45, marginBottom: 14 }}>
+                Settlement data is prepared for export to QuickBooks, HiBid batch payment export, and Gardner certified consignor disbursement checks.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {analytics.settlementReadiness.checks.slice(0, 3).map(check => {
+                  const isVerified = check.status === 'verified';
+                  const isWarning = check.status === 'warning';
+
+                  return (
+                    <div 
+                      key={check.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 8,
+                        fontSize: 12,
+                        color: isVerified ? '#d97706' : (isWarning ? '#b45309' : '#64748b')
+                      }}
+                    >
+                      <div style={{ flexShrink: 0 }}>
+                        {isVerified && <CheckCircle2 size={14} style={{ color: '#d97706' }} />}
+                        {isWarning && <AlertCircle size={14} style={{ color: '#d97706' }} />}
+                        {!isVerified && !isWarning && <Clock size={14} style={{ color: '#64748b' }} />}
+                      </div>
+                      <span style={{ lineHeight: 1.35 }}>
+                        {check.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 };
