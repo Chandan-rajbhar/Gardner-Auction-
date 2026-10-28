@@ -192,6 +192,16 @@ export interface SelectContentProps {
   style?: React.CSSProperties;
 }
 
+function getNodeText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getNodeText).join('');
+  if (React.isValidElement(node) && (node.props as any)?.children) {
+    return getNodeText((node.props as any).children);
+  }
+  return '';
+}
+
 export const SelectContent: React.FC<SelectContentProps> = ({
   children,
   className = '',
@@ -201,13 +211,12 @@ export const SelectContent: React.FC<SelectContentProps> = ({
   const ctx = useContext(SelectContext);
   if (!ctx) throw new Error('SelectContent must be used within Select');
 
-  if (!ctx.open) return null;
-
   return (
     <div
       className={`shadcn-select-content align-${align} ${className}`}
       role="listbox"
       style={{
+        display: ctx.open ? 'block' : 'none',
         position: 'absolute',
         top: 'calc(100% + 4px)',
         [align === 'right' ? 'right' : 'left']: 0,
@@ -252,10 +261,13 @@ export const SelectItem: React.FC<SelectItemProps> = ({
 
   // Sync selected label to context if this item is selected
   useEffect(() => {
-    if (isSelected && typeof children === 'string') {
-      ctx.setSelectedLabel(children);
+    if (isSelected) {
+      const text = getNodeText(children);
+      if (text) {
+        ctx.setSelectedLabel(text);
+      }
     }
-  }, [isSelected, children]);
+  }, [isSelected, children, ctx]);
 
   return (
     <div
@@ -265,8 +277,9 @@ export const SelectItem: React.FC<SelectItemProps> = ({
       className={`shadcn-select-item ${isSelected ? 'is-selected' : ''} ${className}`}
       onClick={() => {
         if (!disabled) {
-          if (typeof children === 'string') {
-            ctx.setSelectedLabel(children);
+          const text = getNodeText(children);
+          if (text) {
+            ctx.setSelectedLabel(text);
           }
           ctx.onValueChange(value);
         }

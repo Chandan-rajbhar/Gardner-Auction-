@@ -37,8 +37,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   availableAuctions = [],
   onSelectAuction
 }) => {
-  // Default to 'all' so consolidated realization ($1,050.00 across all active database lots) is shown on entry
-  const [activeAuctionId, setActiveAuctionId] = useState<string>('all');
+  // Default to externalSelectedAuctionId if provided, or 'all' for consolidated portfolio
+  const [activeAuctionId, setActiveAuctionId] = useState<string>(() => {
+    return externalSelectedAuctionId || 'all';
+  });
   const [analytics, setAnalytics] = useState<ReportAnalyticsData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -46,7 +48,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   // Sync internal auction ID if external prop changes
   useEffect(() => {
-    if (externalSelectedAuctionId && externalSelectedAuctionId !== activeAuctionId && externalSelectedAuctionId !== 'auc-001') {
+    if (externalSelectedAuctionId && externalSelectedAuctionId !== activeAuctionId) {
       setActiveAuctionId(externalSelectedAuctionId);
     }
   }, [externalSelectedAuctionId]);
@@ -137,7 +139,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       const status = `"${(l.status || 'upcoming').replace(/"/g, '""')}"`;
       const paddle = `"${(l.highBidderPaddle || '').replace(/"/g, '""')}"`;
       const bidderName = `"${(l.highBidderName || '').replace(/"/g, '""')}"`;
-      const consignor = `"${(l.consignorName || 'Estate Consignor').replace(/"/g, '""')}"`;
+      const consignor = `"${(l.consignorName || 'Consignor Record').replace(/"/g, '""')}"`;
 
       return [lotNum, title, cat, cert, grade, estLow, estHigh, reserve, realized, status, paddle, bidderName, consignor].join(',');
     });
@@ -434,17 +436,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               </div>
 
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.45, marginBottom: 14 }}>
-                Settlement data is prepared for export to QuickBooks, HiBid batch payment export, and Gardner certified consignor disbursement checks.
+                {analytics.settlementReadiness.summaryText}
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {analytics.settlementReadiness.checks.slice(0, 3).map(check => {
+                {analytics.settlementReadiness.checks.map(check => {
                   const isVerified = check.status === 'verified';
                   const isWarning = check.status === 'warning';
 
                   return (
                     <div 
                       key={check.id} 
+                      title={check.detail}
                       style={{ 
                         display: 'flex', 
                         alignItems: 'center', 

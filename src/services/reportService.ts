@@ -126,6 +126,14 @@ class ReportService {
     const { data: rawSellerData } = await sellerQuery;
     const sellerSettlements = rawSellerData || [];
 
+    // 7. Fetch HiBid Syndication Stats for Channel Engagement
+    let synQuery = this.client.from('hibid_syndication_stats').select('*');
+    if (!isAllAuctions) {
+      synQuery = synQuery.eq('auction_id', auctionId);
+    }
+    const { data: rawSynData } = await synQuery;
+    const syndicationStats = rawSynData || [];
+
     // =========================================================================
     // Calculations: KPI Summary Cards
     // =========================================================================
@@ -233,11 +241,11 @@ class ReportService {
         hibidCount++;
       } else if (src.includes('web') || src.includes('portal') || src.includes('direct') || src.includes('gardner')) {
         directWebCount++;
-      } else if (src.includes('floor') || src.includes('clerk') || src.includes('room') || src.includes('paddle')) {
+      } else if (src.includes('floor') || src.includes('clerk') || src.includes('room') || src.includes('paddle') || src.includes('saleroom')) {
         floorCount++;
       } else if (src.includes('phone') || src.includes('absentee')) {
         phoneAbsenteeCount++;
-      } else {
+      } else if (src.trim()) {
         floorCount++;
       }
     });
@@ -265,6 +273,35 @@ class ReportService {
         floorCount++;
       }
     });
+
+    // 4. Evaluate HiBid Syndication Stats from Database
+    syndicationStats.forEach((syn: any) => {
+      const site = String(syn.site || '').toLowerCase();
+      const activity = (Number(syn.total_bids) || Number(syn.unique_bids) || 0) + (Number(syn.registrations) || 0);
+      if (site.includes('direct') || site.includes('gardner')) {
+        directWebCount += activity;
+      } else {
+        hibidCount += activity;
+      }
+    });
+
+    // 5. If bids table is empty, reflect channel engagement from realized lots
+    if (bids.length === 0) {
+      rawLots.forEach((lot: LotItem) => {
+        if (lot.status === 'sold' && lot.highBidderPaddle) {
+          const paddle = String(lot.highBidderPaddle).trim();
+          if (paddle.startsWith('5')) {
+            floorCount++;
+          } else if (paddle.startsWith('1') || paddle.toLowerCase().includes('hibid')) {
+            hibidCount++;
+          } else if (paddle.startsWith('2') || paddle.toLowerCase().includes('web')) {
+            directWebCount++;
+          } else {
+            floorCount++;
+          }
+        }
+      });
+    }
 
     const totalChannelActivity = hibidCount + directWebCount + floorCount + phoneAbsenteeCount;
 
@@ -307,13 +344,13 @@ class ReportService {
     const consignorsCount = sellerSettlements.length;
     const readyPayoutCount = sellerSettlements.filter((s: any) => s.status === 'Ready for Payout' || s.status === 'Paid').length;
 
-    // Check Montana Sales Tax compliance
+    // Check Montana Sales Tax compliance: Montana has 0% state sales tax
     const taxRate = targetAuction ? Number(targetAuction.taxRate) || 0 : 0;
     const isTaxCompliant = taxRate === 0;
 
-    // Check Buyer's Premium separation
-    const bpCash = targetAuction ? Number(targetAuction.buyersPremiumCash) : 15;
-    const bpCredit = targetAuction ? Number(targetAuction.buyersPremiumCredit) : 18;
+    // Check Buyer's Premium separation terms
+    const bpCash = targetAuction && targetAuction.buyersPremiumCash !== undefined ? Number(targetAuction.buyersPremiumCash) : 15;
+    const bpCredit = targetAuction && targetAuction.buyersPremiumCredit !== undefined ? Number(targetAuction.buyersPremiumCredit) : 18;
     const isBpSeparationValid = bpCash > 0 && bpCredit >= bpCash;
 
     // Check Consignor Reserve integrity: did all sold lots achieve >= reserve_price?
@@ -328,15 +365,19 @@ class ReportService {
     const checks: SettlementReadinessCheck[] = [
       {
         id: 'tax_compliance',
-        label: 'Tax calculations compliant with Montana zero general state sales tax + out-of-state marketplace nexus',
+        label: isTaxCompliant
+          ? 'Tax calculations compliant with Montana zero general state sales tax + out-of-state marketplace nexus'
+          : `Montana zero sales tax check: custom tax rate (${taxRate}%) currently applied in auction terms`,
         status: isTaxCompliant ? 'verified' : 'warning',
         detail: isTaxCompliant 
           ? 'Zero rate applied for MT nexus. Exemption flags active.' 
-          : `Custom rate (${taxRate}%) currently applied in auction config.`
+          : `Custom rate (${taxRate}%) configured in auction terms.`
       },
       {
         id: 'bp_separation',
-        label: `${bpCash}% Wire / ${bpCredit}% Credit Card Premium separation validated`,
+        label: isBpSeparationValid
+          ? `${bpCash}% Wire / ${bpCredit}% Credit Card Premium separation validated`
+          : 'Buyer premium terms require validation in Auction Day config',
         status: isBpSeparationValid ? 'verified' : 'warning',
         detail: isBpSeparationValid 
           ? `Standard discount curve active: ${bpCash}% Wire / ${bpCredit}% Card.` 
@@ -344,7 +385,11 @@ class ReportService {
       },
       {
         id: 'reserve_integrity',
-        label: 'Consignor reserve integrity confirmed',
+        label: soldLots.length === 0 
+          ? 'Consignor reserve integrity pending sales closure' 
+          : (isReserveIntegrityConfirmed 
+              ? `Consignor reserve integrity confirmed (${soldLots.length} realized lot${soldLots.length === 1 ? '' : 's'} met reserve)` 
+              : `Consignor reserve variance detected (${lotsBelowReserve.length} sold below reserve)`),
         status: soldLots.length === 0 
           ? 'pending' 
           : (isReserveIntegrityConfirmed ? 'verified' : 'warning'),
@@ -356,7 +401,9 @@ class ReportService {
       },
       {
         id: 'invoices_status',
-        label: 'Buyer settlement invoices preparation',
+        label: invoicesCount > 0 
+          ? `Buyer settlement invoices: ${invoicesCount} generated (${paidInvoicesCount} settled & paid)` 
+          : 'Buyer settlement invoices: awaiting auction settlement closure',
         status: invoicesCount > 0 ? (paidInvoicesCount === invoicesCount ? 'verified' : 'warning') : 'pending',
         detail: invoicesCount > 0 
           ? `${invoicesCount} buyer invoice(s) generated (${paidInvoicesCount} settled & paid).` 
@@ -364,7 +411,9 @@ class ReportService {
       },
       {
         id: 'consignor_disbursement',
-        label: 'Consignor payout statement & check disbursement',
+        label: consignorsCount > 0 
+          ? `Consignor disbursement: ${consignorsCount} statement(s) created (${readyPayoutCount} ready for payout)` 
+          : 'Consignor payout statement & check disbursement: pending settlement calculation',
         status: consignorsCount > 0 ? (readyPayoutCount > 0 ? 'verified' : 'warning') : 'pending',
         detail: consignorsCount > 0 
           ? `${consignorsCount} consignor statement(s) created (${readyPayoutCount} approved for disbursement).` 
@@ -416,6 +465,8 @@ class ReportService {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lots' }, () => callback())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => callback())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bidder_registrations' }, () => callback())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alternate_bids' }, () => callback())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hibid_syndication_stats' }, () => callback())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => callback())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'seller_settlements' }, () => callback())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'auctions' }, () => callback())
