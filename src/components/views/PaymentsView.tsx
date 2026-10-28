@@ -13,6 +13,7 @@ import {
   CheckCircle, 
   CheckCircle2,
   DollarSign,
+  Loader2,
   RotateCw, 
   Eye, 
   Send, 
@@ -134,8 +135,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   // Dynamic Supabase data states
   const [bidderSettlements, setBidderSettlements] = useState<SettlementCustomer[]>([]);
   const [sellerSettlements, setSellerSettlements] = useState<ConsignorSettlement[]>([]);
-  const [isLoadingBidder, setIsLoadingBidder] = useState<boolean>(false);
-  const [isLoadingSeller, setIsLoadingSeller] = useState<boolean>(false);
+  const [isLoadingBidder, setIsLoadingBidder] = useState<boolean>(() => Boolean(selectedAuctionId));
+  const [isLoadingSeller, setIsLoadingSeller] = useState<boolean>(() => Boolean(selectedAuctionId));
   const [bidderFetchError, setBidderFetchError] = useState<string | null>(null);
   const [sellerFetchError, setSellerFetchError] = useState<string | null>(null);
 
@@ -308,6 +309,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   }, [currentAuctionId]);
 
   useEffect(() => {
+    setIsLoadingBidder(true);
+    setIsLoadingSeller(true);
     fetchBidderSettlements();
     fetchSellerSettlements();
     setSelectedBidderIds([]);
@@ -885,7 +888,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               alignItems: 'center'
             }}
           >
-            <RotateCw size={15} className={isLoadingBidder || isLoadingSeller ? 'animate-spin' : ''} />
+            <RotateCw size={15} className={isLoadingBidder || isLoadingSeller ? 'animate-spin spin-animation' : ''} style={isLoadingBidder || isLoadingSeller ? { animation: 'spinKeyframe 0.85s linear infinite', transformOrigin: 'center center' } : undefined} />
           </button>
           <button
             type="button"
@@ -912,7 +915,14 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
 
         {/* Row 3: Total Settlements: X */}
         <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 12 }}>
-          Total Settlements:{activeTab === 'bidder' ? filteredBidderSettlements.length : filteredSellerSettlements.length}
+          Total Settlements: {((isLoadingBidder && activeTab === 'bidder') || (isLoadingSeller && activeTab === 'seller')) ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#64748b', fontWeight: 500, fontSize: 12 }}>
+              <Loader2 size={13} className="animate-spin spin-animation" style={{ color: 'var(--gold-primary, #a37a3b)', animation: 'spinKeyframe 0.85s linear infinite', transformOrigin: 'center center' }} />
+              <span>Loading...</span>
+            </span>
+          ) : (
+            <span>{activeTab === 'bidder' ? filteredBidderSettlements.length : filteredSellerSettlements.length}</span>
+          )}
         </div>
 
         {/* =====================================================================
@@ -1007,10 +1017,63 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <tbody>
                   {isLoadingBidder ? (
                     <tr>
-                      <td colSpan={1 + bidderColumns.filter(c => c.visible).length} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                          <RotateCw size={16} className="animate-spin" />
-                          <span>Loading settlements from Supabase...</span>
+                      <td colSpan={1 + bidderColumns.filter(c => c.visible).length} style={{ padding: '56px 20px', textAlign: 'center', background: '#ffffff' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                          <div style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 14,
+                            background: 'linear-gradient(135deg, rgba(163, 122, 59, 0.12) 0%, rgba(163, 122, 59, 0.04) 100%)',
+                            border: '1px solid rgba(163, 122, 59, 0.25)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 14px rgba(163, 122, 59, 0.12)'
+                          }}>
+                            <Loader2 size={28} className="animate-spin spin-animation" style={{ color: 'var(--gold-primary, #a37a3b)', animation: 'spinKeyframe 0.85s linear infinite', transformOrigin: 'center center' }} />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                              Loading Settlement Records...
+                            </span>
+                            <span style={{ fontSize: 12.5, color: '#64748b', maxWidth: 360 }}>
+                              Fetching dynamic invoices and balances from Supabase
+                            </span>
+                          </div>
+                          <div style={{
+                            width: 140,
+                            height: 3,
+                            borderRadius: 9999,
+                            background: 'linear-gradient(90deg, transparent, rgba(163, 122, 59, 0.5), transparent)',
+                            animation: 'pulse 1.8s ease-in-out infinite',
+                            marginTop: 2
+                          }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : bidderFetchError ? (
+                    <tr>
+                      <td colSpan={1 + bidderColumns.filter(c => c.visible).length} style={{ padding: '40px 16px', textAlign: 'center', color: '#dc2626' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                          <AlertCircle size={24} style={{ color: '#dc2626' }} />
+                          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{bidderFetchError}</span>
+                          <button
+                            type="button"
+                            onClick={fetchBidderSettlements}
+                            style={{
+                              marginTop: 6,
+                              padding: '6px 14px',
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              borderRadius: 6,
+                              color: '#991b1b',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Retry Loading
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1379,10 +1442,63 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <tbody>
                   {isLoadingSeller ? (
                     <tr>
-                      <td colSpan={11} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                          <RotateCw size={16} className="animate-spin" />
-                          <span>Loading seller settlements from Supabase...</span>
+                      <td colSpan={11} style={{ padding: '56px 20px', textAlign: 'center', background: '#ffffff' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                          <div style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 14,
+                            background: 'linear-gradient(135deg, rgba(163, 122, 59, 0.12) 0%, rgba(163, 122, 59, 0.04) 100%)',
+                            border: '1px solid rgba(163, 122, 59, 0.25)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 14px rgba(163, 122, 59, 0.12)'
+                          }}>
+                            <Loader2 size={28} className="animate-spin spin-animation" style={{ color: 'var(--gold-primary, #a37a3b)', animation: 'spinKeyframe 0.85s linear infinite', transformOrigin: 'center center' }} />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                              Loading Consignor Statements...
+                            </span>
+                            <span style={{ fontSize: 12.5, color: '#64748b', maxWidth: 360 }}>
+                              Fetching seller settlements and payouts from Supabase
+                            </span>
+                          </div>
+                          <div style={{
+                            width: 140,
+                            height: 3,
+                            borderRadius: 9999,
+                            background: 'linear-gradient(90deg, transparent, rgba(163, 122, 59, 0.5), transparent)',
+                            animation: 'pulse 1.8s ease-in-out infinite',
+                            marginTop: 2
+                          }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : sellerFetchError ? (
+                    <tr>
+                      <td colSpan={11} style={{ padding: '40px 16px', textAlign: 'center', color: '#dc2626' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                          <AlertCircle size={24} style={{ color: '#dc2626' }} />
+                          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{sellerFetchError}</span>
+                          <button
+                            type="button"
+                            onClick={fetchSellerSettlements}
+                            style={{
+                              marginTop: 6,
+                              padding: '6px 14px',
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              borderRadius: 6,
+                              color: '#991b1b',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Retry Loading
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1605,7 +1721,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               disabled={isSubmittingBatchShip}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 18px', fontSize: 13, fontWeight: 700 }}
             >
-              {isSubmittingBatchShip ? <RotateCw size={15} className="animate-spin" /> : <PackageCheck size={15} />}
+              {isSubmittingBatchShip ? <RotateCw size={15} className="animate-spin spin-animation" style={{ animation: 'spinKeyframe 0.85s linear infinite' }} /> : <PackageCheck size={15} />}
               <span>Confirm & Dispatch</span>
             </button>
           </div>
@@ -1723,7 +1839,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               disabled={isSubmittingInvoiceUpdate || !selectedInvoiceId}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 18px', fontSize: 13, fontWeight: 700 }}
             >
-              {isSubmittingInvoiceUpdate ? <RotateCw size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+              {isSubmittingInvoiceUpdate ? <RotateCw size={15} className="animate-spin spin-animation" style={{ animation: 'spinKeyframe 0.85s linear infinite' }} /> : <CheckCircle size={15} />}
               <span>Save Invoice Updates</span>
             </button>
           </div>
@@ -1858,7 +1974,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               disabled={isSendingEmail}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 18px', fontSize: 13, fontWeight: 700 }}
             >
-              {isSendingEmail ? <RotateCw size={15} className="animate-spin" /> : <Send size={15} />}
+              {isSendingEmail ? <RotateCw size={15} className="animate-spin spin-animation" style={{ animation: 'spinKeyframe 0.85s linear infinite' }} /> : <Send size={15} />}
               <span>Send Email</span>
             </button>
           </div>

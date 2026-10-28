@@ -8077,11 +8077,19 @@ body {
   cursor: not-allowed;
 }
 
-.spin-animation {
-  animation: spinKeyframe 1s linear infinite;
+.spin-animation,
+.animate-spin {
+  animation: spinKeyframe 0.85s linear infinite !important;
+  display: inline-block !important;
+  transform-origin: center center !important;
 }
 
 @keyframes spinKeyframe {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
