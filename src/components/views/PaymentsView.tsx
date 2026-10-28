@@ -750,6 +750,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           <span>Bidder Settlement</span>
         </button>
 
+        {/* Seller Settlement tab button commented per user request */}
+        {/*
         <button
           type="button"
           onClick={() => setActiveTab('seller')}
@@ -775,6 +777,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         >
           <span>Seller Settlement</span>
         </button>
+        */}
       </div>
 
       {/* =========================================================================
