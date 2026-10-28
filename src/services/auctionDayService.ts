@@ -227,9 +227,13 @@ class AuctionDayService {
       }
     } catch (_) {}
 
-    // Fallback to auction.dayStats if dedicated tables returned empty
+    // Fallback to auction.dayStats if dedicated tables returned empty (excluding static mock data)
     if (registrations.length === 0 && Array.isArray(auction.dayStats?.registrations)) {
-      registrations = [...auction.dayStats.registrations];
+      registrations = auction.dayStats.registrations.filter((r: any) =>
+        !['reg-1000', 'reg-5001', 'reg-5002', 'reg-5003'].includes(r?.id) &&
+        !['1000', '5001', '5002', '5003'].includes(String(r?.bidCardNumber)) &&
+        !['Randy A Stratford', 'Helena Vance', 'Marcus Chen', 'Eleanor Rigby'].includes(r?.bidderName)
+      );
     }
     if (alternateBids.length === 0 && Array.isArray(auction.dayStats?.alternateBids)) {
       alternateBids = [...auction.dayStats.alternateBids];
@@ -238,7 +242,11 @@ class AuctionDayService {
       siteStats = [...auction.dayStats.siteStats];
     }
     if (deposits.length === 0 && Array.isArray(auction.dayStats?.deposits)) {
-      deposits = [...auction.dayStats.deposits];
+      deposits = auction.dayStats.deposits.filter((d: any) =>
+        !['dep-1001', 'dep-1002', 'dep-1003'].includes(d?.id) &&
+        !['5001', '2001', '5003'].includes(String(d?.bidCardNumber)) &&
+        !['Helena Vance', 'Roger Perry', 'Eleanor Rigby'].includes(d?.bidderName)
+      );
     }
     if (Array.isArray(auction.dayStats?.lotStats)) {
       lotStats = [...auction.dayStats.lotStats];

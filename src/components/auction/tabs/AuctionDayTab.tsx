@@ -137,6 +137,27 @@ interface AuctionDayTabProps {
   onNavigateReports?: () => void;
 }
 
+const isMockRegItem = (r: any) =>
+  ['reg-1000', 'reg-5001', 'reg-5002', 'reg-5003'].includes(r?.id) ||
+  ['1000', '5001', '5002', '5003'].includes(String(r?.bidCardNumber)) ||
+  ['Randy A Stratford', 'Helena Vance', 'Marcus Chen', 'Eleanor Rigby'].includes(r?.bidderName);
+
+const isMockDepositItem = (d: any) =>
+  ['dep-1001', 'dep-1002', 'dep-1003'].includes(d?.id) ||
+  ['5001', '2001', '5003'].includes(String(d?.bidCardNumber)) ||
+  ['Helena Vance', 'Roger Perry', 'Eleanor Rigby'].includes(d?.bidderName);
+
+const DEFAULT_CHECKIN_VISIBLE_COLUMNS: { [key: string]: boolean } = {
+  bidCardNumber: true,
+  companyName: true,
+  bidderName: true,
+  email: true,
+  hearAboutUs: true,
+  creditLimit: true,
+  status: true,
+  actions: true
+};
+
 export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   currentTab,
   onSelectTab,
@@ -163,10 +184,14 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   // Local state for live mutations
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [registrations, setRegistrations] = useState<BidderRegistration[]>(auction?.dayStats?.registrations || []);
+  const [registrations, setRegistrations] = useState<BidderRegistration[]>(
+    () => (auction?.dayStats?.registrations || []).filter(r => !isMockRegItem(r))
+  );
   const [alternateBids, setAlternateBids] = useState<AlternateBid[]>(auction?.dayStats?.alternateBids || []);
   const [siteStats, setSiteStats] = useState<HiBidSiteStat[]>(auction?.dayStats?.siteStats || []);
-  const [deposits, setDeposits] = useState<BidderDeposit[]>(auction?.dayStats?.deposits || []);
+  const [deposits, setDeposits] = useState<BidderDeposit[]>(
+    () => (auction?.dayStats?.deposits || []).filter(d => !isMockDepositItem(d))
+  );
 
   // Dashboard Detail Subtabs: Details | Registrations | Lot Stats
   const [dashboardBottomTab, setDashboardBottomTab] = useState<'details' | 'registrations' | 'lot-stats'>('details');
@@ -189,15 +214,17 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [dashRegPageSize, setDashRegPageSize] = useState<number>(20);
   const [lotStatsPage, setLotStatsPage] = useState<number>(1);
   const [lotStatsPageSize, setLotStatsPageSize] = useState<number>(20);
-  const [visibleColumns, setVisibleColumns] = useState<{ [key: string]: boolean }>({
-    bidCardNumber: true,
-    companyName: true,
-    bidderName: true,
-    email: true,
-    hearAboutUs: true,
-    creditLimit: true,
-    status: true,
-    actions: true
+  const [visibleColumns, setVisibleColumns] = useState<{ [key: string]: boolean }>(() => {
+    try {
+      const saved = localStorage.getItem('af360_auction_day_checkin_columns');
+      if (saved) {
+        return {
+          ...DEFAULT_CHECKIN_VISIBLE_COLUMNS,
+          ...JSON.parse(saved)
+        };
+      }
+    } catch (_) {}
+    return DEFAULT_CHECKIN_VISIBLE_COLUMNS;
   });
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
   const [isColConfigDropdownOpen, setIsColConfigDropdownOpen] = useState(false);
@@ -497,13 +524,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [drawerDepNotes, setDrawerDepNotes] = useState('');
   const [isSavingDrawerDeposit, setIsSavingDrawerDeposit] = useState(false);
 
-  // Sync internal state when auction changes
+  // Sync internal state when auction changes (strictly dynamic records only)
   useEffect(() => {
     if (auction?.dayStats) {
-      setRegistrations(auction.dayStats.registrations || []);
+      setRegistrations((auction.dayStats.registrations || []).filter(r => !isMockRegItem(r)));
       setAlternateBids(auction.dayStats.alternateBids || []);
       setSiteStats(auction.dayStats.siteStats || []);
-      setDeposits(auction.dayStats.deposits || []);
+      setDeposits((auction.dayStats.deposits || []).filter(d => !isMockDepositItem(d)));
     }
   }, [auction?.id, auction?.dayStats]);
 
@@ -513,8 +540,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     let isMounted = true;
     auctionDayService.getAuctionDayData(auction.id, lots).then(payload => {
       if (!isMounted) return;
-      if (payload.registrations && payload.registrations.length > 0) {
-        setRegistrations(payload.registrations);
+      if (payload.registrations) {
+        setRegistrations(payload.registrations.filter(r => !isMockRegItem(r)));
       }
       if (payload.alternateBids && payload.alternateBids.length > 0) {
         setAlternateBids(payload.alternateBids);
@@ -522,8 +549,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       if (payload.siteStats && payload.siteStats.length > 0) {
         setSiteStats(payload.siteStats);
       }
-      if (payload.deposits && payload.deposits.length > 0) {
-        setDeposits(payload.deposits);
+      if (payload.deposits) {
+        setDeposits(payload.deposits.filter(d => !isMockDepositItem(d)));
       }
       if (payload.auction) {
         dispatch({ type: 'SET_AUCTION', payload: payload.auction });
@@ -545,10 +572,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       console.log('[AuctionDayTab] Supabase Realtime event detected for auction:', auction.id);
       try {
         const payload = await auctionDayService.getAuctionDayData(auction.id, lots);
-        setRegistrations(payload.registrations);
+        setRegistrations((payload.registrations || []).filter(r => !isMockRegItem(r)));
         setAlternateBids(payload.alternateBids);
         setSiteStats(payload.siteStats);
-        setDeposits(payload.deposits || []);
+        setDeposits((payload.deposits || []).filter(d => !isMockDepositItem(d)));
         dispatch({ type: 'SET_AUCTION', payload: payload.auction });
       } catch (err) {
         console.warn('[AuctionDayTab] Realtime sync error:', err);
@@ -4277,7 +4304,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                             checked={isChecked}
                             onChange={(e) => {
                               const checked = e.target.checked;
-                              setVisibleColumns(prev => ({ ...prev, [col.key]: checked }));
+                              setVisibleColumns(prev => {
+                                const updated = { ...prev, [col.key]: checked };
+                                try {
+                                  localStorage.setItem('af360_auction_day_checkin_columns', JSON.stringify(updated));
+                                } catch (_) {}
+                                return updated;
+                              });
                             }}
                             style={{ accentColor: '#0d9488', cursor: 'pointer', width: 14, height: 14 }}
                           />
