@@ -115,7 +115,7 @@ const AuctionDaySection: React.FC<{
   const [isLiveRostrumActive, setIsLiveRostrumActive] = useState<boolean>(false);
 
   return (
-    <AuctionDetailProvider auctionId={auctionId} initialLots={lots}>
+    <AuctionDetailProvider key={auctionId} auctionId={auctionId} initialLots={lots}>
       {isLiveRostrumActive ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

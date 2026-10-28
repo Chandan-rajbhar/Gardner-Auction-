@@ -205,6 +205,8 @@ interface AuctionDetailContextType {
   state: AuctionDetailState;
   dispatch: React.Dispatch<Action>;
   isLoading: boolean;
+  loadError: string | null;
+  reloadAuction: () => Promise<void>;
   saveAuction: () => Promise<boolean>;
   validate: () => boolean;
   errors: ValidationErrors;
@@ -221,17 +223,28 @@ export const AuctionDetailProvider: React.FC<{
 }> = ({ auctionId, children, onSavedSuccess, onSavedError, initialLots }) => {
   const [state, dispatch] = useReducer(auctionDetailReducer, initialState);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
 
   const loadAuction = useCallback(async () => {
+    if (!auctionId) {
+      setIsLoading(false);
+      setLoadError(null);
+      return;
+    }
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await auctionService.getAuctionById(auctionId);
       if (data) {
         dispatch({ type: 'SET_AUCTION', payload: data });
+        setLoadError(null);
+      } else {
+        setLoadError(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load auction detail:', e);
+      setLoadError(e?.message || 'Failed to load auction details.');
     } finally {
       setIsLoading(false);
     }
@@ -297,6 +310,8 @@ export const AuctionDetailProvider: React.FC<{
         state,
         dispatch,
         isLoading,
+        loadError,
+        reloadAuction: loadAuction,
         saveAuction,
         validate,
         errors

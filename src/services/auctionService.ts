@@ -239,7 +239,11 @@ class AuctionService {
         .eq('id', id)
         .maybeSingle();
 
-      if (!error && data) {
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
         // Fetch accurate real-time lot count for this auction
         let lotCount = data.day_stats?.lotCount || 0;
         try {
@@ -334,6 +338,11 @@ class AuctionService {
       }
     } catch (err) {
       console.warn('[AuctionService] getAuctionById Supabase error:', err);
+      const found = this.auctions.find(a => a.id === id);
+      if (found) {
+        return JSON.parse(JSON.stringify(found));
+      }
+      throw err;
     }
 
     // 2. Fallback to local cache if already fetched and present

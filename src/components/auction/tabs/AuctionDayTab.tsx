@@ -14,6 +14,7 @@ import { auctionDayService, AuctionDayMetrics } from '../../../services/auctionD
 import { lotsService } from '../../../services/lotsService';
 import { supabase, supabaseAdmin } from '../../../lib/supabase';
 import { 
+  Loader2,
   ExternalLink, 
   CheckCircle, 
   RotateCcw, 
@@ -153,7 +154,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   onSelectAuction,
   onNavigateReports
 }) => {
-  const { state, dispatch } = useAuctionDetail();
+  const { state, dispatch, isLoading, loadError, reloadAuction } = useAuctionDetail();
   const { showToast } = useToast();
   const { user } = useAuth();
   const auction = state.data;
@@ -2744,12 +2745,136 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   };
 
+  if (isLoading) {
+    return (
+      <div
+        className="auction-day-loading-state"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 320,
+          padding: '40px 20px',
+          gap: 14
+        }}
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2
+          size={32}
+          className="animate-spin spin-animation"
+          style={{ color: 'var(--gold-primary, #dfba52)' }}
+        />
+        <span
+          style={{
+            fontSize: 13.5,
+            fontWeight: 500,
+            color: 'var(--text-muted, #64748b)',
+            letterSpacing: '0.01em'
+          }}
+        >
+          Loading Auction Day…
+        </span>
+      </div>
+    );
+  }
+
+  if (loadError && !auction) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          padding: '14px 18px',
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: 8,
+          color: '#991b1b',
+          fontSize: 13,
+          margin: '16px 0'
+        }}
+        role="alert"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <AlertCircle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+          <span>{loadError || 'Failed to load auction data. Please try again.'}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => reloadAuction?.()}
+          className="btn btn-secondary"
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            padding: '6px 14px',
+            borderRadius: 6,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer'
+          }}
+        >
+          <RotateCcw size={13} />
+          <span>Retry</span>
+        </button>
+      </div>
+    );
+  }
+
   if (!auction) {
     return (
-      <div style={{ padding: 48, textAlign: 'center', background: '#ffffff', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-        <AlertCircle size={36} color="var(--gold-primary)" style={{ margin: '0 auto 12px' }} />
-        <h3 className="font-serif" style={{ fontSize: 18, color: 'var(--text-main)', margin: 0 }}>No Auction Loaded</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Select an auction to view Auction Day console.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="card-luxury" style={{ padding: '14px 20px', background: '#ffffff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                Select Auction:
+              </span>
+              {availableAuctions && availableAuctions.length > 0 && onSelectAuction ? (
+                <select
+                  value={selectedAuctionId || ''}
+                  onChange={(e) => onSelectAuction(e.target.value)}
+                  style={{
+                    height: 36,
+                    padding: '0 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-medium, #cbd5e1)',
+                    fontSize: 13,
+                    color: 'var(--text-main, #0f172a)',
+                    background: '#ffffff',
+                    outline: 'none',
+                    minWidth: 260,
+                    cursor: 'pointer'
+                  }}
+                  id="select-auction-empty-state"
+                >
+                  <option value="" disabled>Choose an auction…</option>
+                  {availableAuctions.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.title || a.code} ({a.code})
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  try { window.history.pushState({}, '', '/auctions'); } catch (_) {}
+                  window.location.href = '/auctions';
+                }}
+                className="btn btn-secondary"
+                style={{ fontSize: 12.5, fontWeight: 600, padding: '7px 14px', borderRadius: 6, cursor: 'pointer' }}
+                id="btn-browse-auctions-empty-state"
+              >
+                <span>Browse Auction Catalog</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -2803,12 +2928,40 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               >
                 <span>↵ Return to All Auctions</span>
               </button>
+              {/* Auction Switcher Dropdown (commented per request) */}
+              {/* {availableAuctions && availableAuctions.length > 1 && onSelectAuction && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>•</span>
+                  <select
+                    value={selectedAuctionId || auction.id}
+                    onChange={(e) => onSelectAuction(e.target.value)}
+                    style={{
+                      fontSize: 12,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      background: '#ffffff',
+                      color: 'var(--text-main)',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                    title="Switch auction"
+                    aria-label="Switch auction"
+                  >
+                    {availableAuctions.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.title || a.code} ({a.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )} */}
             </div>
           </div>
 
           <div className="auction-day-header-actions">
-            {/* Auctioneer Screen button matching Executive Theme */}
-            <button
+            {/* Auctioneer Screen button matching Executive Theme (commented per request) */}
+            {/* <button
               type="button"
               onClick={onNavigateClerking}
               className="btn btn-gold"
@@ -2818,7 +2971,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             >
               <ExternalLink size={14} color="#dfb74a" />
               <span>Auctioneer Screen</span>
-            </button>
+            </button> */}
 
             {/* Export Bidders button */}
             <button
