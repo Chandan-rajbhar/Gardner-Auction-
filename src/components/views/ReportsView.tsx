@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Auction, LotItem } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { 
@@ -14,6 +14,8 @@ import {
   Layers
 } from 'lucide-react';
 import { reportService, ReportAnalyticsData } from '../../services/reportService';
+import { auctionService } from '../../services/auctionService';
+import { DynamicRealizationChart } from './DynamicRealizationChart';
 import { 
   Select, 
   SelectTrigger, 
@@ -37,6 +39,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   availableAuctions = [],
   onSelectAuction
 }) => {
+  // Dynamic auctions loaded from Supabase
+  const [dbAuctions, setDbAuctions] = useState<Auction[]>(availableAuctions);
+
   // Default to externalSelectedAuctionId if provided, or 'all' for consolidated portfolio
   const [activeAuctionId, setActiveAuctionId] = useState<string>(() => {
     return externalSelectedAuctionId || 'all';
@@ -46,17 +51,78 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync internal auction ID if external prop changes
+  // Keep reference of external ID to avoid overriding user selection of 'all'
+  const prevExternalIdRef = useRef(externalSelectedAuctionId);
+
+  // Sync internal auction ID ONLY if external prop explicitly changed from the parent
   useEffect(() => {
-    if (externalSelectedAuctionId && externalSelectedAuctionId !== activeAuctionId) {
+    if (externalSelectedAuctionId && externalSelectedAuctionId !== prevExternalIdRef.current) {
+      prevExternalIdRef.current = externalSelectedAuctionId;
       setActiveAuctionId(externalSelectedAuctionId);
     }
   }, [externalSelectedAuctionId]);
 
+  // Fetch all auctions dynamically from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDynamicAuctions = async () => {
+      try {
+        const details = await auctionService.getAuctions();
+        if (isMounted && details && Array.isArray(details)) {
+          const mapped: Auction[] = details.map((d: any) => ({
+            id: d.id,
+            code: d.code,
+            title: d.name || d.title,
+            category: 'Premier Numismatics & Horology',
+            status: d.status === 'Open' ? 'preview' : d.status === 'In Progress' ? 'live' : 'closed',
+            startDate: d.startDate || '',
+            endDate: d.endDate || '',
+            location: '',
+            address: '',
+            cityStateZip: '',
+            country: '',
+            lotCount: d.dayStats?.lotCount || 0,
+            checkInCount: d.dayStats?.checkInCount || 0,
+            uniqueSellers: d.dayStats?.uniqueSellers || 0,
+            presaleMin: d.dayStats?.presaleMin || 0,
+            presaleMax: d.dayStats?.presaleMax || 0,
+            avgEstimate: d.dayStats?.avgEstimate || 0,
+            avgSalesPrice: d.dayStats?.avgSalesPrice || 0,
+            buyersPremiumCash: 15.0,
+            buyersPremiumCredit: 18.0,
+            taxRate: 7.5,
+            description: d.description || '',
+            terms: d.terms || '',
+            bpExplanation: '',
+            taxExemptInfo: '',
+            hibidSyncStatus: 'synced',
+          } as Auction));
+          setDbAuctions(mapped);
+        }
+      } catch (err) {
+        console.warn('[ReportsView] Could not load dynamic auctions from Supabase:', err);
+      }
+    };
+    fetchDynamicAuctions();
+
+    const unsubscribe = auctionService.subscribeToAuctions(() => {
+      fetchDynamicAuctions();
+    });
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const allAuctionsList = useMemo(() => {
+    if (dbAuctions && dbAuctions.length > 0) return dbAuctions;
+    return availableAuctions;
+  }, [dbAuctions, availableAuctions]);
+
   // Target auction details for currently active filter
   const currentTargetAuction = activeAuctionId === 'all'
     ? null
-    : (availableAuctions.find(a => a.id === activeAuctionId) || (auction?.id === activeAuctionId ? auction : null));
+    : (allAuctionsList.find(a => a.id === activeAuctionId) || (auction?.id === activeAuctionId ? auction : null));
 
   // Fetch report analytics dynamically from Supabase
   const loadAnalytics = useCallback(async (isSilent = false) => {
@@ -99,6 +165,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const handleAuctionChange = (newAuctionId: string) => {
     setActiveAuctionId(newAuctionId);
     if (onSelectAuction && newAuctionId !== 'all') {
+      prevExternalIdRef.current = newAuctionId;
       onSelectAuction(newAuctionId);
     }
   };
@@ -195,17 +262,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Auctions (Consolidated Portfolio)</SelectItem>
-              {availableAuctions.map(a => (
+              {allAuctionsList.map(a => (
                 <SelectItem key={a.id} value={a.id}>
                   {a.title} ({a.code})
                 </SelectItem>
               ))}
-              {/* Fallback if availableAuctions does not contain current auction */}
-              {auction && !availableAuctions.some(a => a.id === auction.id) && (
-                <SelectItem value={auction.id}>
-                  {auction.title} ({auction.code})
-                </SelectItem>
-              )}
             </SelectContent>
           </Select>
 
@@ -329,6 +390,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Dynamic Realization Graph (Visual Realization & Hammer Curve) */}
+          <DynamicRealizationChart
+            lots={analytics.rawLots}
+            totalHammer={analytics.totalHammerRealized}
+            categoryStats={analytics.categoryStats}
+            auctionTitle={analytics.auctionTitle}
+          />
 
           {/* Section B: Numismatic Category Distribution & Realized Depth */}
           <div className="syndication-card" style={{ padding: '18px 22px' }}>

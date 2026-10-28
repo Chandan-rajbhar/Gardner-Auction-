@@ -68,6 +68,33 @@ class ReportService {
   public async getReportAnalytics(auctionId?: string | null, targetAuction?: Auction | null): Promise<ReportAnalyticsData> {
     const isAllAuctions = !auctionId || auctionId === 'all';
 
+    // Ensure targetAuction details are loaded from Supabase if not provided
+    let auctionData = targetAuction;
+    if (!isAllAuctions && !auctionData && auctionId) {
+      try {
+        const { data: dbAuc } = await this.client
+          .from('auctions')
+          .select('*')
+          .eq('id', auctionId)
+          .maybeSingle();
+        if (dbAuc) {
+          auctionData = {
+            id: dbAuc.id,
+            code: dbAuc.code || '',
+            title: dbAuc.name || dbAuc.title || `Auction ${dbAuc.code}`,
+            status: dbAuc.status === 'Open' ? 'preview' : dbAuc.status === 'In Progress' ? 'live' : 'closed',
+            startDate: dbAuc.start_date || '',
+            endDate: dbAuc.end_date || '',
+            taxRate: 7.5,
+            buyersPremiumCash: 15.0,
+            buyersPremiumCredit: 18.0
+          } as Auction;
+        }
+      } catch (e) {
+        console.warn('[reportService] Could not fetch auction metadata:', e);
+      }
+    }
+
     // 1. Fetch Lots from Supabase
     let lotsQuery = this.client
       .from('lots')
@@ -274,34 +301,21 @@ class ReportService {
       }
     });
 
-    // 4. Evaluate HiBid Syndication Stats from Database
-    syndicationStats.forEach((syn: any) => {
-      const site = String(syn.site || '').toLowerCase();
-      const activity = (Number(syn.total_bids) || Number(syn.unique_bids) || 0) + (Number(syn.registrations) || 0);
-      if (site.includes('direct') || site.includes('gardner')) {
-        directWebCount += activity;
-      } else {
-        hibidCount += activity;
+    // 4. Evaluate Realized Sold Lots Channels
+    rawLots.forEach((lot: LotItem) => {
+      if (lot.status === 'sold' && lot.highBidderPaddle) {
+        const paddle = String(lot.highBidderPaddle).trim().toLowerCase();
+        if (paddle.includes('hibid') || paddle.startsWith('10')) {
+          hibidCount++;
+        } else if (paddle.includes('web') || paddle.includes('cust') || paddle.startsWith('20')) {
+          directWebCount++;
+        } else if (paddle.includes('phone') || paddle.includes('absentee') || paddle.startsWith('40')) {
+          phoneAbsenteeCount++;
+        } else {
+          floorCount++;
+        }
       }
     });
-
-    // 5. If bids table is empty, reflect channel engagement from realized lots
-    if (bids.length === 0) {
-      rawLots.forEach((lot: LotItem) => {
-        if (lot.status === 'sold' && lot.highBidderPaddle) {
-          const paddle = String(lot.highBidderPaddle).trim();
-          if (paddle.startsWith('5')) {
-            floorCount++;
-          } else if (paddle.startsWith('1') || paddle.toLowerCase().includes('hibid')) {
-            hibidCount++;
-          } else if (paddle.startsWith('2') || paddle.toLowerCase().includes('web')) {
-            directWebCount++;
-          } else {
-            floorCount++;
-          }
-        }
-      });
-    }
 
     const totalChannelActivity = hibidCount + directWebCount + floorCount + phoneAbsenteeCount;
 
@@ -345,12 +359,12 @@ class ReportService {
     const readyPayoutCount = sellerSettlements.filter((s: any) => s.status === 'Ready for Payout' || s.status === 'Paid').length;
 
     // Check Montana Sales Tax compliance: Montana has 0% state sales tax
-    const taxRate = targetAuction ? Number(targetAuction.taxRate) || 0 : 0;
+    const taxRate = auctionData ? Number(auctionData.taxRate) || 0 : 0;
     const isTaxCompliant = taxRate === 0;
 
     // Check Buyer's Premium separation terms
-    const bpCash = targetAuction && targetAuction.buyersPremiumCash !== undefined ? Number(targetAuction.buyersPremiumCash) : 15;
-    const bpCredit = targetAuction && targetAuction.buyersPremiumCredit !== undefined ? Number(targetAuction.buyersPremiumCredit) : 18;
+    const bpCash = auctionData && auctionData.buyersPremiumCash !== undefined ? Number(targetAuction.buyersPremiumCash) : 15;
+    const bpCredit = auctionData && auctionData.buyersPremiumCredit !== undefined ? Number(targetAuction.buyersPremiumCredit) : 18;
     const isBpSeparationValid = bpCash > 0 && bpCredit >= bpCash;
 
     // Check Consignor Reserve integrity: did all sold lots achieve >= reserve_price?
@@ -434,8 +448,8 @@ class ReportService {
 
     return {
       auctionId: isAllAuctions ? null : auctionId,
-      auctionTitle: targetAuction?.title || (isAllAuctions ? 'Consolidated Portfolio (All Auctions)' : 'Auction Intelligence'),
-      auctionCode: targetAuction?.code || (isAllAuctions ? 'ALL' : 'AUC'),
+      auctionTitle: auctionData?.title || (isAllAuctions ? 'Consolidated Portfolio (All Auctions)' : 'Auction Intelligence'),
+      auctionCode: auctionData?.code || (isAllAuctions ? 'ALL' : 'AUC'),
       totalLotsCount,
       soldLotsCount,
       offeredLotsCount,
