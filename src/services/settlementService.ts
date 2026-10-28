@@ -129,10 +129,231 @@ export class SettlementService {
   // =========================================================================
 
   /**
+   * Automatically synchronizes Bidder Settlements (invoices + invoice_lots)
+   * and Seller Settlements (seller_settlements) in Supabase from all sold lots
+   * for a given auction.
+   */
+  public async syncSettlementsFromSoldLots(auctionId: string, fallbackAuctionCode?: string): Promise<void> {
+    if (!auctionId) return;
+    const client = this.client;
+
+    try {
+      // 1. Fetch auction to get code if not provided
+      let auctionCode = fallbackAuctionCode || '';
+      if (!auctionCode) {
+        const { data: auc } = await client.from('auctions').select('code').eq('id', auctionId).maybeSingle();
+        if (auc && auc.code) {
+          auctionCode = auc.code;
+        }
+      }
+
+      // 2. Fetch all sold lots for this auction
+      const { data: soldLots, error: lotsErr } = await client
+        .from('lots')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .eq('status', 'sold');
+
+      if (lotsErr || !soldLots) {
+        return;
+      }
+
+      // If no sold lots exist, remove any auto-generated records for lots no longer sold
+      if (soldLots.length === 0) {
+        const { data: exLots } = await client.from('invoice_lots').select('id').eq('auction_id', auctionId);
+        if (exLots && exLots.length > 0) {
+          await client.from('invoice_lots').delete().eq('auction_id', auctionId);
+          await client.from('invoices').delete().eq('auction_id', auctionId);
+          await client.from('seller_settlements').delete().eq('auction_id', auctionId);
+        }
+        return;
+      }
+
+      // 3. Fetch users/customers to resolve name, email, paddle
+      const { data: usersData } = await client
+        .from('users')
+        .select('id, full_name, first_name, last_name, email, permanent_bidder_number, customer_code');
+
+      const userByPaddle = new Map<string, any>();
+      if (usersData && Array.isArray(usersData)) {
+        usersData.forEach((u: any) => {
+          if (u.permanent_bidder_number) userByPaddle.set(String(u.permanent_bidder_number).toLowerCase(), u);
+          if (u.customer_code) userByPaddle.set(String(u.customer_code).toLowerCase(), u);
+          if (u.id) userByPaddle.set(String(u.id).toLowerCase(), u);
+        });
+      }
+
+      // 4. Fetch existing invoices for this auction
+      const { data: existingInvoices } = await client
+        .from('invoices')
+        .select('*')
+        .eq('auction_id', auctionId);
+
+      const invoiceByPaddle = new Map<string, any>();
+      if (existingInvoices && Array.isArray(existingInvoices)) {
+        existingInvoices.forEach((inv: any) => {
+          if (inv.paddle_number) {
+            invoiceByPaddle.set(String(inv.paddle_number).toLowerCase(), inv);
+          }
+        });
+      }
+
+      // 5. Group sold lots by paddle number
+      const lotsByPaddle = new Map<string, any[]>();
+      soldLots.forEach((lot: any) => {
+        const paddle = String(lot.high_bidder_paddle || '101').trim();
+        const list = lotsByPaddle.get(paddle.toLowerCase()) || [];
+        list.push(lot);
+        lotsByPaddle.set(paddle.toLowerCase(), list);
+      });
+
+      // Process Bidder Settlements (Invoices)
+      for (const [paddleLower, paddleLots] of lotsByPaddle.entries()) {
+        const firstLot = paddleLots[0];
+        const paddleRaw = firstLot.high_bidder_paddle || '101';
+        const matchedUser = userByPaddle.get(paddleLower);
+        const buyerName = firstLot.high_bidder_name?.trim() || matchedUser?.full_name?.trim() || `${matchedUser?.first_name || ''} ${matchedUser?.last_name || ''}`.trim() || `Bidder #${paddleRaw}`;
+        const buyerEmail = matchedUser?.email || `paddle${paddleRaw}@gardner-auction.com`;
+
+        const hammerSubtotal = paddleLots.reduce((sum: number, l: any) => sum + (Number(l.hammer_price) || 0), 0);
+        const buyersPremium = hammerSubtotal * 0.15;
+        const taxAmount = hammerSubtotal * 0.075;
+        const shippingFee = 0;
+        const totalDue = hammerSubtotal + buyersPremium + taxAmount + shippingFee;
+        const itemsCount = paddleLots.length;
+
+        let invoice = invoiceByPaddle.get(paddleLower);
+        let invoiceId = invoice?.id;
+
+        if (!invoice) {
+          const invoiceNumber = `INV-GA-${new Date().getFullYear()}-${paddleRaw.replace(/[^a-zA-Z0-9]/g, '')}`;
+          invoiceId = `inv-${auctionId}-${paddleRaw.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+          const { data: inserted, error: invErr } = await client.from('invoices').upsert([{
+            id: invoiceId,
+            invoice_number: invoiceNumber,
+            auction_id: auctionId,
+            auction_code: auctionCode,
+            paddle_number: paddleRaw,
+            buyer_name: buyerName,
+            buyer_email: buyerEmail,
+            items_count: itemsCount,
+            hammer_subtotal: hammerSubtotal,
+            buyers_premium: buyersPremium,
+            tax_amount: taxAmount,
+            shipping_fee: shippingFee,
+            total_due: totalDue,
+            balance: totalDue,
+            payment_status: 'Pending',
+            is_cash_buyer: false,
+            is_shipped: false,
+            shipped_count: 0,
+            total_lots_count: itemsCount,
+            shipping_requested: true,
+            updated_at: new Date().toISOString()
+          }], { onConflict: 'id' }).select();
+
+          if (invErr) {
+            console.error('[SettlementService] Failed to upsert invoice:', invErr.message);
+          } else if (inserted && inserted[0]) {
+            invoice = inserted[0];
+            invoiceId = inserted[0].id;
+            invoiceByPaddle.set(paddleLower, invoice);
+          }
+        } else {
+          await client.from('invoices').update({
+            items_count: itemsCount,
+            total_lots_count: itemsCount,
+            hammer_subtotal: hammerSubtotal,
+            buyers_premium: buyersPremium,
+            tax_amount: taxAmount,
+            total_due: totalDue,
+            balance: invoice.payment_status === 'Paid' ? 0 : totalDue,
+            buyer_name: buyerName,
+            updated_at: new Date().toISOString()
+          }).eq('id', invoiceId);
+        }
+
+        // Upsert lot rows in invoice_lots
+        if (invoiceId) {
+          for (const lot of paddleLots) {
+            const ilotId = `ilot-${invoiceId}-${lot.id}`;
+            const hammer = Number(lot.hammer_price) || 0;
+            const bp = hammer * 0.15;
+
+            await client.from('invoice_lots').upsert([{
+              id: ilotId,
+              invoice_id: invoiceId,
+              auction_id: auctionId,
+              lot_id: lot.id,
+              lot_number: lot.lot_number,
+              title: lot.title || `Lot #${lot.lot_number}`,
+              status: 'Sold',
+              qty_sold: 1,
+              is_shipped: false,
+              entries: [
+                { id: `entry-hammer-${lot.id}`, type: 'sold_lot', label: `Sold Lot #${lot.lot_number}`, amount: hammer },
+                { id: `entry-bp-${lot.id}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: bp }
+              ],
+              updated_at: new Date().toISOString()
+            }], { onConflict: 'id' });
+          }
+        }
+      }
+
+      // 6. Process Seller Settlements (Consignor Statements)
+      const lotsByConsignor = new Map<string, any[]>();
+      soldLots.forEach((lot: any) => {
+        const consignorName = (lot.consignor_name || lot.consignorName || 'House Consignor').trim();
+        const list = lotsByConsignor.get(consignorName.toLowerCase()) || [];
+        list.push(lot);
+        lotsByConsignor.set(consignorName.toLowerCase(), list);
+      });
+
+      for (const [consignorLower, cLots] of lotsByConsignor.entries()) {
+        const consignorName = cLots[0].consignor_name || cLots[0].consignorName || 'House Consignor';
+        const consignorClean = consignorName.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8);
+        const consignorCode = `CON-${consignorClean.toUpperCase() || '101'}`;
+
+        const totalLotsSold = cLots.length;
+        const grossHammer = cLots.reduce((sum: number, l: any) => sum + (Number(l.hammer_price) || 0), 0);
+        const commissionRate = 10;
+        const commissionAmount = grossHammer * 0.10;
+        const photographyFees = 0;
+        const netPayout = grossHammer - commissionAmount;
+        const sellerSettlementId = `sell-${auctionId}-${consignorClean || 'con'}`;
+
+        await client.from('seller_settlements').upsert([{
+          id: sellerSettlementId,
+          auction_id: auctionId,
+          auction_code: auctionCode,
+          consignor_code: consignorCode,
+          consignor_name: consignorName,
+          total_lots_sold: totalLotsSold,
+          gross_hammer: grossHammer,
+          commission_rate: commissionRate,
+          commission_amount: commissionAmount,
+          photography_fees: photographyFees,
+          net_payout: netPayout,
+          status: 'Pending Review',
+          updated_at: new Date().toISOString()
+        }], { onConflict: 'id' });
+      }
+    } catch (err) {
+      console.error('[SettlementService] syncSettlementsFromSoldLots error:', err);
+    }
+  }
+
+  /**
    * Load Bidder Settlements for the specified auction from Supabase.
    * Returns an empty array (not mock data) if the table has no records.
    */
   public async getBidderSettlements(auctionId: string): Promise<SettlementCustomer[]> {
+    try {
+      await this.syncSettlementsFromSoldLots(auctionId);
+    } catch (syncErr) {
+      console.warn('[SettlementService] syncSettlementsFromSoldLots notice in getBidderSettlements:', syncErr);
+    }
+
     const { data, error } = await this.client
       .from('invoices')
       .select('*')
@@ -159,6 +380,12 @@ export class SettlementService {
    * Returns an empty array if no records exist.
    */
   public async getSellerSettlements(auctionId: string): Promise<ConsignorSettlement[]> {
+    try {
+      await this.syncSettlementsFromSoldLots(auctionId);
+    } catch (syncErr) {
+      console.warn('[SettlementService] syncSettlementsFromSoldLots notice in getSellerSettlements:', syncErr);
+    }
+
     const { data, error } = await this.client
       .from('seller_settlements')
       .select('*')

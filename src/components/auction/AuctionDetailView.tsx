@@ -121,9 +121,7 @@ const AuctionDetailContent: React.FC<{
   const isPublished = auction?.status === 'In Progress';
 
   // Filtered lots for this specific auction
-  const filteredAuctionLots = lots.filter(l => 
-    l.auctionId === auction?.id || (auction?.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
-  );
+  const filteredAuctionLots = lots.filter(l => l.auctionId === auction?.id);
   const expensesTotal = (auction?.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
 
   // Centralized Publish Readiness Validation Calculation

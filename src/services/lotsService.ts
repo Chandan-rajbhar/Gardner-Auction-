@@ -35,7 +35,7 @@ export interface DBLotRow {
 export function dbToLotItem(row: DBLotRow): LotItem {
   return {
     id: row.id,
-    auctionId: row.auction_id || 'auc-001',
+    auctionId: row.auction_id || '',
     lotNumber: row.lot_number,
     title: row.title,
     category: (row.category || 'Rare US Gold') as LotCategory,
@@ -66,7 +66,7 @@ export function dbToLotItem(row: DBLotRow): LotItem {
 export function lotItemToDB(lot: LotItem): DBLotRow {
   return {
     id: lot.id,
-    auction_id: lot.auctionId || 'auc-001',
+    auction_id: lot.auctionId || undefined,
     lot_number: lot.lotNumber,
     title: lot.title,
     category: lot.category || 'Rare Numismatics & Curated Lots',
@@ -129,7 +129,7 @@ export const lotsService = {
       const row = lotItemToDB(lot);
       let { data, error } = await supabaseAdmin
         .from('lots')
-        .insert([row])
+        .upsert([row], { onConflict: 'id' })
         .select()
         .single();
 

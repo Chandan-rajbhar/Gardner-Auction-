@@ -37,6 +37,7 @@ import { ProfileView } from './components/views/ProfileView';
 import { CheckCircle2, RefreshCw, X, Radio, ArrowLeft } from 'lucide-react';
 import { recordBidToSupabase, supabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
+import { settlementService } from './services/settlementService';
 import { auctionService } from './services/auctionService';
 import { notificationService } from './services/notificationService';
 import { activityLogService } from './services/activityLogService';
@@ -658,7 +659,13 @@ const AdminConsole: React.FC = () => {
     // Persist sold state to Supabase
     lotsService.updateLot(lotId, {
       status: 'sold',
-      hammerPrice: finalAmount
+      hammerPrice: finalAmount,
+      highBidderPaddle: winningPaddle,
+      highBidderName: winner.name
+    }).then(() => {
+      settlementService.syncSettlementsFromSoldLots(currentAuction.id, currentAuction.code).catch(err => {
+        console.warn('[App] syncSettlementsFromSoldLots error:', err);
+      });
     });
 
     // Update bidder spending

@@ -11,6 +11,8 @@ import {
   Settings, 
   Gavel, 
   CheckCircle, 
+  CheckCircle2,
+  DollarSign,
   RotateCw, 
   Eye, 
   Send, 
@@ -439,6 +441,30 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   const toggleSelectOneSeller = (id: string) => {
     setSelectedSellerIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  // Seller Settlement Status Update Handler
+  const handleUpdateSellerStatus = async (
+    sellerId: string,
+    newStatus: 'Pending Review' | 'Ready for Payout' | 'Paid',
+    checkNumber?: string
+  ) => {
+    try {
+      setSellerSettlements(prev => prev.map(s => s.id === sellerId ? { ...s, status: newStatus, checkNumber: checkNumber || s.checkNumber } : s));
+      const ok = await settlementService.updateSellerSettlementStatus(currentAuctionId, sellerId, newStatus, checkNumber);
+      if (ok) {
+        showToast('success', 'Status Updated', `Consignor payout status updated to "${newStatus}".`);
+        if (onUpdateConsignorStatus) {
+          onUpdateConsignorStatus(sellerId, newStatus);
+        }
+      } else {
+        showToast('error', 'Update Failed', 'Failed to update seller status in Supabase.');
+        fetchSellerSettlements();
+      }
+    } catch (_) {
+      showToast('error', 'Error', 'Failed to persist status change.');
+      fetchSellerSettlements();
+    }
   };
 
   // Cash Buyer Toggle Handler
@@ -1342,12 +1368,15 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>
                       Check / Reference
                     </th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569', textAlign: 'center', width: 70 }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoadingSeller ? (
                     <tr>
-                      <td colSpan={10} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                      <td colSpan={11} style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                           <RotateCw size={16} className="animate-spin" />
                           <span>Loading seller settlements from Supabase...</span>
@@ -1356,7 +1385,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     </tr>
                   ) : paginatedSellerSettlements.length === 0 ? (
                     <tr>
-                      <td colSpan={10} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
+                      <td colSpan={11} style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
                         No data available in table
                       </td>
                     </tr>
@@ -1416,6 +1445,51 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                           </td>
                           <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>
                             {s.checkNumber || '—'}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`Actions for ${s.consignorName}`}
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 4,
+                                    border: '1px solid var(--border-medium, #dcd5ca)',
+                                    background: '#ffffff',
+                                    color: 'var(--text-main, #0f172a)',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: 0,
+                                    transition: 'all 0.12s ease'
+                                  }}
+                                >
+                                  <MoreVertical size={15} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleUpdateSellerStatus(s.id, 'Ready for Payout')}>
+                                  <CheckCircle2 size={15} color="#0369a1" />
+                                  <span>Ready for Payout</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  const checkNum = window.prompt(`Enter Check or Wire Reference # for ${s.consignorName}:`, s.checkNumber || `CHK-${Date.now().toString().slice(-4)}`);
+                                  if (checkNum !== null) {
+                                    handleUpdateSellerStatus(s.id, 'Paid', checkNum.trim() || undefined);
+                                  }
+                                }}>
+                                  <DollarSign size={15} color="#15803d" />
+                                  <span>Mark as Paid</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleUpdateSellerStatus(s.id, 'Pending Review')}>
+                                  <RotateCw size={15} color="#92400e" />
+                                  <span>Pending Review</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );

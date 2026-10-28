@@ -12,6 +12,7 @@ import { FormModal } from '../../Common/FormModal';
 import { FormField } from '../../Common/FormField';
 import { auctionDayService, AuctionDayMetrics } from '../../../services/auctionDayService';
 import { lotsService } from '../../../services/lotsService';
+import { settlementService } from '../../../services/settlementService';
 import { supabase, supabaseAdmin } from '../../../lib/supabase';
 import { 
   Loader2,
@@ -2562,6 +2563,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         } catch (bidErr) {
           console.warn('[AuctionDayTab] Insert clerking bid error:', bidErr);
         }
+
+        // Dynamically create/sync Bidder & Seller Settlements in Supabase
+        try {
+          await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+        } catch (syncErr) {
+          console.warn('[AuctionDayTab] Sync settlements error:', syncErr);
+        }
       }
 
       // 3. Update local customLots state
@@ -2636,6 +2644,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       } : l));
 
       if (onReopenLot) onReopenLot(lotId);
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+      } catch (syncErr) {
+        console.warn('[AuctionDayTab] Sync settlements after reopen error:', syncErr);
+      }
       showToast('info', 'Lot Reopened', `Lot #${target.lotNumber} reopened and returned to upcoming status.`);
     } catch (_) {
       showToast('error', 'Error', 'Failed to reopen lot in Supabase.');
@@ -2735,6 +2748,14 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         }
         return l;
       }));
+
+      if (isSold) {
+        try {
+          await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+        } catch (syncErr) {
+          console.warn('[AuctionDayTab] Sync settlements from drawer clerking error:', syncErr);
+        }
+      }
 
       showToast('success', 'Clerking Updated', `Updated clerking record for Lot #${drawerClerkLotNum}.`);
       setClerkingDrawer({ isOpen: false, mode: 'view' });

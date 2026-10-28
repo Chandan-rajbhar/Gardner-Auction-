@@ -332,9 +332,7 @@ export const PreAuctionTab: React.FC<PreAuctionTabProps> = ({
   if (!auction) return null;
 
   // Filter lots to this auction (including AF360 reference lots for demo auction only)
-  const filteredAuctionLots = lots.filter(l => 
-    l.auctionId === auction.id || (auction.id === 'auc-001' && (!l.auctionId || ['lot-ref-1', 'lot-ref-2', 'lot-ref-3', 'lot-ref-4', 'lot-ref-6'].includes(l.id)))
-  );
+  const filteredAuctionLots = lots.filter(l => l.auctionId === auction.id);
 
   // Centralized publish-readiness verification
   const readiness = useMemo(() => {
