@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { UserBidder } from '../../types';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { deleteCustomerFromDb, updateCustomerInDb, deactivateCustomerInDb } from '../../services/adminActionService';
-import { 
+import {
+  SlidersHorizontal, 
   Search, 
-  ShieldAlert, 
   ShieldCheck, 
   Plus, 
   CloudDownload,
@@ -24,16 +25,19 @@ import {
   Mail,
   FileText,
   MapPin,
-  CreditCard,
-  Sparkles,
   Pencil,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Lock,
+  Copy,
+  Check
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { ShadcnDatePicker } from '../ui/ShadcnDatePicker';
 import { RowActionMenu } from '../ui/RowActionMenu';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
+import { ShadcnSelect, ShadcnSelectOption } from '../ui/ShadcnSelect';
 
 interface UsersViewProps {
   users: UserBidder[];
@@ -41,20 +45,254 @@ interface UsersViewProps {
   onAddUser: (user: UserBidder) => void;
 }
 
-type SortField = 'customerCode' | 'company' | 'firstName' | 'lastName' | 'phone1' | 'email';
+export type ColumnKey = 
+  | 'customerCode'
+  | 'fullName'
+  | 'company'
+  | 'phone1'
+  | 'email'
+  | 'role'
+  | 'action';
+
+export interface ColumnConfig {
+  key: ColumnKey;
+  label: string;
+  hideable: boolean;
+}
+
+const AVAILABLE_COLUMNS: ColumnConfig[] = [
+  { key: 'customerCode', label: 'Customer Code', hideable: true },
+  { key: 'fullName', label: 'Full Name', hideable: true },
+  { key: 'company', label: 'Company', hideable: true },
+  { key: 'phone1', label: 'Phone', hideable: true },
+  { key: 'email', label: 'Email', hideable: true },
+  { key: 'role', label: 'Role', hideable: true },
+  { key: 'action', label: 'Action', hideable: false }
+];
+
+const DEFAULT_COLUMN_VISIBILITY: Record<ColumnKey, boolean> = {
+  customerCode: true,
+  fullName: true,
+  company: true,
+  phone1: true,
+  email: true,
+  role: true,
+  action: true
+};
+
+const COLUMN_STORAGE_KEY = 'af360_customers_column_visibility_v5';
+const HEADERS_STORAGE_KEY = 'af360_customers_show_headers_v5';
+
+const formatRole = (role?: string): string => {
+  if (!role || !role.trim()) return '—';
+  const r = role.toLowerCase().trim();
+  if (r === 'super_admin') return 'Super Admin';
+  if (r === 'user') return 'User';
+  if (r === 'admin') return 'Admin';
+  if (r === 'clerk') return 'Clerk';
+  if (r === 'consignor_manager') return 'Consignor Manager';
+  return role
+    .split(/[_s]+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+};
+
+type SortField = 'customerCode' | 'fullName' | 'company' | 'phone1' | 'email' | 'role';
 type SortDirection = 'asc' | 'desc';
 
+// Standardized country options for shadcn Select
+const COUNTRY_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'United States', label: 'United States' },
+  { value: 'Canada', label: 'Canada' },
+  { value: 'United Kingdom', label: 'United Kingdom' },
+  { value: 'Australia', label: 'Australia' },
+  { value: 'Switzerland', label: 'Switzerland' },
+  { value: 'Germany', label: 'Germany' },
+  { value: 'France', label: 'France' },
+  { value: 'India', label: 'India' },
+  { value: 'Japan', label: 'Japan' },
+  { value: 'Other', label: 'Other Country' }
+];
+
+// Standardized bidder/seller classification options for shadcn Select
+const CLASSIFICATION_OPTIONS: ShadcnSelectOption[] = [
+  { value: 'bidder', label: 'Registered Bidder (Standard)' },
+  { value: 'both', label: 'Bidder & Consignor (Seller)' }
+];
+
+// Helper to generate a collision-free Customer Code
+const generateCustomerCode = (existingUsers: UserBidder[]): string => {
+  const existingCodes = new Set(
+    existingUsers
+      .map(u => u.customerCode?.toUpperCase().trim())
+      .filter(Boolean)
+  );
+
+  let candidate = '';
+  let attempts = 0;
+  do {
+    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    candidate = `CUST-${randomDigits}`;
+    attempts++;
+  } while (existingCodes.has(candidate) && attempts < 100);
+
+  return candidate;
+};
+
+// Email validation regex (RFC 5322 standard compliant)
+const isValidEmailFormat = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+// Phone validation helper
+const isValidPhoneFormat = (phone: string): boolean => {
+  if (!phone.trim()) return true;
+  const cleaned = phone.replace(/[^0-9]/g, '');
+  return cleaned.length >= 7;
+};
+
 export const UsersView: React.FC<UsersViewProps> = ({
-  users,
+  users: _users,
   onUpdateUser,
   onAddUser
 }) => {
+  // Search state
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState<UserBidder | null>(null);
   
   // Sorting state
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Column Visibility & Header Settings State (with localStorage persistence)
+  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_COLUMN_VISIBILITY,
+          ...parsed,
+          action: true // Action column remains always visible
+        };
+      }
+    } catch {}
+    return DEFAULT_COLUMN_VISIBILITY;
+  });
+
+  const [showTableHeaders, setShowTableHeaders] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(HEADERS_STORAGE_KEY);
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return true;
+  });
+
+  const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
+  const settingsPopoverRef = useRef<HTMLDivElement>(null);
+  const [settingsPosition, setSettingsPosition] = useState<{ top: number; right: number; width: number }>({
+    top: 0,
+    right: 16,
+    width: 260
+  });
+
+  const updateSettingsPosition = useCallback(() => {
+    if (!settingsTriggerRef.current) return;
+    const rect = settingsTriggerRef.current.getBoundingClientRect();
+    const popoverWidth = 260;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < 380 && rect.top > 380;
+    const top = openUpwards 
+      ? Math.max(10, rect.top - 380) 
+      : Math.min(window.innerHeight - 380, rect.bottom + 6);
+    let right = window.innerWidth - rect.right;
+    if (right < 10) right = 10;
+    setSettingsPosition({ top, right, width: popoverWidth });
+  }, []);
+
+  // Close column settings on outside click / escape / window resize
+  useEffect(() => {
+    if (!isColumnSettingsOpen) return;
+    updateSettingsPosition();
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        settingsPopoverRef.current &&
+        !settingsPopoverRef.current.contains(target) &&
+        settingsTriggerRef.current &&
+        !settingsTriggerRef.current.contains(target)
+      ) {
+        setIsColumnSettingsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsColumnSettingsOpen(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
+    }, 20);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateSettingsPosition);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateSettingsPosition);
+    };
+  }, [isColumnSettingsOpen, updateSettingsPosition]);
+
+  const toggleColumn = (key: ColumnKey) => {
+    if (key === 'action') return; // Action is non-hideable
+
+    const dataKeys: ColumnKey[] = ['customerCode', 'fullName', 'company', 'phone1', 'email', 'role'];
+    const currentVisibleCount = dataKeys.filter(k => columnVisibility[k]).length;
+    if (columnVisibility[key] && currentVisibleCount <= 1) {
+      return; // Prevent hiding every data column
+    }
+
+    setColumnVisibility(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleShowAllColumns = () => {
+    const next = { ...DEFAULT_COLUMN_VISIBILITY };
+    setColumnVisibility(next);
+    try {
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  };
+
+  const handleResetColumns = () => {
+    const nextCols = { ...DEFAULT_COLUMN_VISIBILITY };
+    setColumnVisibility(nextCols);
+    setShowTableHeaders(true);
+    try {
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(nextCols));
+      localStorage.setItem(HEADERS_STORAGE_KEY, JSON.stringify(true));
+    } catch {}
+  };
+
+  const handleToggleHeaders = (checked: boolean) => {
+    setShowTableHeaders(checked);
+    try {
+      localStorage.setItem(HEADERS_STORAGE_KEY, JSON.stringify(checked));
+    } catch {}
+  };
 
   // Supabase dynamic users state
   const [supabaseUsers, setSupabaseUsers] = useState<UserBidder[]>([]);
@@ -62,18 +300,21 @@ export const UsersView: React.FC<UsersViewProps> = ({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Modals state
-  const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
+  // Modals & Drawers state
+  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<UserBidder | null>(null);
+  const [viewingCustomer, setViewingCustomer] = useState<UserBidder | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<UserBidder | null>(null);
   const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
   const [deleteCustomerError, setDeleteCustomerError] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importStatusMessage, setImportStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatusMessage, setImportStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Comprehensive New Customer Form state matching exact user fields
+  // Customer Form state
   const [newFirstName, setNewFirstName] = useState('');
   const [newLastName, setNewLastName] = useState('');
   const [newCompany, setNewCompany] = useState('');
@@ -93,8 +334,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
   const [newPermanentBidder, setNewPermanentBidder] = useState(false);
   const [newCustomerCode, setNewCustomerCode] = useState('');
 
+  // Form field errors
+  const [formErrors, setFormErrors] = useState<{
+    firstName?: string;
+    email?: string;
+    phone?: string;
+    general?: string;
+  }>({});
+
   // 1. Fetch Customers dynamically from Supabase public.users
-  const fetchSupabaseUsers = async () => {
+  const fetchSupabaseUsers = useCallback(async () => {
     setIsLoadingDb(true);
     setFetchError(null);
     try {
@@ -111,18 +360,18 @@ export const UsersView: React.FC<UsersViewProps> = ({
       }
 
       if (data && data.length > 0) {
-        // Exclude admin and dashboard staff records from customer table
-        const customerRecords = data.filter((row: any) => {
-          const role = (row.role || '').toLowerCase();
-          return role !== 'super_admin' && role !== 'admin' && role !== 'clerk' && role !== 'consignor_manager';
-        });
-
-        const mappedUsers: UserBidder[] = customerRecords.map((row: any) => {
-          const fullName = row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Customer';
-          const firstName = row.first_name || (fullName ? fullName.split(' ')[0] : '');
-          const lastName = row.last_name || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
+        // Fetch all applicable user records dynamically from Supabase public.users
+        const mappedUsers: UserBidder[] = data.map((row: any) => {
+          const rawFullName = (row.full_name || '').trim();
+          const rawFirst = (row.first_name || '').trim();
+          const rawLast = (row.last_name || '').trim();
+          const combinedName = [rawFirst, rawLast].filter(Boolean).join(' ').trim();
+          const fullName = rawFullName || combinedName || (row.email ? row.email.split('@')[0] : 'Customer');
+          const firstName = rawFirst || (fullName !== 'Customer' ? fullName.split(' ')[0] : '');
+          const lastName = rawLast || (fullName !== 'Customer' ? fullName.split(' ').slice(1).join(' ') : '');
           const customerCode = row.customer_code || (row.permanent_bidder_number ? `CUST-${row.permanent_bidder_number}` : `CUST-${row.id.slice(0, 6).toUpperCase()}`);
           const phone1 = row.phone_1 || row.phone || '';
+          const role = (row.role || '').trim() || 'user';
 
           return {
             id: row.id,
@@ -130,9 +379,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
             firstName,
             lastName,
             name: fullName,
+            fullName: fullName,
             email: row.email || '',
             phone1,
             phone: phone1,
+            role,
             company: row.company_name || undefined,
             paddleNumber: row.permanent_bidder_number || customerCode.replace('CUST-', '') || 'Pending',
             siteOrigin: row.role === 'super_admin' ? 'Super Admin' : 'Website Direct',
@@ -173,9 +424,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
     } finally {
       setIsLoadingDb(false);
     }
-  };
+  }, []);
 
-  // 2. Realtime listener: auto-update when user registers on website
+  // 2. Realtime listener: auto-update when records change in Supabase public.users
   useEffect(() => {
     fetchSupabaseUsers();
 
@@ -189,9 +440,41 @@ export const UsersView: React.FC<UsersViewProps> = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchSupabaseUsers]);
 
-  // Extract helper values for a user
+  // Lock background scroll when any right sidebar drawer is open
+  useEffect(() => {
+    if (viewingCustomer || isCustomerDrawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [viewingCustomer, isCustomerDrawerOpen]);
+
+  // Handle Escape key to close right sidebar drawers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (viewingCustomer) setViewingCustomer(null);
+        else if (isCustomerDrawerOpen && !isSaving) setIsCustomerDrawerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewingCustomer, isCustomerDrawerOpen, isSaving]);
+
+  // Helper getters
+  const getFullName = (u: UserBidder): string => {
+    if (u.fullName && u.fullName.trim() && u.fullName !== 'Customer' && u.fullName !== '—') return u.fullName.trim();
+    if (u.name && u.name.trim() && u.name !== 'Customer' && u.name !== '—') return u.name.trim();
+    const parts = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+    if (parts) return parts;
+    return u.email ? u.email.split('@')[0] : '—';
+  };
+
   const getCustomerCode = (u: UserBidder): string => {
     if (u.customerCode) return u.customerCode;
     if (u.paddleNumber && u.paddleNumber !== 'Pending' && !u.paddleNumber.startsWith('Consignor')) {
@@ -216,33 +499,33 @@ export const UsersView: React.FC<UsersViewProps> = ({
   const getPhone1 = (u: UserBidder): string => u.phone1 || u.phone || '—';
   const getEmail = (u: UserBidder): string => u.email || '—';
 
-  // Exclusively display verified Supabase customer records from database
+  // Customer list from Supabase
   const customerList = useMemo(() => {
     return supabaseUsers;
   }, [supabaseUsers]);
 
-  // Apply search
+  // Apply search across all supported customer fields
   const filteredUsers = useMemo(() => {
     return customerList.filter(u => {
       const q = searchTerm.toLowerCase().trim();
       if (!q) return true;
 
       const code = getCustomerCode(u).toLowerCase();
+      const fullName = getFullName(u).toLowerCase();
       const comp = getCompany(u).toLowerCase();
-      const first = getFirstName(u).toLowerCase();
-      const last = getLastName(u).toLowerCase();
       const phone = getPhone1(u).toLowerCase();
       const email = (u.email || '').toLowerCase();
-      const fullName = (u.name || '').toLowerCase();
+      const role = (u.role || '').toLowerCase();
+      const formattedRole = formatRole(u.role).toLowerCase();
 
       return (
         code.includes(q) ||
+        fullName.includes(q) ||
         comp.includes(q) ||
-        first.includes(q) ||
-        last.includes(q) ||
         phone.includes(q) ||
         email.includes(q) ||
-        fullName.includes(q)
+        role.includes(q) ||
+        formattedRole.includes(q)
       );
     });
   }, [customerList, searchTerm]);
@@ -260,17 +543,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
           valA = getCustomerCode(a);
           valB = getCustomerCode(b);
           break;
+        case 'fullName':
+          valA = getFullName(a);
+          valB = getFullName(b);
+          break;
         case 'company':
           valA = a.company || '';
           valB = b.company || '';
-          break;
-        case 'firstName':
-          valA = getFirstName(a);
-          valB = getFirstName(b);
-          break;
-        case 'lastName':
-          valA = getLastName(a);
-          valB = getLastName(b);
           break;
         case 'phone1':
           valA = getPhone1(a);
@@ -280,6 +559,10 @@ export const UsersView: React.FC<UsersViewProps> = ({
           valA = a.email || '';
           valB = b.email || '';
           break;
+        case 'role':
+          valA = formatRole(a.role);
+          valB = formatRole(b.role);
+          break;
       }
 
       const cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base', numeric: true });
@@ -287,7 +570,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
     });
   }, [filteredUsers, sortField, sortDirection]);
 
-  // Handle header sort click
+  // Header sort toggle
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       if (sortDirection === 'asc') {
@@ -311,10 +594,12 @@ export const UsersView: React.FC<UsersViewProps> = ({
       : <ArrowDown size={13} style={{ color: 'var(--gold-primary, #d4af37)', marginLeft: 4 }} />;
   };
 
-  // Open New Customer Modal with preset code
+  // Open New Customer Drawer (Slide-Over from Right)
   const openNewCustomerModal = () => {
     setEditingCustomer(null);
-    setNewCustomerCode(`CUST-${Math.floor(100 + Math.random() * 900)}`);
+    setFormErrors({});
+    const autoCode = generateCustomerCode(supabaseUsers);
+    setNewCustomerCode(autoCode);
     setNewFirstName('');
     setNewLastName('');
     setNewCompany('');
@@ -332,18 +617,19 @@ export const UsersView: React.FC<UsersViewProps> = ({
     setNewZip('');
     setNewCountry('United States');
     setNewPermanentBidder(false);
-    setIsNewCustomerModalOpen(true);
+    setIsCustomerDrawerOpen(true);
   };
 
-  // Open Edit Customer Modal with selected customer data prefilled
+  // Open Edit Customer Drawer with pre-filled fields (Slide-Over from Right)
   const handleOpenEditCustomer = (customer: UserBidder) => {
     setEditingCustomer(customer);
+    setFormErrors({});
     setNewCustomerCode(customer.customerCode || getCustomerCode(customer));
     setNewFirstName(customer.firstName || getFirstName(customer));
     setNewLastName(customer.lastName || getLastName(customer));
     setNewCompany(customer.company || customer.companyName || '');
     setNewPhone1(customer.phone1 || customer.phone || '');
-    setNewEmail(customer.email || '');
+    setNewEmail(customer.email || ''); // Stored for read-only reference
     setNewDriversLicense(customer.driversLicenseNumber || '');
     setNewTaxId(customer.taxId || '');
     setNewTaxExpiration(customer.taxIdExpirationDate || '');
@@ -356,36 +642,67 @@ export const UsersView: React.FC<UsersViewProps> = ({
     setNewZip(customer.zip || '');
     setNewCountry(customer.country || 'United States');
     setNewPermanentBidder(Boolean(customer.isPermanentBidder));
-    setIsNewCustomerModalOpen(true);
+    setIsCustomerDrawerOpen(true);
   };
 
-  // 3. Create or Edit customer -> Save directly into Supabase public.users & update state
+  // Open Customer Details Page in Right Side Bar
+  const handleOpenViewCustomer = (customer: UserBidder) => {
+    setViewingCustomer(customer);
+  };
+
+  // 3. Save Customer (Create or Update)
   const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFirstName.trim() || !newEmail.trim()) {
-      alert('Please fill out at least First Name and Email.');
+    const errors: typeof formErrors = {};
+
+    // Validate First Name
+    if (!newFirstName.trim()) {
+      errors.firstName = 'First Name is required.';
+    }
+
+    // Validate Email (Required & Valid Format on Create; Read-Only on Update)
+    if (!editingCustomer) {
+      if (!newEmail.trim()) {
+        errors.email = 'Email Address is required.';
+      } else if (!isValidEmailFormat(newEmail)) {
+        errors.email = 'Please provide a valid email format (e.g. name@domain.com).';
+      }
+    }
+
+    // Validate Phone format if provided
+    if (newPhone1.trim() && !isValidPhoneFormat(newPhone1)) {
+      errors.phone = 'Phone number must contain at least 7 digits.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
 
+    setFormErrors({});
     setIsSaving(true);
+
     const fullName = `${newFirstName.trim()} ${newLastName.trim()}`.trim();
-    const assignedCode = newCustomerCode.trim() || (editingCustomer ? getCustomerCode(editingCustomer) : `CUST-${Math.floor(100 + Math.random() * 900)}`);
+    const assignedCode = newCustomerCode.trim() || (editingCustomer ? getCustomerCode(editingCustomer) : generateCustomerCode(supabaseUsers));
     const paddleNum = assignedCode.replace('CUST-', '') || `${Math.floor(200 + Math.random() * 700)}`;
 
     if (editingCustomer) {
-      // --- UPDATE EXISTING CUSTOMER ---
+      // =========================================================================
+      // UPDATE EXISTING CUSTOMER
+      // CRITICAL REQUIREMENT: Email is strictly read-only and is NEVER included
+      // in the update payload sent to Supabase. Existing email is fully preserved.
+      // =========================================================================
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingCustomer.id);
       const targetId = isUUID ? editingCustomer.id : crypto.randomUUID();
 
-      const updatePayload = {
-        id: targetId,
+      const updatePayload: Record<string, any> = {
         customer_code: assignedCode,
         first_name: newFirstName.trim(),
         last_name: newLastName.trim(),
         full_name: fullName,
         company_name: newCompany.trim() || null,
         phone: newPhone1.trim() || null,
-        email: newEmail.trim().toLowerCase(),
+        // NOTE: 'email' is strictly OMITTED from updatePayload!
         drivers_license_number: newDriversLicense.trim() || null,
         tax_id: newTaxId.trim() || null,
         tax_id_expiration_date: newTaxExpiration || null,
@@ -406,10 +723,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
         if (!updateRes.success && updateRes.error) {
           console.warn('[UsersView] Update notice:', updateRes.error);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[UsersView] Supabase update error:', err);
       }
 
+      // Preserve the original email untouched in updated local state
       const updated: UserBidder = {
         ...editingCustomer,
         id: targetId,
@@ -417,7 +735,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         firstName: newFirstName.trim(),
         lastName: newLastName.trim(),
         name: fullName,
-        email: newEmail.trim(),
+        email: editingCustomer.email, // Kept strictly unchanged
         phone1: newPhone1.trim() || editingCustomer.phone1,
         phone: newPhone1.trim() || editingCustomer.phone,
         company: newCompany.trim() || undefined,
@@ -442,13 +760,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
       onUpdateUser(updated);
       setSupabaseUsers(prev => prev.map(u => (u.id === editingCustomer.id || u.email.toLowerCase() === editingCustomer.email.toLowerCase()) ? updated : u));
       setIsSaving(false);
-      setIsNewCustomerModalOpen(false);
+      setIsCustomerDrawerOpen(false);
       setEditingCustomer(null);
-      setActionSuccessMessage(`Customer "${fullName}" updated successfully in Supabase!`);
+      setActionSuccessMessage(`Customer "${fullName}" updated successfully in Supabase! Email preserved unchanged.`);
       setTimeout(() => setActionSuccessMessage(null), 4000);
       fetchSupabaseUsers();
     } else {
-      // --- CREATE NEW CUSTOMER ---
+      // =========================================================================
+      // CREATE NEW CUSTOMER
+      // Saves new record directly into Supabase public.users
+      // =========================================================================
       const id = crypto.randomUUID();
       const sbPayload = {
         id,
@@ -483,7 +804,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         if (error) {
           console.warn('[UsersView] Supabase insert warning:', error.message);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[UsersView] Supabase insert error:', err);
       }
 
@@ -494,8 +815,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
         lastName: newLastName.trim(),
         name: fullName,
         email: newEmail.trim(),
-        phone1: newPhone1.trim() || '(406) 555-0100',
-        phone: newPhone1.trim() || '(406) 555-0100',
+        phone1: newPhone1.trim() || '',
+        phone: newPhone1.trim() || '',
         company: newCompany.trim() || undefined,
         paddleNumber: paddleNum,
         siteOrigin: 'Admin Console',
@@ -528,40 +849,44 @@ export const UsersView: React.FC<UsersViewProps> = ({
       onAddUser(created);
       setSupabaseUsers(prev => [created, ...prev]);
       setIsSaving(false);
-      setIsNewCustomerModalOpen(false);
-      setActionSuccessMessage(`Customer "${fullName}" added successfully!`);
+      setIsCustomerDrawerOpen(false);
+      setActionSuccessMessage(`Customer "${fullName}" added successfully to Supabase!`);
       setTimeout(() => setActionSuccessMessage(null), 4000);
       fetchSupabaseUsers();
     }
   };
 
-  // Functional Delete Customer with integrity check
+  // 4. Delete Customer
   const handleDeleteCustomer = async () => {
     if (!customerToDelete) return;
+    if (customerToDelete.role === 'super_admin') {
+      setActionSuccessMessage(null);
+      setDeleteCustomerError('Super Admin accounts cannot be deleted from the Customers module. Please manage administrator accounts under Admin Management.');
+      return;
+    }
+
     setIsDeletingCustomer(true);
     setDeleteCustomerError(null);
 
     try {
-      // 1. Check if linked records exist in Supabase (e.g. bids)
+      // Check if linked records exist in Supabase (e.g. historical bids)
       const { count: bidsCount, error: bidErr } = await supabase
         .from('bids')
         .select('*', { count: 'exact', head: true })
         .or(`bidder_name.eq."${customerToDelete.name}",paddle_number.eq."${customerToDelete.paddleNumber}"`);
 
-      const client = supabaseAdmin || supabase;
-
       if (!bidErr && bidsCount && bidsCount > 0) {
         // Linked historical auction data found -> safely deactivate rather than break historical records
         await deactivateCustomerInDb(customerToDelete.id);
         setSupabaseUsers(prev => prev.filter(u => u.id !== customerToDelete.id));
-        setActionSuccessMessage(`Customer "${customerToDelete.name}" is linked to ${bidsCount} historical auction bids. The account was safely deactivated to preserve auction integrity.`);
+        setActionSuccessMessage(`Customer "${customerToDelete.name}" is linked to ${bidsCount} historical auction bids. Account was safely deactivated to preserve auction integrity.`);
         setTimeout(() => setActionSuccessMessage(null), 5000);
         setCustomerToDelete(null);
         fetchSupabaseUsers();
         return;
       }
 
-      // 2. Safe delete from Supabase users table via adminActionService
+      // Safe delete from Supabase users table
       const delResult = await deleteCustomerFromDb(customerToDelete.id, customerToDelete.email);
       if (!delResult.success) {
         if (delResult.error && (delResult.error.includes('foreign key') || delResult.error.includes('23503'))) {
@@ -577,7 +902,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       }
 
       setSupabaseUsers(prev => prev.filter(u => u.id !== customerToDelete.id));
-      setActionSuccessMessage(`Customer "${customerToDelete.name}" deleted successfully.`);
+      setActionSuccessMessage(`Customer "${customerToDelete.name}" deleted successfully from Supabase.`);
       setTimeout(() => setActionSuccessMessage(null), 4000);
       setCustomerToDelete(null);
       fetchSupabaseUsers();
@@ -588,8 +913,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
     }
   };
 
-  // 4. Functional Export Customers to CSV
+  // 5. Export Customers to CSV (respecting active search/filter)
   const handleExportCustomers = () => {
+    if (sortedUsers.length === 0) {
+      alert('No customer records to export.');
+      return;
+    }
+
     const exportRows = sortedUsers.map(u => ({
       'Customer Code': getCustomerCode(u),
       'Company Name': u.company || '',
@@ -597,6 +927,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       'Last Name': getLastName(u),
       'Phone 1': getPhone1(u),
       'Email': u.email || '',
+      'Role': formatRole(u.role),
       'Driver License Number': u.driversLicenseNumber || '',
       'Tax ID': u.taxId || '',
       'Tax ID Expiration Date': u.taxIdExpirationDate || '',
@@ -608,7 +939,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
       'State': u.state || '',
       'Zip': u.zip || '',
       'Country': u.country || 'United States',
-      'Permanent Bidder': u.isPermanentBidder ? 'YES' : 'NO'
+      'Permanent Bidder': u.isPermanentBidder ? 'YES' : 'NO',
+      'Registration Date': u.registrationDate || ''
     }));
 
     const csvContent = Papa.unparse(exportRows);
@@ -623,7 +955,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // 5. Functional Download Sample CSV Template
+  // 6. Download Sample CSV Template
   const handleDownloadSampleTemplate = () => {
     const sampleRows = [
       {
@@ -680,10 +1012,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // 6. Functional Import CSV -> Insert into Supabase public.users & update state
+  // 7. Import CSV with validation and duplicate checking
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setIsImporting(true);
+    setImportStatusMessage(null);
 
     Papa.parse(file, {
       header: true,
@@ -692,22 +1027,49 @@ export const UsersView: React.FC<UsersViewProps> = ({
         try {
           const rows = results.data as Array<Record<string, string>>;
           if (!rows || rows.length === 0) {
-            setImportStatusMessage({ text: 'File appears empty or unreadable.', type: 'error' });
+            setImportStatusMessage({ text: 'The selected CSV file appears to be empty.', type: 'error' });
+            setIsImporting(false);
             return;
           }
 
+          const existingEmails = new Set(supabaseUsers.map(u => (u.email || '').toLowerCase().trim()));
+          const seenInBatch = new Set<string>();
           let addedCount = 0;
+          let duplicateCount = 0;
+          let invalidCount = 0;
+
           const recordsToInsert: any[] = [];
           const localAdded: UserBidder[] = [];
 
           for (let idx = 0; idx < rows.length; idx++) {
             const row = rows[idx];
-            const firstName = row['First Name'] || row['firstName'] || row['First'] || row['Name']?.split(' ')[0] || `Customer`;
-            const lastName = row['Last Name'] || row['lastName'] || row['Last'] || row['Name']?.split(' ').slice(1).join(' ') || `${idx + 1}`;
+            const firstName = (row['First Name'] || row['firstName'] || row['First'] || row['Name']?.split(' ')[0] || '').trim();
+            const lastName = (row['Last Name'] || row['lastName'] || row['Last'] || row['Name']?.split(' ').slice(1).join(' ') || '').trim();
+            const emailRaw = (row['Email'] || row['email'] || '').trim().toLowerCase();
+
+            // Validate required fields
+            if (!firstName || !emailRaw) {
+              invalidCount++;
+              continue;
+            }
+
+            // Validate email format
+            if (!isValidEmailFormat(emailRaw)) {
+              invalidCount++;
+              continue;
+            }
+
+            // Check duplicate in database or duplicate in current batch
+            if (existingEmails.has(emailRaw) || seenInBatch.has(emailRaw)) {
+              duplicateCount++;
+              continue;
+            }
+
+            seenInBatch.add(emailRaw);
+
             const company = row['Company Name'] || row['Company'] || row['company'] || '';
-            const phone1 = row['Phone 1'] || row['Phone'] || row['phone1'] || row['phone'] || '(406) 555-0100';
-            const email = (row['Email'] || row['email'] || `customer_${Date.now()}_${idx}@gardner-auction.com`).trim().toLowerCase();
-            const customerCode = row['Customer Code'] || row['customerCode'] || row['Code'] || `CUST-${Math.floor(200 + Math.random() * 700)}`;
+            const phone1 = row['Phone 1'] || row['Phone'] || row['phone1'] || row['phone'] || '';
+            const customerCode = row['Customer Code'] || row['customerCode'] || row['Code'] || `CUST-${Math.floor(100000 + Math.random() * 900000)}`;
             const paddleNum = customerCode.replace('CUST-', '') || `${Math.floor(200 + Math.random() * 700)}`;
             const dl = row['Driver License Number'] || row['Driver\'s License Number'] || row['drivers_license_number'] || null;
             const taxId = row['Tax ID'] || row['tax_id'] || null;
@@ -730,8 +1092,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
               last_name: lastName,
               full_name: `${firstName} ${lastName}`.trim(),
               company_name: company || null,
-              phone: phone1,
-              email,
+              phone: phone1 || null,
+              email: emailRaw,
               drivers_license_number: dl,
               tax_id: taxId,
               tax_id_expiration_date: taxExp,
@@ -759,7 +1121,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               company,
               phone1,
               phone: phone1,
-              email,
+              email: emailRaw,
               paddleNumber: paddleNum,
               siteOrigin: 'Imported via CSV',
               registrationDate: new Date().toISOString().split('T')[0],
@@ -803,23 +1165,34 @@ export const UsersView: React.FC<UsersViewProps> = ({
           }
 
           setSupabaseUsers(prev => [...localAdded, ...prev]);
-          setImportStatusMessage({ 
-            text: `Successfully imported ${addedCount} customer record(s) to Supabase & Dashboard!`, 
-            type: 'success' 
+
+          let statusText = `Successfully imported ${addedCount} customer record(s) into Supabase!`;
+          if (duplicateCount > 0 || invalidCount > 0) {
+            statusText += ` (${duplicateCount} duplicate emails skipped, ${invalidCount} invalid rows ignored).`;
+          }
+
+          setImportStatusMessage({
+            text: statusText,
+            type: addedCount > 0 ? 'success' : 'warning'
           });
 
-          setTimeout(() => {
-            setIsImportModalOpen(false);
-            setImportStatusMessage(null);
-          }, 1500);
-
+          if (addedCount > 0) {
+            setTimeout(() => {
+              setIsImportModalOpen(false);
+              setImportStatusMessage(null);
+            }, 2500);
+            fetchSupabaseUsers();
+          }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : 'Unknown parsing error';
           setImportStatusMessage({ text: `Import failed: ${message}`, type: 'error' });
+        } finally {
+          setIsImporting(false);
         }
       },
       error: (err) => {
         setImportStatusMessage({ text: `File parsing error: ${err.message}`, type: 'error' });
+        setIsImporting(false);
       }
     });
 
@@ -828,10 +1201,193 @@ export const UsersView: React.FC<UsersViewProps> = ({
     }
   };
 
+  // Copy email to clipboard helper
+  const handleCopyEmail = (emailText: string) => {
+    navigator.clipboard.writeText(emailText);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2000);
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header & Requested Action Buttons with Gardner Gold Dashboard Theme */}
-      <div className="card-header-flex" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+    <div className="customers-module-root" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <style>{`
+        /* Responsive Customer Module Styles */
+        .customers-header-flex {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
+        .customers-btn-black {
+          background: #0f172a;
+          color: #ffffff;
+          border: 1px solid #0f172a;
+          border-radius: 4px;
+          padding: 9px 18px;
+          font-size: 12.5px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          cursor: pointer;
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+          transition: all 0.15s ease;
+        }
+        .customers-btn-black:hover {
+          background: #1e293b;
+          border-color: #1e293b;
+          transform: translateY(-1px);
+        }
+        .customers-search-row {
+          display: flex;
+          gap: 14px;
+          flex-wrap: wrap;
+          align-items: center;
+          background: var(--bg-card);
+          padding: 16px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border-subtle);
+        }
+        .customers-search-input-wrap {
+          flex: 1;
+          min-width: 260px;
+        }
+        .customers-search-actions {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+        .customer-drawer-input {
+          width: 100%;
+          height: 40px;
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          background-color: #f8fafc;
+          color: #0f172a;
+          font-size: 13px;
+          box-sizing: border-box;
+          transition: all 0.15s ease;
+        }
+        .customer-drawer-input:hover {
+          border-color: #94a3b8 !important;
+        }
+        .customer-drawer-input:focus {
+          background-color: #ffffff !important;
+          border-color: #0f172a !important;
+          box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08) !important;
+          outline: none !important;
+        }
+        .customer-drawer-input.is-error {
+          border-color: #ef4444 !important;
+          background-color: #fef2f2 !important;
+        }
+        .customer-drawer-label {
+          display: block;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #334155;
+          margin-bottom: 5px;
+        }
+        .customer-section-header {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          margin-top: 4px;
+          margin-bottom: 2px;
+        }
+        .customer-section-icon {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justifyContent: center;
+          color: #475569;
+          flex-shrink: 0;
+        }
+        .customer-section-title {
+          font-size: 11.5px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #0f172a;
+        }
+        .customer-section-line {
+          flex: 1;
+          height: 1px;
+          background: #e2e8f0;
+        }
+        .customer-drawer-grid-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        .customer-drawer-grid-3 {
+          display: grid;
+          grid-template-columns: 1.3fr 0.85fr 0.85fr;
+          gap: 6px;
+        }
+        @keyframes slideInRightDrawer {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        @keyframes modalFadeInScale {
+          from { opacity: 0; transform: scale(0.96) translateY(4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        /* Mobile and Tablet Media Queries */
+        @media (max-width: 768px) {
+          .customers-header-flex {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+          }
+          .customers-header-actions-wrap {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 8px;
+          }
+          .customers-btn-black {
+            width: 100%;
+            justify-content: center;
+          }
+          .customers-search-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+            padding: 12px;
+          }
+          .customers-search-actions {
+            justify-content: space-between;
+            width: 100%;
+          }
+          .customer-drawer-panel {
+            width: 100vw !important;
+            max-width: 100vw !important;
+          }
+          .customer-drawer-grid-2 {
+            grid-template-columns: 1fr !important;
+            gap: 12px;
+          }
+          .customer-drawer-grid-3 {
+            grid-template-columns: 1fr !important;
+            gap: 8px;
+          }
+          .view-customer-modal-grid-2 {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+
+      {/* Header & Requested Action Buttons matching reference screenshot */}
+      <div className="customers-header-flex">
         <div>
           <h2 className="font-serif" style={{ fontSize: 22, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>Customers</span>
@@ -842,76 +1398,27 @@ export const UsersView: React.FC<UsersViewProps> = ({
           </p>
         </div>
 
-        {/* 3 Buttons styled in sleek Black */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* 3 Buttons styled in sleek Black matching screenshot */}
+        <div className="customers-header-actions-wrap" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* 1. NEW CUSTOMER - Black Button */}
           <button 
             type="button"
-            style={{
-              background: '#0f172a',
-              color: '#ffffff',
-              border: '1px solid #0f172a',
-              borderRadius: 4,
-              padding: '9px 18px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.25)',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#1e293b';
-              e.currentTarget.style.borderColor = '#1e293b';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#0f172a';
-              e.currentTarget.style.borderColor = '#0f172a';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
+            className="customers-btn-black"
             onClick={openNewCustomerModal}
             id="btn-new-customer"
           >
             <Plus size={16} strokeWidth={2.8} />
-            <span>NEW CUSTOMER</span>
+            <span>+ NEW CUSTOMER</span>
           </button>
 
           {/* 2. IMPORT CUSTOMERS - Black Button */}
           <button 
             type="button"
-            style={{
-              background: '#0f172a',
-              color: '#ffffff',
-              border: '1px solid #0f172a',
-              borderRadius: 4,
-              padding: '9px 18px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.25)',
-              transition: 'all 0.15s ease'
+            className="customers-btn-black"
+            onClick={() => {
+              setImportStatusMessage(null);
+              setIsImportModalOpen(true);
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#1e293b';
-              e.currentTarget.style.borderColor = '#1e293b';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#0f172a';
-              e.currentTarget.style.borderColor = '#0f172a';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-            onClick={() => setIsImportModalOpen(true)}
             id="btn-import-customers"
           >
             <CloudDownload size={16} strokeWidth={2.2} />
@@ -921,33 +1428,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           {/* 3. EXPORT CUSTOMER - Black Button */}
           <button 
             type="button"
-            style={{
-              background: '#0f172a',
-              color: '#ffffff',
-              border: '1px solid #0f172a',
-              borderRadius: 4,
-              padding: '9px 18px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.25)',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#1e293b';
-              e.currentTarget.style.borderColor = '#1e293b';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#0f172a';
-              e.currentTarget.style.borderColor = '#0f172a';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
+            className="customers-btn-black"
             onClick={handleExportCustomers}
             id="btn-export-customers"
           >
@@ -1010,24 +1491,56 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       )}
 
-      {/* Search Bar & Sync indicator */}
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg-card)', padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-        <div className="input-search-wrapper" style={{ flex: 1, minWidth: 260 }}>
+      {/* Search Bar & Sync indicator matching reference screenshot */}
+      <div className="customers-search-row">
+        <div className="input-search-wrapper customers-search-input-wrap">
           <Search size={16} className="search-icon" />
           <input 
             type="text" 
-            placeholder="Search by customer code, company, first name, last name, phone, or email..."
+            placeholder="Search by customer code, full name, company, phone, email, or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search customers"
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="customers-search-actions">
+          {/* Table Column Settings Toggle Button */}
+          <div className="col-settings-container" style={{ position: 'relative' }}>
+            <button 
+              ref={settingsTriggerRef}
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                updateSettingsPosition();
+                setIsColumnSettingsOpen(prev => !prev);
+              }}
+              title="Table Column Settings"
+              aria-label="Table Column Settings"
+              aria-expanded={isColumnSettingsOpen}
+              style={{ 
+                fontSize: 11, 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                padding: '6px 12px',
+                background: isColumnSettingsOpen ? '#e2e8f0' : undefined
+              }}
+            >
+              <SlidersHorizontal size={13} />
+              <span>Columns</span>
+            </button>
+          </div>
+
           <button 
             type="button"
             className="btn btn-secondary"
-            style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px' }}
-            onClick={fetchSupabaseUsers}
+            style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px' }}
+            onClick={() => {
+              fetchSupabaseUsers();
+              setActionSuccessMessage('Synchronizing customer records with Supabase...');
+              setTimeout(() => setActionSuccessMessage(null), 3000);
+            }}
             title="Refresh from Supabase"
           >
             <RefreshCw size={12} className={isLoadingDb ? 'animate-spin' : ''} />
@@ -1036,238 +1549,332 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
           <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
             Showing <strong>{sortedUsers.length}</strong> customers
+            {searchTerm && ` (filtered from ${customerList.length})`}
           </span>
         </div>
       </div>
 
-      {/* Customer Table Without Status Column */}
-      <div className="table-wrapper" style={{ overflowX: 'auto', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-        <table className="luxury-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th 
-                onClick={() => handleSort('customerCode')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by Customer Code"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>Customer Code</span>
-                  {renderSortIcon('customerCode')}
-                </div>
-              </th>
+      {/* Customer Table with Full Name, Role & Column Visibility */}
+      {(() => {
+        const visibleColumnsCount = AVAILABLE_COLUMNS.filter(c => columnVisibility[c.key]).length;
 
-              <th 
-                onClick={() => handleSort('company')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by Company"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>Company</span>
-                  {renderSortIcon('company')}
-                </div>
-              </th>
-
-              <th 
-                onClick={() => handleSort('firstName')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by First Name"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>First Name</span>
-                  {renderSortIcon('firstName')}
-                </div>
-              </th>
-
-              <th 
-                onClick={() => handleSort('lastName')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by Last Name"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>Last Name</span>
-                  {renderSortIcon('lastName')}
-                </div>
-              </th>
-
-              <th 
-                onClick={() => handleSort('phone1')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by Phone 1"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>Phone 1</span>
-                  {renderSortIcon('phone1')}
-                </div>
-              </th>
-
-              <th 
-                onClick={() => handleSort('email')} 
-                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                title="Sort by Email"
-              >
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span>Email</span>
-                  {renderSortIcon('email')}
-                </div>
-              </th>
-
-              <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoadingDb && sortedUsers.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                    <Loader2 size={20} className="animate-spin" style={{ color: 'var(--gold-primary)' }} />
-                    <span style={{ fontSize: 13.5, fontWeight: 500 }}>Loading customer records from database...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : fetchError ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#b91c1c' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                      <AlertCircle size={18} color="#dc2626" />
-                      <span>{fetchError}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={fetchSupabaseUsers}
-                      className="btn btn-secondary"
-                      style={{ fontSize: 12, padding: '5px 12px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                    >
-                      <RefreshCw size={12} />
-                      <span>Retry</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ) : sortedUsers.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 21, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                      <User size={20} />
-                    </div>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 14.5 }}>
-                      {searchTerm ? 'No matching customers found' : 'No customer records in database'}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 400 }}>
-                      {searchTerm
-                        ? `No customers match your search term "${searchTerm}". Try a different keyword.`
-                        : 'No customer accounts exist yet in Supabase. Register your first customer using the New Customer button or Import CSV.'}
-                    </div>
-                    {!searchTerm && (
-                      <button
-                        type="button"
-                        onClick={openNewCustomerModal}
-                        className="btn btn-gold"
-                        style={{ marginTop: 6, fontSize: 12, padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        return (
+          <div className="table-wrapper" style={{ overflowX: 'auto', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+            <table className="luxury-table" style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
+              {showTableHeaders && (
+                <thead>
+                  <tr>
+                    {/* 1. CUSTOMER CODE */}
+                    {columnVisibility.customerCode && (
+                      <th 
+                        onClick={() => handleSort('customerCode')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Customer Code"
                       >
-                        <Plus size={13} />
-                        <span>New Customer</span>
-                      </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Customer Code</span>
+                          {renderSortIcon('customerCode')}
+                        </div>
+                      </th>
                     )}
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              sortedUsers.map(user => {
-                const customerCode = getCustomerCode(user);
-                const firstName = getFirstName(user);
-                const lastName = getLastName(user);
-                const phone1 = getPhone1(user);
-                const company = getCompany(user);
-                const email = getEmail(user);
-                const fullName = user.name || `${firstName} ${lastName}`.trim() || 'Customer';
 
-                return (
-                  <tr key={user.id}>
-                    {/* 1. Customer Code */}
-                    <td>
-                      <span style={{ 
-                        fontFamily: 'var(--font-mono, monospace)', 
-                        fontWeight: 700, 
-                        color: user.paddleNumber === 'Pending' ? '#f59e0b' : 'var(--gold-primary, #d4af37)',
-                        background: 'rgba(212, 175, 55, 0.08)',
-                        padding: '4px 8px',
-                        borderRadius: 4,
-                        fontSize: 12,
-                        letterSpacing: '0.03em'
-                      }}>
-                        {customerCode}
-                      </span>
+                    {/* 2. FULL NAME */}
+                    {columnVisibility.fullName && (
+                      <th 
+                        onClick={() => handleSort('fullName')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Full Name"
+                      >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Full Name</span>
+                          {renderSortIcon('fullName')}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 3. COMPANY */}
+                    {columnVisibility.company && (
+                      <th 
+                        onClick={() => handleSort('company')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Company"
+                      >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Company</span>
+                          {renderSortIcon('company')}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 4. PHONE 1 */}
+                    {columnVisibility.phone1 && (
+                      <th 
+                        onClick={() => handleSort('phone1')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Phone"
+                      >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Phone 1</span>
+                          {renderSortIcon('phone1')}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 5. EMAIL */}
+                    {columnVisibility.email && (
+                      <th 
+                        onClick={() => handleSort('email')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Email"
+                      >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Email</span>
+                          {renderSortIcon('email')}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 6. ROLE */}
+                    {columnVisibility.role && (
+                      <th 
+                        onClick={() => handleSort('role')} 
+                        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        title="Sort by Role"
+                      >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span>Role</span>
+                          {renderSortIcon('role')}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 7. ACTION HEADER */}
+                    {columnVisibility.action && (
+                      <th style={{ textAlign: 'center', whiteSpace: 'nowrap', width: 80 }}>Action</th>
+                    )}
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {isLoadingDb && sortedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={visibleColumnsCount} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                        <Loader2 size={20} className="animate-spin" style={{ color: 'var(--gold-primary)' }} />
+                        <span style={{ fontSize: 13.5, fontWeight: 500 }}>Loading customer records from Supabase...</span>
+                      </div>
                     </td>
-
-                    {/* 2. Company */}
-                    <td>
-                      <div style={{ fontWeight: 500, color: (user.company || user.companyName) ? 'var(--text-main)' : 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {(user.company || user.companyName) ? (
-                          <>
-                            <Building size={13} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
-                            <span>{company}</span>
-                          </>
-                        ) : (
-                          <span>—</span>
+                  </tr>
+                ) : fetchError ? (
+                  <tr>
+                    <td colSpan={visibleColumnsCount} style={{ textAlign: 'center', padding: '36px 16px', color: '#b91c1c' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                          <AlertCircle size={18} color="#dc2626" />
+                          <span>{fetchError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={fetchSupabaseUsers}
+                          className="btn btn-secondary"
+                          style={{ fontSize: 12, padding: '5px 12px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                        >
+                          <RefreshCw size={12} />
+                          <span>Retry</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : sortedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={visibleColumnsCount} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 21, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                          <User size={20} />
+                        </div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 14.5 }}>
+                          {searchTerm ? 'No matching customers found' : 'No customer records in database'}
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 400 }}>
+                          {searchTerm
+                            ? `No customers match your search term "${searchTerm}". Try a different keyword.`
+                            : 'No customer accounts exist yet in Supabase. Register your first customer using the New Customer button or Import CSV.'}
+                        </div>
+                        {!searchTerm && (
+                          <button
+                            type="button"
+                            onClick={openNewCustomerModal}
+                            className="btn btn-gold"
+                            style={{ marginTop: 6, fontSize: 12, padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                          >
+                            <Plus size={13} />
+                            <span>New Customer</span>
+                          </button>
                         )}
                       </div>
                     </td>
-
-                    {/* 3. First Name */}
-                    <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                      {firstName || '—'}
-                    </td>
-
-                    {/* 4. Last Name */}
-                    <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                      {lastName || '—'}
-                    </td>
-
-                    {/* 5. Phone 1 */}
-                    <td style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {phone1}
-                    </td>
-
-                    {/* 6. Email */}
-                    <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                      {email}
-                    </td>
-
-                    {/* Action */}
-                    <td style={{ textAlign: 'center' }}>
-                      <RowActionMenu
-                        ariaLabel={`Actions for ${fullName}`}
-                        buttonId={`customer-actions-${user.id}`}
-                        items={[
-                          {
-                            label: 'Edit Customer',
-                            icon: <Pencil size={14} />,
-                            onClick: () => handleOpenEditCustomer(user)
-                          },
-                          {
-                            label: 'Delete Customer',
-                            icon: <Trash2 size={14} />,
-                            variant: 'danger',
-                            onClick: () => {
-                              setDeleteCustomerError(null);
-                              setCustomerToDelete(user);
-                            }
-                          }
-                        ]}
-                      />
-                    </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ) : (
+                  sortedUsers.map(user => {
+                    const customerCode = getCustomerCode(user);
+                    const fullName = getFullName(user);
+                    const phone1 = getPhone1(user);
+                    const company = getCompany(user);
+                    const email = getEmail(user);
 
-      {/* New Customer Side Drawer (Slide-Over from Right) */}
-      {isNewCustomerModalOpen && (
+                    return (
+                      <tr key={user.id}>
+                        {/* 1. Customer Code */}
+                        {columnVisibility.customerCode && (
+                          <td>
+                            <span 
+                              onClick={() => handleOpenViewCustomer(user)}
+                              style={{ 
+                                fontFamily: 'var(--font-mono, monospace)', 
+                                fontWeight: 700, 
+                                color: user.paddleNumber === 'Pending' ? '#f59e0b' : 'var(--gold-primary, #d4af37)',
+                                background: 'rgba(212, 175, 55, 0.08)',
+                                padding: '4px 8px',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                letterSpacing: '0.03em',
+                                cursor: 'pointer',
+                                display: 'inline-block',
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(212, 175, 55, 0.18)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(212, 175, 55, 0.08)';
+                              }}
+                              title="Click to view customer details in right sidebar"
+                            >
+                              {customerCode}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 2. Full Name (clickable to open right sidebar) */}
+                        {columnVisibility.fullName && (
+                          <td 
+                            onClick={() => handleOpenViewCustomer(user)}
+                            style={{ fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}
+                            title="Click to view customer details in right sidebar"
+                          >
+                            {fullName}
+                          </td>
+                        )}
+
+                        {/* 3. Company */}
+                        {columnVisibility.company && (
+                          <td>
+                            <div style={{ fontWeight: 500, color: (user.company || user.companyName) ? 'var(--text-main)' : 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {(user.company || user.companyName) ? (
+                                <>
+                                  <Building size={13} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                                  <span>{company}</span>
+                                </>
+                              ) : (
+                                <span>—</span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 4. Phone 1 */}
+                        {columnVisibility.phone1 && (
+                          <td style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: 'var(--text-muted)' }}>
+                            {phone1}
+                          </td>
+                        )}
+
+                        {/* 5. Email */}
+                        {columnVisibility.email && (
+                          <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                            {email}
+                          </td>
+                        )}
+
+                        {/* 6. Role */}
+                        {columnVisibility.role && (
+                          <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                            {formatRole(user.role) === '—' ? (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            ) : (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '3px 9px',
+                                  borderRadius: 4,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  letterSpacing: '0.02em',
+                                  background: (user.role || '').toLowerCase() === 'super_admin' ? '#f1f5f9' : '#f8fafc',
+                                  color: (user.role || '').toLowerCase() === 'super_admin' ? '#0f172a' : '#334155',
+                                  border: (user.role || '').toLowerCase() === 'super_admin' ? '1px solid #cbd5e1' : '1px solid #e2e8f0'
+                                }}
+                              >
+                                {(user.role || '').toLowerCase() === 'super_admin' && (
+                                  <ShieldCheck size={12} style={{ color: 'var(--gold-primary, #b48324)' }} />
+                                )}
+                                <span>{formatRole(user.role)}</span>
+                              </span>
+                            )}
+                          </td>
+                        )}
+
+                        {/* 7. Action with three-dot dropdown menu */}
+                        {columnVisibility.action && (
+                          <td style={{ textAlign: 'center' }}>
+                            <RowActionMenu
+                              ariaLabel={`Actions for ${fullName}`}
+                              buttonId={`customer-actions-${user.id}`}
+                              items={[
+                                {
+                                  label: 'View Customer',
+                                  icon: <Eye size={14} />,
+                                  onClick: () => handleOpenViewCustomer(user)
+                                },
+                                {
+                                  label: 'Edit Customer',
+                                  icon: <Pencil size={14} />,
+                                  onClick: () => handleOpenEditCustomer(user)
+                                },
+                                {
+                                  label: 'Delete Customer',
+                                  icon: <Trash2 size={14} />,
+                                  variant: 'danger',
+                                  onClick: () => {
+                                    if ((user.role || '').toLowerCase() === 'super_admin') {
+                                      setActionSuccessMessage(null);
+                                      setDeleteCustomerError('Super Admin accounts cannot be deleted from the Customers module. Please manage administrator accounts under Admin Management.');
+                                      return;
+                                    }
+                                    setDeleteCustomerError(null);
+                                    setCustomerToDelete(user);
+                                  }
+                                }
+                              ]}
+                            />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
+      {/* =========================================================================
+          CREATE & EDIT CUSTOMER SLIDE-OVER DRAWER (RIGHT SIDEBAR)
+          ========================================================================= */}
+      {isCustomerDrawerOpen && (
         <div 
           style={{
             position: 'fixed',
@@ -1279,81 +1886,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
             justifyContent: 'flex-end',
             transition: 'opacity 0.25s ease'
           }}
-          onClick={() => setIsNewCustomerModalOpen(false)}
+          onClick={() => !isSaving && setIsCustomerDrawerOpen(false)}
         >
-          <style>{`
-            @keyframes slideInRightDrawer {
-              from {
-                transform: translateX(100%);
-              }
-              to {
-                transform: translateX(0);
-              }
-            }
-            .customer-drawer-input {
-              width: 100%;
-              height: 40px;
-              padding: 8px 12px;
-              border-radius: 6px;
-              border: 1px solid #cbd5e1;
-              background-color: #f8fafc;
-              color: #0f172a;
-              font-size: 13px;
-              box-sizing: border-box;
-              transition: all 0.15s ease;
-            }
-            .customer-drawer-input:hover {
-              border-color: #94a3b8 !important;
-            }
-            .customer-drawer-input:focus {
-              background-color: #ffffff !important;
-              border-color: #0f172a !important;
-              box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08) !important;
-              outline: none !important;
-            }
-            .customer-section-header {
-              display: flex;
-              align-items: center;
-              gap: 9px;
-              margin-top: 4px;
-              margin-bottom: 2px;
-            }
-            .customer-section-icon {
-              width: 26px;
-              height: 26px;
-              border-radius: 6px;
-              background: #f1f5f9;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: #475569;
-              flex-shrink: 0;
-            }
-            .customer-section-title {
-              font-size: 11.5px;
-              font-weight: 700;
-              letter-spacing: 0.04em;
-              text-transform: uppercase;
-              color: #0f172a;
-            }
-            .customer-section-line {
-              flex: 1;
-              height: 1px;
-              background: #e2e8f0;
-            }
-            .customer-drawer-label {
-              display: block;
-              font-size: 11.5px;
-              font-weight: 600;
-              color: #334155;
-              margin-bottom: 5px;
-            }
-          `}</style>
           <div 
+            className="customer-drawer-panel"
             onClick={(e) => e.stopPropagation()} 
             style={{
               width: '760px',
-              maxWidth: '94vw',
+              maxWidth: '96vw',
               height: '100vh',
               background: '#ffffff',
               boxShadow: '-14px 0 44px rgba(0, 0, 0, 0.22)',
@@ -1375,7 +1915,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 flexShrink: 0
               }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
                       {editingCustomer ? 'Edit Customer' : 'New Customer'}
                     </h3>
@@ -1387,21 +1927,22 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       padding: '2px 9px', 
                       borderRadius: 12 
                     }}>
-                      {editingCustomer ? 'Customer Editor' : 'Slide-Over Form'}
+                      {editingCustomer ? 'Customer Editor' : 'Registration Form'}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gold-primary, #b48324)', background: 'rgba(212, 175, 55, 0.1)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold-primary, #b48324)', background: 'rgba(212, 175, 55, 0.1)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
                       {newCustomerCode || 'CUST-AUTO'}
                     </span>
                   </div>
                   <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
                     {editingCustomer 
-                      ? 'Update customer contact, tax details, and saleroom billing address'
-                      : 'Enter customer contact, tax details, and saleroom billing address'}
+                      ? 'Update customer contact, tax details, and saleroom billing address. Email is permanently read-only.'
+                      : 'Enter customer contact, tax details, and saleroom credentials.'}
                   </p>
                 </div>
                 <button 
                   type="button" 
-                  onClick={() => setIsNewCustomerModalOpen(false)}
+                  disabled={isSaving}
+                  onClick={() => setIsCustomerDrawerOpen(false)}
                   style={{
                     background: '#f1f5f9',
                     border: 'none',
@@ -1412,16 +1953,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#64748b',
-                    cursor: 'pointer',
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
                     transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#e2e8f0';
-                    e.currentTarget.style.color = '#0f172a';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f1f5f9';
-                    e.currentTarget.style.color = '#64748b';
                   }}
                   title="Close (Esc)"
                 >
@@ -1429,7 +1962,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 </button>
               </div>
 
-              {/* Drawer Body - Organized into Clear Logical Sections Covering Full Space */}
+              {/* Drawer Body */}
               <div style={{
                 flex: 1,
                 padding: '20px 26px',
@@ -1448,7 +1981,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     <div className="customer-section-line" />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
                         First Name <span style={{ color: '#ef4444' }}>*</span>
@@ -1458,9 +1991,17 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         required 
                         placeholder="e.g. Eleanor"
                         value={newFirstName}
-                        onChange={(e) => setNewFirstName(e.target.value)}
-                        className="customer-drawer-input"
+                        onChange={(e) => {
+                          setNewFirstName(e.target.value);
+                          if (formErrors.firstName) setFormErrors(prev => ({ ...prev, firstName: undefined }));
+                        }}
+                        className={`customer-drawer-input ${formErrors.firstName ? 'is-error' : ''}`}
                       />
+                      {formErrors.firstName && (
+                        <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>
+                          {formErrors.firstName}
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -1469,7 +2010,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       </label>
                       <input 
                         type="text" 
-                        placeholder="e.g. Vance"
+                        placeholder="e.g. Sterling"
                         value={newLastName}
                         onChange={(e) => setNewLastName(e.target.value)}
                         className="customer-drawer-input"
@@ -1477,14 +2018,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
-                        Company Name
+                        Company Name (Optional)
                       </label>
                       <input 
                         type="text" 
-                        placeholder="Company or DBA name (optional)"
+                        placeholder="Company or Firm name"
                         value={newCompany}
                         onChange={(e) => setNewCompany(e.target.value)}
                         className="customer-drawer-input"
@@ -1509,7 +2050,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                           {newCustomerCode || 'CUST-AUTO'}
                         </span>
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold-primary, #b48324)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          Auto-Assigned
+                          {editingCustomer ? 'Preserved' : 'Auto-Assigned'}
                         </span>
                       </div>
                     </div>
@@ -1526,43 +2067,103 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     <div className="customer-section-line" />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
+                    {/* Email Field with Strict Read-Only on Update */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <label className="customer-drawer-label" style={{ margin: 0 }}>
+                          Email Address <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        {editingCustomer && (
+                          <span style={{ 
+                            fontSize: 10, 
+                            fontWeight: 700, 
+                            color: '#64748b', 
+                            background: '#f1f5f9', 
+                            padding: '2px 7px', 
+                            borderRadius: 4, 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: 4 
+                          }}>
+                            <Lock size={10} />
+                            READ-ONLY
+                          </span>
+                        )}
+                      </div>
+
+                      {editingCustomer ? (
+                        <>
+                          <input 
+                            type="email" 
+                            readOnly 
+                            disabled
+                            value={newEmail}
+                            className="customer-drawer-input"
+                            style={{ 
+                              backgroundColor: '#f1f5f9', 
+                              color: '#64748b', 
+                              cursor: 'not-allowed', 
+                              borderColor: '#e2e8f0'
+                            }}
+                          />
+                          <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, display: 'block' }}>
+                            Customer email is permanently bound to login credentials and cannot be edited.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <input 
+                            type="email" 
+                            required 
+                            placeholder="customer@domain.com"
+                            value={newEmail}
+                            onChange={(e) => {
+                              setNewEmail(e.target.value);
+                              if (formErrors.email) setFormErrors(prev => ({ ...prev, email: undefined }));
+                            }}
+                            className={`customer-drawer-input ${formErrors.email ? 'is-error' : ''}`}
+                          />
+                          {formErrors.email && (
+                            <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>
+                              {formErrors.email}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Phone 1 Field */}
                     <div>
                       <label className="customer-drawer-label">
-                        Phone 1 <span style={{ color: '#ef4444' }}>*</span>
+                        Phone 1 / Telephone
                       </label>
                       <input 
                         type="text" 
                         placeholder="(406) 555-0100"
                         value={newPhone1}
-                        onChange={(e) => setNewPhone1(e.target.value)}
-                        className="customer-drawer-input"
+                        onChange={(e) => {
+                          setNewPhone1(e.target.value);
+                          if (formErrors.phone) setFormErrors(prev => ({ ...prev, phone: undefined }));
+                        }}
+                        className={`customer-drawer-input ${formErrors.phone ? 'is-error' : ''}`}
                       />
-                    </div>
-
-                    <div>
-                      <label className="customer-drawer-label">
-                        Email Address <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <input 
-                        type="email" 
-                        required 
-                        placeholder="customer@domain.com"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        className="customer-drawer-input"
-                      />
+                      {formErrors.phone && (
+                        <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>
+                          {formErrors.phone}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
-                        Driver's License / Gov ID Number
+                        Driver's License / Gov ID
                       </label>
                       <input 
                         type="text" 
-                        placeholder="Driver's License Number"
+                        placeholder="State or National ID Number"
                         value={newDriversLicense}
                         onChange={(e) => setNewDriversLicense(e.target.value)}
                         className="customer-drawer-input"
@@ -1571,22 +2172,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     <div>
                       <label className="customer-drawer-label">
-                        ID Verification
+                        Bidder Classification
                       </label>
-                      <div 
-                        className="customer-drawer-input" 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 8,
-                          background: '#f8fafc',
-                          color: '#475569',
-                          fontSize: 12
-                        }}
-                      >
-                        <ShieldCheck size={16} style={{ color: '#10b981', flexShrink: 0 }} />
-                        <span>Saleroom Verification On File</span>
-                      </div>
+                      <ShadcnSelect
+                        value={newIsSeller ? 'both' : 'bidder'}
+                        onChange={(val) => setNewIsSeller(val === 'both')}
+                        options={CLASSIFICATION_OPTIONS}
+                        fullWidth
+                      />
                     </div>
                   </div>
                 </div>
@@ -1597,11 +2190,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     <div className="customer-section-icon">
                       <FileText size={14} />
                     </div>
-                    <span className="customer-section-title">Tax Information</span>
+                    <span className="customer-section-title">Tax & Resale Information</span>
                     <div className="customer-section-line" />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
                         Tax ID / Resale Certificate Number
@@ -1634,11 +2227,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     <div className="customer-section-icon">
                       <MapPin size={14} />
                     </div>
-                    <span className="customer-section-title">Address Information</span>
+                    <span className="customer-section-title">Saleroom Billing & Shipping Address</span>
                     <div className="customer-section-line" />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
                         Address Line 1
@@ -1654,11 +2247,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     <div>
                       <label className="customer-drawer-label">
-                        Address Line 2
+                        Address Line 2 (Optional)
                       </label>
                       <input 
                         type="text" 
-                        placeholder="Apt, Suite, Unit, Building (optional)"
+                        placeholder="Apt, Suite, Unit, Building"
                         value={newAddress2}
                         onChange={(e) => setNewAddress2(e.target.value)}
                         className="customer-drawer-input"
@@ -1666,12 +2259,12 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 0.75fr', gap: 16 }}>
+                  <div className="customer-drawer-grid-2">
                     <div>
                       <label className="customer-drawer-label">
                         City, State, ZIP Code
                       </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.85fr 0.85fr', gap: 6 }}>
+                      <div className="customer-drawer-grid-3">
                         <input 
                           type="text" 
                           placeholder="City"
@@ -1700,26 +2293,19 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Country
                       </label>
-                      <select 
-                        value={newCountry} 
-                        onChange={(e) => setNewCountry(e.target.value)}
-                        className="customer-drawer-input"
-                      >
-                        <option value="United States">United States</option>
-                        <option value="Canada">Canada</option>
-                        <option value="United Kingdom">United Kingdom</option>
-                        <option value="Australia">Australia</option>
-                        <option value="Switzerland">Switzerland</option>
-                        <option value="Germany">Germany</option>
-                        <option value="France">France</option>
-                        <option value="Other">Other</option>
-                      </select>
+                      <ShadcnSelect
+                        value={newCountry}
+                        onChange={setNewCountry}
+                        options={COUNTRY_OPTIONS}
+                        fullWidth
+                        placeholder="Select Country"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Drawer Footer - Sticky at Bottom */}
+              {/* Drawer Footer */}
               <div style={{
                 position: 'sticky',
                 bottom: 0,
@@ -1735,7 +2321,529 @@ export const UsersView: React.FC<UsersViewProps> = ({
               }}>
                 <button 
                   type="button" 
-                  onClick={() => setIsNewCustomerModalOpen(false)}
+                  disabled={isSaving}
+                  onClick={() => setIsCustomerDrawerOpen(false)}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#475569',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    padding: '9px 20px',
+                    borderRadius: 4,
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    letterSpacing: '0.04em',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  CANCEL
+                </button>
+
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  style={{ 
+                    background: '#0f172a', 
+                    color: '#ffffff', 
+                    fontWeight: 700,
+                    fontSize: 13,
+                    padding: '9px 28px',
+                    borderRadius: 4,
+                    border: '1px solid #0f172a',
+                    letterSpacing: '0.04em',
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {isSaving && <Loader2 size={14} className="animate-spin" />}
+                  <span>{editingCustomer ? 'UPDATE CUSTOMER' : 'SAVE CUSTOMER'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      
+      {/* =========================================================================
+          TABLE COLUMN SETTINGS POPOVER
+          ========================================================================= */}
+      {isColumnSettingsOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={settingsPopoverRef}
+          role="dialog"
+          aria-label="Table Column Settings"
+          style={{
+            position: 'fixed',
+            top: settingsPosition.top,
+            right: settingsPosition.right,
+            width: settingsPosition.width,
+            maxWidth: 'calc(100vw - 20px)',
+            background: '#ffffff',
+            borderRadius: 8,
+            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.08)',
+            border: '1px solid #e2e8f0',
+            padding: '12px 14px',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            animation: 'af360MenuFadeIn 0.15s ease-out'
+          }}
+        >
+          {/* Popover Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <SlidersHorizontal size={14} style={{ color: 'var(--gold-primary, #b48324)' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Table Settings</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsColumnSettingsOpen(false)}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2, display: 'flex' }}
+              title="Close settings"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Toggle: Show Table Headers */}
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none', padding: '4px 2px' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>Show Table Headers</span>
+            <input
+              type="checkbox"
+              checked={showTableHeaders}
+              onChange={(e) => handleToggleHeaders(e.target.checked)}
+              style={{
+                width: 15,
+                height: 15,
+                accentColor: 'var(--gold-primary, #b48324)',
+                cursor: 'pointer'
+              }}
+            />
+          </label>
+
+          <div style={{ height: 1, background: '#f1f5f9', margin: '2px 0' }} />
+
+          {/* Section: Column Visibility */}
+          <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', padding: '0 2px' }}>
+            Column Visibility
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 240, overflowY: 'auto' }}>
+            {AVAILABLE_COLUMNS.map(col => {
+              const isChecked = columnVisibility[col.key];
+              const isLocked = !col.hideable;
+              return (
+                <label
+                  key={col.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 8px',
+                    borderRadius: 5,
+                    fontSize: 12.5,
+                    color: isLocked ? '#64748b' : '#1e293b',
+                    cursor: isLocked ? 'default' : 'pointer',
+                    userSelect: 'none',
+                    background: isChecked ? '#f8fafc' : 'transparent',
+                    transition: 'background 0.12s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      disabled={isLocked}
+                      onChange={() => toggleColumn(col.key)}
+                      style={{
+                        cursor: isLocked ? 'not-allowed' : 'pointer',
+                        accentColor: 'var(--gold-primary, #b48324)',
+                        width: 14,
+                        height: 14
+                      }}
+                    />
+                    <span style={{ fontWeight: isChecked ? 600 : 400 }}>{col.label}</span>
+                  </div>
+                  {isLocked && (
+                    <span style={{ fontSize: 10, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 500 }}>
+                      <Lock size={10} />
+                      <span>Required</span>
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{ height: 1, background: '#f1f5f9', margin: '2px 0' }} />
+
+          {/* Bottom Actions: Show All & Reset Default */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+            <button
+              type="button"
+              onClick={handleShowAllColumns}
+              className="btn btn-secondary"
+              style={{ fontSize: 11, padding: '5px 10px', height: 28, flex: 1, justifyContent: 'center' }}
+            >
+              Show All
+            </button>
+            <button
+              type="button"
+              onClick={handleResetColumns}
+              className="btn btn-secondary"
+              style={{ fontSize: 11, padding: '5px 10px', height: 28, flex: 1, justifyContent: 'center', color: '#64748b' }}
+            >
+              Reset Default
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* =========================================================================
+          VIEW CUSTOMER DETAILS PAGE - OPEN IN RIGHT SIDE BAR
+          ========================================================================= */}
+      {viewingCustomer && typeof document !== 'undefined' && createPortal(
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            transition: 'opacity 0.25s ease'
+          }}
+          onClick={() => setViewingCustomer(null)}
+        >
+          <div 
+            className="customer-drawer-panel"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '740px',
+              maxWidth: '96vw',
+              height: '100vh',
+              background: '#ffffff',
+              boxShadow: '-14px 0 44px rgba(0, 0, 0, 0.22)',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'slideInRightDrawer 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Right Sidebar Header */}
+            <div style={{
+              padding: '16px 26px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#ffffff',
+              flexShrink: 0
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                    Customer Details
+                  </h3>
+                  <span style={{ 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    color: '#0f766e', 
+                    background: '#ccfbf1', 
+                    padding: '2px 9px', 
+                    borderRadius: 12 
+                  }}>
+                    Saleroom Record
+                  </span>
+                  <span style={{ 
+                    fontFamily: 'monospace', 
+                    fontSize: 11, 
+                    fontWeight: 700, 
+                    color: 'var(--gold-primary, #b48324)', 
+                    background: 'rgba(212, 175, 55, 0.1)', 
+                    padding: '2px 8px', 
+                    borderRadius: 4 
+                  }}>
+                    {getCustomerCode(viewingCustomer)}
+                  </span>
+                </div>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Complete saleroom credentials, billing address & database record
+                </p>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={() => setViewingCustomer(null)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: 34,
+                  height: 34,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#e2e8f0';
+                  e.currentTarget.style.color = '#0f172a';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9';
+                  e.currentTarget.style.color = '#64748b';
+                }}
+                title="Close (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Right Sidebar Body */}
+            <div style={{ padding: '20px 26px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18, flex: 1 }}>
+              {/* Profile Card Banner */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                padding: '16px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: '50%',
+                    background: 'var(--gold-gradient, linear-gradient(135deg, #d4af37 0%, #f6e07a 100%))',
+                    color: '#0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: 20
+                  }}>
+                    {getFirstName(viewingCustomer).charAt(0) || 'C'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+                      {viewingCustomer.name || `${getFirstName(viewingCustomer)} ${getLastName(viewingCustomer)}`}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                      {viewingCustomer.company ? viewingCustomer.company : 'Individual Saleroom Bidder'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', background: '#ccfbf1', padding: '4px 10px', borderRadius: 12 }}>
+                    Paddle #{viewingCustomer.paddleNumber || 'Pending'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: 12 }}>
+                    {viewingCustomer.type === 'both' ? 'Bidder & Seller' : 'Registered Bidder'}
+                  </span>
+                  <span style={{ 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    color: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#0f172a' : '#334155', 
+                    background: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#f1f5f9' : '#f8fafc', 
+                    border: '1px solid #e2e8f0', 
+                    padding: '4px 10px', 
+                    borderRadius: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    {(viewingCustomer.role || '').toLowerCase() === 'super_admin' && <ShieldCheck size={12} color="var(--gold-primary, #b48324)" />}
+                    <span>Role: {formatRole(viewingCustomer.role)}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Detail Sections in Grid */}
+              <div className="view-customer-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* 1. Contact Info Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <Mail size={16} color="#64748b" />
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#0f172a', letterSpacing: '0.04em' }}>
+                      Contact Information
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Email Address</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{viewingCustomer.email || '—'}</span>
+                        {viewingCustomer.email && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyEmail(viewingCustomer.email)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94a3b8' }}
+                            title="Copy email"
+                          >
+                            {copiedEmail ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Phone 1 / Telephone</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontFamily: 'monospace', display: 'block', marginTop: 2 }}>{getPhone1(viewingCustomer)}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Registration Date</span>
+                      <span style={{ color: '#334155', display: 'block', marginTop: 2 }}>{viewingCustomer.registrationDate || 'Recent'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Tax & Licensing Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <FileText size={16} color="#64748b" />
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#0f172a', letterSpacing: '0.04em' }}>
+                      Tax & Licensing
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Tax ID / Certificate</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a', display: 'block', marginTop: 2 }}>{viewingCustomer.taxId || 'None on file'}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Tax ID Expiration Date</span>
+                      <span style={{ color: '#334155', display: 'block', marginTop: 2 }}>{viewingCustomer.taxIdExpirationDate || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Tax Status</span>
+                      <span style={{ color: viewingCustomer.taxExemptAllPurchases ? '#059669' : '#64748b', fontWeight: 600, display: 'block', marginTop: 2 }}>
+                        {viewingCustomer.taxExemptAllPurchases ? 'Tax-Exempt Purchaser' : 'Standard Taxable Bidder'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Saleroom Credentials Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <ShieldCheck size={16} color="#10b981" />
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#0f172a', letterSpacing: '0.04em' }}>
+                      Saleroom Credentials
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Account Role</span>
+                      <span style={{ color: '#0f172a', fontWeight: 600, display: 'block', marginTop: 2 }}>{formatRole(viewingCustomer.role)}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Driver's License / Gov ID</span>
+                      <span style={{ color: '#0f172a', fontWeight: 600, display: 'block', marginTop: 2 }}>{viewingCustomer.driversLicenseNumber || 'Not recorded'}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Permanent Bidder</span>
+                      <span style={{ color: viewingCustomer.isPermanentBidder ? '#059669' : '#64748b', fontWeight: 600, display: 'block', marginTop: 2 }}>
+                        {viewingCustomer.isPermanentBidder ? 'Yes (Retained Saleroom Paddle)' : 'No (Per-Sale Bidder)'}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#64748b', display: 'block', fontWeight: 600 }}>Account Origin</span>
+                      <span style={{ color: '#334155', display: 'block', marginTop: 2 }}>{viewingCustomer.siteOrigin || 'Direct Saleroom'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Billing Address Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MapPin size={16} color="#64748b" />
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#0f172a', letterSpacing: '0.04em' }}>
+                      Billing & Saleroom Address
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: '#334155' }}>
+                    {viewingCustomer.address1 || viewingCustomer.address ? (
+                      <>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{viewingCustomer.address1 || viewingCustomer.address}</div>
+                        {viewingCustomer.address2 && <div>{viewingCustomer.address2}</div>}
+                        <div>{viewingCustomer.cityStateZip || `${viewingCustomer.city || ''} ${viewingCustomer.state || ''} ${viewingCustomer.zip || ''}`.trim()}</div>
+                        <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>{viewingCustomer.country || 'United States'}</div>
+                      </>
+                    ) : (
+                      <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No billing address recorded</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Sidebar Footer - Sticky at bottom */}
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              background: '#ffffff',
+              borderTop: '1px solid #e2e8f0',
+              padding: '14px 26px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              boxShadow: '0 -4px 14px rgba(0, 0, 0, 0.05)',
+              flexShrink: 0
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewingCustomer;
+                  setViewingCustomer(null);
+                  setDeleteCustomerError(null);
+                  setCustomerToDelete(target);
+                }}
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  padding: '9px 16px',
+                  borderRadius: 4,
+                  background: '#ffffff',
+                  border: '1px solid #fecaca',
+                  color: '#dc2626',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fef2f2';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ffffff';
+                }}
+              >
+                <Trash2 size={14} />
+                <span>Delete Customer</span>
+              </button>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setViewingCustomer(null)}
                   style={{
                     background: '#ffffff',
                     border: '1px solid #cbd5e1',
@@ -1757,91 +2865,166 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     e.currentTarget.style.color = '#475569';
                   }}
                 >
-                  CANCEL
+                  CLOSE
                 </button>
 
-                <button 
-                  type="submit" 
-                  disabled={isSaving}
-                  style={{ 
-                    background: '#0f172a', 
-                    color: '#ffffff', 
-                    fontWeight: 700,
-                    fontSize: 13,
-                    padding: '9px 28px',
-                    borderRadius: 4,
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingCustomer;
+                    setViewingCustomer(null);
+                    handleOpenEditCustomer(target);
+                  }}
+                  style={{
+                    background: '#0f172a',
+                    color: '#ffffff',
                     border: '1px solid #0f172a',
+                    borderRadius: 4,
+                    padding: '9px 24px',
+                    fontSize: 13,
+                    fontWeight: 700,
                     letterSpacing: '0.04em',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 7,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
                     transition: 'all 0.15s ease'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = '#1e293b';
-                    e.currentTarget.style.borderColor = '#1e293b';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = '#0f172a';
-                    e.currentTarget.style.borderColor = '#0f172a';
                   }}
                 >
-                  {isSaving && <Loader2 size={14} className="animate-spin" />}
-                  <span>{editingCustomer ? 'UPDATE CUSTOMER' : 'SAVE CUSTOMER'}</span>
+                  <Pencil size={14} />
+                  <span>EDIT CUSTOMER</span>
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Import Customers Modal */}
-      {isImportModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsImportModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
-            <div className="modal-header">
+      {/* =========================================================================
+          IMPORT CUSTOMERS MODAL
+          ========================================================================= */}
+      {isImportModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="modal-overlay" 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16
+          }}
+          onClick={() => !isImporting && setIsImportModalOpen(false)}
+        >
+          <div 
+            className="modal-content" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              maxWidth: 540, 
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: 10,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+              border: '1px solid #e2e8f0',
+              animation: 'modalFadeInScale 0.18s ease-out'
+            }}
+          >
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#ffffff'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <FileSpreadsheet size={20} color="var(--gold-primary, #dfba52)" />
-                <h3 className="font-serif" style={{ margin: 0 }}>Import Customers</h3>
+                <h3 className="font-serif" style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+                  Import Customers
+                </h3>
               </div>
-              <button type="button" className="icon-btn" onClick={() => setIsImportModalOpen(false)}>
+              <button 
+                type="button" 
+                disabled={isImporting}
+                onClick={() => setIsImportModalOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 6,
+                  width: 30,
+                  height: 30,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#94a3b8',
+                  cursor: isImporting ? 'not-allowed' : 'pointer'
+                }}
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-                Upload a CSV file containing customer records. Imported rows will be saved directly into Supabase and rendered in your table.
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <p style={{ fontSize: 13, color: '#475569', margin: 0, lineHeight: 1.5 }}>
+                Upload a CSV file containing customer records. Each row will be validated and saved directly into Supabase. Existing duplicate emails will be detected and skipped automatically.
               </p>
 
               {/* Upload Drop Area */}
               <div 
                 style={{
-                  border: '2px dashed rgba(212, 175, 55, 0.35)',
+                  border: '2px dashed rgba(212, 175, 55, 0.45)',
                   borderRadius: 8,
                   padding: '28px 16px',
                   textAlign: 'center',
-                  background: 'var(--bg-darkest, #111)',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.2s ease'
+                  background: '#f8fafc',
+                  cursor: isImporting ? 'not-allowed' : 'pointer',
+                  transition: 'border-color 0.2s ease, background 0.2s ease'
                 }}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isImporting && fileInputRef.current?.click()}
+                onMouseEnter={(e) => {
+                  if (!isImporting) e.currentTarget.style.borderColor = 'var(--gold-primary, #d4af37)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isImporting) e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.45)';
+                }}
               >
-                <CloudDownload size={36} color="var(--gold-primary, #dfba52)" style={{ margin: '0 auto 8px' }} />
-                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-main)' }}>
-                  Click to choose CSV file
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
-                  Supports .csv and text formats
-                </div>
+                {isImporting ? (
+                  <>
+                    <Loader2 size={36} className="animate-spin" style={{ color: 'var(--gold-primary, #dfba52)', margin: '0 auto 8px' }} />
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
+                      Importing and saving records to Supabase...
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <CloudDownload size={36} color="var(--gold-primary, #dfba52)" style={{ margin: '0 auto 8px' }} />
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
+                      Click to choose CSV file
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                      Supports comma-separated values (.csv)
+                    </div>
+                  </>
+                )}
                 <input 
                   type="file" 
                   ref={fileInputRef} 
                   accept=".csv,.txt"
                   style={{ display: 'none' }}
                   onChange={handleFileUpload}
+                  disabled={isImporting}
                 />
               </div>
 
@@ -1852,25 +3035,40 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   borderRadius: 6,
                   fontSize: 13,
                   fontWeight: 500,
-                  backgroundColor: importStatusMessage.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                  color: importStatusMessage.type === 'success' ? '#10b981' : '#ef4444',
-                  border: `1px solid ${importStatusMessage.type === 'success' ? '#10b981' : '#ef4444'}`
+                  backgroundColor: importStatusMessage.type === 'success' 
+                    ? 'rgba(16, 185, 129, 0.12)' 
+                    : importStatusMessage.type === 'warning'
+                    ? 'rgba(245, 158, 11, 0.12)'
+                    : 'rgba(239, 68, 68, 0.12)',
+                  color: importStatusMessage.type === 'success' 
+                    ? '#059669' 
+                    : importStatusMessage.type === 'warning'
+                    ? '#d97706'
+                    : '#dc2626',
+                  border: `1px solid ${
+                    importStatusMessage.type === 'success' 
+                      ? '#a7f3d0' 
+                      : importStatusMessage.type === 'warning'
+                      ? '#fde68a'
+                      : '#fecaca'
+                  }`
                 }}>
                   {importStatusMessage.text}
                 </div>
               )}
 
               {/* Download Sample Template */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', padding: '10px 14px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 14px', borderRadius: 6, border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>CSV Template</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>Download sample template with all customer columns</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>CSV Template</div>
+                  <div style={{ fontSize: 11.5, color: '#64748b' }}>Download sample template with all customer column headers</div>
                 </div>
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
-                  style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}
+                  style={{ fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}
                   onClick={handleDownloadSampleTemplate}
+                  disabled={isImporting}
                 >
                   <Download size={13} />
                   <span>Download Sample</span>
@@ -1878,122 +3076,30 @@ export const UsersView: React.FC<UsersViewProps> = ({
               </div>
             </div>
 
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setIsImportModalOpen(false)}>
+            <div style={{
+              padding: '12px 20px',
+              borderTop: '1px solid #f1f5f9',
+              background: '#f8fafc',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                disabled={isImporting}
+                onClick={() => setIsImportModalOpen(false)}
+              >
                 Close
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Customer Detail & Authorization Modal */}
-      {selectedUser && (
-        <div className="modal-overlay" onClick={() => setSelectedUser(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="font-serif">Customer Profile & Authorization</h3>
-              <button className="icon-btn" onClick={() => setSelectedUser(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: 'var(--bg-darkest)', padding: 16, borderRadius: 8 }}>
-                <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'var(--gold-gradient)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20 }}>
-                  {getFirstName(selectedUser).charAt(0) || selectedUser.name.charAt(0)}
-                </div>
-                <div>
-                  <h4 style={{ fontSize: 18, color: 'var(--text-main)', fontWeight: 700, margin: 0 }}>
-                    {getFirstName(selectedUser)} {getLastName(selectedUser)}
-                  </h4>
-                  <p style={{ fontSize: 12, color: 'var(--gold-primary)', margin: '4px 0 0' }}>
-                    Customer Code: {getCustomerCode(selectedUser)} • Paddle #{selectedUser.paddleNumber}
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
-                <div className="form-group">
-                  <label>Email Address</label>
-                  <input type="text" readOnly value={selectedUser.email} />
-                </div>
-                <div className="form-group">
-                  <label>Phone 1 / Telephone</label>
-                  <input type="text" readOnly value={getPhone1(selectedUser)} />
-                </div>
-                <div className="form-group">
-                  <label>Organization / Firm</label>
-                  <input type="text" readOnly value={getCompany(selectedUser)} />
-                </div>
-                <div className="form-group">
-                  <label>Registered Origin</label>
-                  <input type="text" readOnly value={selectedUser.siteOrigin} />
-                </div>
-              </div>
-
-              {selectedUser.driversLicenseNumber && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-                  <div className="form-group">
-                    <label>Driver's License</label>
-                    <input type="text" readOnly value={selectedUser.driversLicenseNumber} />
-                  </div>
-                  <div className="form-group">
-                    <label>Tax ID</label>
-                    <input type="text" readOnly value={selectedUser.taxId || 'N/A'} />
-                  </div>
-                </div>
-              )}
-
-              <div className="form-group" style={{ marginTop: 14 }}>
-                <label>Customer Bid Limit Ceiling ($)</label>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <input 
-                    type="number" 
-                    value={selectedUser.bidLimit}
-                    onChange={(e) => {
-                      const updated = { ...selectedUser, bidLimit: parseFloat(e.target.value) || 0 };
-                      setSelectedUser(updated);
-                      onUpdateUser(updated);
-                    }}
-                  />
-                  <button 
-                    className="btn btn-secondary" 
-                    onClick={() => {
-                      const updated = { ...selectedUser, bidLimit: selectedUser.bidLimit + 50000 };
-                      setSelectedUser(updated);
-                      onUpdateUser(updated);
-                    }}
-                  >
-                    +$50k
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: 14 }}>
-                <label>Admin Notes & Bank References</label>
-                <textarea 
-                  rows={2} 
-                  value={selectedUser.notes}
-                  onChange={(e) => {
-                    const updated = { ...selectedUser, notes: e.target.value };
-                    setSelectedUser(updated);
-                    onUpdateUser(updated);
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setSelectedUser(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Customer Confirmation Modal */}
+      {/* =========================================================================
+          DELETE CUSTOMER CONFIRMATION MODAL
+          ========================================================================= */}
       {customerToDelete && (
         <DeleteConfirmModal
           isOpen={Boolean(customerToDelete)}
@@ -2007,7 +3113,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           title="Delete Customer"
           entityName={customerToDelete.name || `${getFirstName(customerToDelete)} ${getLastName(customerToDelete)}`}
           entitySubtitle={`${getCustomerCode(customerToDelete)} • ${customerToDelete.email || 'No email'}`}
-          warningMessage="Are you sure you want to delete this customer? This action will remove the record from the Supabase database."
+          warningMessage="Are you sure you want to delete this customer? This action will permanently remove the record from the Supabase database."
           isLoading={isDeletingCustomer}
           errorMessage={deleteCustomerError}
           confirmButtonText="Delete Customer"

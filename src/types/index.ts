@@ -97,6 +97,7 @@ export type BidderStatus = 'verified' | 'pending_verification' | 'suspended' | '
 export type UserType = 'bidder' | 'consignor' | 'both';
 
 export interface UserBidder {
+  role?: string;
   id: string;
   customerCode?: string;
   firstName?: string;
@@ -104,6 +105,7 @@ export interface UserBidder {
   phone1?: string;
   paddleNumber: string;
   name: string;
+  fullName?: string;
   email: string;
   phone: string;
   company?: string;

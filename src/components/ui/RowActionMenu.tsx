@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 
 export interface ActionMenuItem {
@@ -60,7 +61,7 @@ export const RowActionMenu: React.FC<RowActionMenuProps> = ({
     }
   };
 
-  // Close when clicking outside
+  // Close when clicking outside or pressing Escape
   useEffect(() => {
     if (!isOpen) return;
 
@@ -101,6 +102,96 @@ export const RowActionMenu: React.FC<RowActionMenuProps> = ({
       window.removeEventListener('resize', handleScrollOrResize);
     };
   }, [isOpen]);
+
+  const menuContent = isOpen ? (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={ariaLabel}
+      style={{
+        position: 'fixed',
+        top: menuPosition.top,
+        ...(menuPosition.right !== undefined ? { right: menuPosition.right } : { left: menuPosition.left }),
+        width: 175,
+        background: '#ffffff',
+        borderRadius: 8,
+        boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.08)',
+        padding: '5px',
+        zIndex: 99999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        animation: 'fadeInMenu 0.12s ease-out'
+      }}
+    >
+      <style>{`
+        @keyframes fadeInMenu {
+          from { opacity: 0; transform: scale(0.96); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+      {items.map((item, idx) => {
+        const isDanger = item.variant === 'danger';
+
+        return (
+          <button
+            key={idx}
+            role="menuitem"
+            type="button"
+            disabled={item.disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+              item.onClick();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: 6,
+              border: 'none',
+              background: 'transparent',
+              color: isDanger ? '#dc2626' : '#1e293b',
+              fontSize: 12.5,
+              fontWeight: 600,
+              textAlign: 'left',
+              cursor: item.disabled ? 'not-allowed' : 'pointer',
+              opacity: item.disabled ? 0.45 : 1,
+              transition: 'background 0.12s ease, color 0.12s ease',
+              outline: 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (item.disabled) return;
+              if (isDanger) {
+                e.currentTarget.style.background = '#fef2f2';
+                e.currentTarget.style.color = '#b91c1c';
+              } else {
+                e.currentTarget.style.background = '#f8fafc';
+                e.currentTarget.style.color = '#0f172a';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (item.disabled) return;
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = isDanger ? '#dc2626' : '#1e293b';
+            }}
+          >
+            <span style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              color: isDanger ? '#dc2626' : '#64748b'
+            }}>
+              {item.icon}
+            </span>
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -147,95 +238,7 @@ export const RowActionMenu: React.FC<RowActionMenuProps> = ({
         <MoreVertical size={16} strokeWidth={2.2} />
       </button>
 
-      {isOpen && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label={ariaLabel}
-          style={{
-            position: 'fixed',
-            top: menuPosition.top,
-            ...(menuPosition.right !== undefined ? { right: menuPosition.right } : { left: menuPosition.left }),
-            width: 175,
-            background: '#ffffff',
-            borderRadius: 8,
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.08)',
-            padding: '5px',
-            zIndex: 99999,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-            animation: 'fadeInMenu 0.12s ease-out'
-          }}
-        >
-          <style>{`
-            @keyframes fadeInMenu {
-              from { opacity: 0; transform: scale(0.96); }
-              to { opacity: 1; transform: scale(1); }
-            }
-          `}</style>
-          {items.map((item, idx) => {
-            const isDanger = item.variant === 'danger';
-
-            return (
-              <button
-                key={idx}
-                role="menuitem"
-                type="button"
-                disabled={item.disabled}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsOpen(false);
-                  item.onClick();
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: 'transparent',
-                  color: isDanger ? '#dc2626' : '#1e293b',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  textAlign: 'left',
-                  cursor: item.disabled ? 'not-allowed' : 'pointer',
-                  opacity: item.disabled ? 0.45 : 1,
-                  transition: 'background 0.12s ease, color 0.12s ease',
-                  outline: 'none'
-                }}
-                onMouseEnter={(e) => {
-                  if (item.disabled) return;
-                  if (isDanger) {
-                    e.currentTarget.style.background = '#fef2f2';
-                    e.currentTarget.style.color = '#b91c1c';
-                  } else {
-                    e.currentTarget.style.background = '#f8fafc';
-                    e.currentTarget.style.color = '#0f172a';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (item.disabled) return;
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = isDanger ? '#dc2626' : '#1e293b';
-                }}
-              >
-                <span style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  color: isDanger ? '#dc2626' : '#64748b'
-                }}>
-                  {item.icon}
-                </span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {typeof document !== 'undefined' && menuContent ? createPortal(menuContent, document.body) : null}
     </div>
   );
 };

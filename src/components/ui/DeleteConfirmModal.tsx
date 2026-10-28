@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
 export interface DeleteConfirmModalProps {
@@ -41,7 +42,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const content = (
     <div
       className="modal-overlay"
       style={{
@@ -69,9 +70,16 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           borderRadius: 10,
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
           overflow: 'hidden',
-          border: '1px solid #e2e8f0'
+          border: '1px solid #e2e8f0',
+          animation: 'modalFadeIn 0.18s ease-out'
         }}
       >
+        <style>{`
+          @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.97) translateY(4px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `}</style>
         {/* Header */}
         <div style={{
           padding: '16px 20px',
@@ -103,6 +111,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             type="button"
             disabled={isLoading}
             onClick={onClose}
+            aria-label="Close dialog"
             style={{
               background: 'transparent',
               border: 'none',
@@ -229,4 +238,6 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 };

@@ -54,12 +54,16 @@ export async function updateCustomerInDb(
   id: string, 
   payload: Record<string, any>
 ): Promise<{ success: boolean; error?: string }> {
+  // Email must be read-only during customer updates; strictly disallow modifying email
+  const safePayload = { ...payload };
+  delete safePayload.email;
+
   // 1. Attempt via server-side endpoint
   try {
     const res = await fetch('/api/customers/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...payload })
+      body: JSON.stringify({ id, ...safePayload })
     });
 
     if (res.ok) {
@@ -79,10 +83,10 @@ export async function updateCustomerInDb(
   try {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (isUUID) {
-      const { error } = await supabase.from('users').update(payload).eq('id', id);
+      const { error } = await supabase.from('users').update(safePayload).eq('id', id);
       if (error) return { success: false, error: error.message };
     } else {
-      const { error } = await supabase.from('users').upsert([{ id, ...payload }]);
+      const { error } = await supabase.from('users').upsert([{ id, ...safePayload }]);
       if (error) return { success: false, error: error.message };
     }
     return { success: true };

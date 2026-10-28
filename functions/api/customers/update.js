@@ -22,6 +22,9 @@ export async function onRequestPost(context) {
       return jsonResponse({ success: false, error: 'Missing customer id' }, 400, req);
     }
 
+    // Email must be read-only during customer updates; strictly disallow modifying email
+    delete updateFields.email;
+
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const updateUrl = isUUID 
       ? `${url}/rest/v1/users?id=eq.${encodeURIComponent(id)}`
