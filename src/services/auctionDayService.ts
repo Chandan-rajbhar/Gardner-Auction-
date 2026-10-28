@@ -104,9 +104,9 @@ class AuctionDayService {
       allLots = await lotsService.fetchLots();
     }
 
-    // Filter lots scoped to this auction (or if auction is primary auc-001/auc-002, match appropriately)
+    // Filter lots scoped strictly to this auction (excluding mock reference lots)
     const auctionLots = allLots.filter(l => 
-      !l.auctionId || l.auctionId === auction.id || (auction.id === 'auc-001' && l.auctionId === 'auc-001')
+      l.auctionId === auction.id && !l.id?.startsWith('lot-ref-')
     );
 
     // 3. Load registrations, alternate bids, deposits, and syndication site stats
@@ -236,7 +236,11 @@ class AuctionDayService {
       );
     }
     if (alternateBids.length === 0 && Array.isArray(auction.dayStats?.alternateBids)) {
-      alternateBids = [...auction.dayStats.alternateBids];
+      alternateBids = auction.dayStats.alternateBids.filter((b: any) =>
+        !['alt-1', 'alt-2', 'alt-3'].includes(b?.id) &&
+        !['Senator James Caldwell', 'Helena Vault Trust'].includes(b?.bidderName) &&
+        !['4005', '3012'].includes(String(b?.paddleNumber))
+      );
     }
     if (siteStats.length === 0 && Array.isArray(auction.dayStats?.siteStats)) {
       siteStats = [...auction.dayStats.siteStats];

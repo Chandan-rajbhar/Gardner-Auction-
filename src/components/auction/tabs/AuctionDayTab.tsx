@@ -147,6 +147,11 @@ const isMockDepositItem = (d: any) =>
   ['5001', '2001', '5003'].includes(String(d?.bidCardNumber)) ||
   ['Helena Vance', 'Roger Perry', 'Eleanor Rigby'].includes(d?.bidderName);
 
+const isMockAltBidItem = (b: any) =>
+  ['alt-1', 'alt-2', 'alt-3'].includes(b?.id) ||
+  ['Senator James Caldwell', 'Helena Vault Trust'].includes(b?.bidderName) ||
+  ['4005', '3012'].includes(String(b?.paddleNumber));
+
 const DEFAULT_CHECKIN_VISIBLE_COLUMNS: { [key: string]: boolean } = {
   bidCardNumber: true,
   companyName: true,
@@ -187,7 +192,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [registrations, setRegistrations] = useState<BidderRegistration[]>(
     () => (auction?.dayStats?.registrations || []).filter(r => !isMockRegItem(r))
   );
-  const [alternateBids, setAlternateBids] = useState<AlternateBid[]>(auction?.dayStats?.alternateBids || []);
+  const [alternateBids, setAlternateBids] = useState<AlternateBid[]>(
+    () => (auction?.dayStats?.alternateBids || []).filter(b => !isMockAltBidItem(b))
+  );
   const [siteStats, setSiteStats] = useState<HiBidSiteStat[]>(auction?.dayStats?.siteStats || []);
   const [deposits, setDeposits] = useState<BidderDeposit[]>(
     () => (auction?.dayStats?.deposits || []).filter(d => !isMockDepositItem(d))
@@ -528,7 +535,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   useEffect(() => {
     if (auction?.dayStats) {
       setRegistrations((auction.dayStats.registrations || []).filter(r => !isMockRegItem(r)));
-      setAlternateBids(auction.dayStats.alternateBids || []);
+      setAlternateBids((auction.dayStats.alternateBids || []).filter(b => !isMockAltBidItem(b)));
       setSiteStats(auction.dayStats.siteStats || []);
       setDeposits((auction.dayStats.deposits || []).filter(d => !isMockDepositItem(d)));
     }
@@ -543,8 +550,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       if (payload.registrations) {
         setRegistrations(payload.registrations.filter(r => !isMockRegItem(r)));
       }
-      if (payload.alternateBids && payload.alternateBids.length > 0) {
-        setAlternateBids(payload.alternateBids);
+      if (payload.alternateBids) {
+        setAlternateBids(payload.alternateBids.filter(b => !isMockAltBidItem(b)));
       }
       if (payload.siteStats && payload.siteStats.length > 0) {
         setSiteStats(payload.siteStats);
@@ -573,7 +580,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       try {
         const payload = await auctionDayService.getAuctionDayData(auction.id, lots);
         setRegistrations((payload.registrations || []).filter(r => !isMockRegItem(r)));
-        setAlternateBids(payload.alternateBids);
+        setAlternateBids((payload.alternateBids || []).filter(b => !isMockAltBidItem(b)));
         setSiteStats(payload.siteStats);
         setDeposits((payload.deposits || []).filter(d => !isMockDepositItem(d)));
         dispatch({ type: 'SET_AUCTION', payload: payload.auction });
@@ -594,16 +601,14 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   }, [lots]);
 
-  // Scoped lots for currently selected auction
+  // Scoped lots for currently selected auction (strictly dynamic lots only)
   const auctionLots = useMemo(() => {
     if (!auction) return [];
     const baseLots = customLots.length > 0 ? customLots : (lots || []);
-    return (baseLots && baseLots.length > 0)
-      ? baseLots.filter(l => !l.auctionId || l.auctionId === auction.id || (auction.id === 'auc-001' && l.auctionId === 'auc-001'))
-      : [];
+    return baseLots.filter(l => l.auctionId === auction.id && !l.id?.startsWith('lot-ref-'));
   }, [lots, customLots, auction?.id]);
 
-  // Unique consignors/sellers across current auction lots
+  // Unique consignors/sellers across current auction lots (dynamic from lot records)
   const uniqueSellersList = useMemo(() => {
     const set = new Set<string>();
     auctionLots.forEach(lot => {
@@ -612,11 +617,6 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         set.add(seller.trim());
       }
     });
-    if (set.size === 0) {
-      set.add('Consignor #101');
-      set.add('Montana Estate Trust');
-      set.add('Silver Star Numismatics');
-    }
     return Array.from(set).map(name => ({ value: name, label: name }));
   }, [auctionLots]);
 
