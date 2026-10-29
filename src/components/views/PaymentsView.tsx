@@ -126,8 +126,8 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const currentAuctionId = selectedAuctionId;
   const currentAuction = availableAuctions.find(a => a.id === currentAuctionId) || {
     id: currentAuctionId,
-    code: '',
-    title: currentAuctionId ? `Auction ${currentAuctionId}` : 'Settlement',
+    code: currentAuctionId === 'auc-001' ? 'AUC-001' : '',
+    title: currentAuctionId === 'auc-001' ? 'Spring Collector Auction — Session I' : (currentAuctionId ? `Auction ${currentAuctionId}` : 'Settlement'),
     status: ''
   };
   const currentAuctionName = currentAuction.title || `Auction ${currentAuctionId}`;

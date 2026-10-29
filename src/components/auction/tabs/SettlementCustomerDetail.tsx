@@ -294,7 +294,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             }}
           >
             <Mail size={14} color="var(--gold-primary, #a37a3b)" />
-            <span>EMAIL SETTLEMENT TO: {customer.email || '(no email on file)'}</span>
+            <span>EMAIL SETTLEMENT{customer.email ? ` TO: ${customer.email}` : ' STATEMENT'}</span>
           </button>
         </div>
       </div>

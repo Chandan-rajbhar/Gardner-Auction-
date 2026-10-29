@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SettlementCustomer } from '../../types/auctionDetail';
 import { settlementService } from '../../services/settlementService';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Mail, X, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export interface EmailSettlementModalProps {
@@ -16,12 +18,15 @@ export const EmailSettlementModal: React.FC<EmailSettlementModalProps> = ({
   isOpen,
   onClose,
   customer,
-  auctionTitle = 'Spring Collector Auction',
-  auctionCode = 'GA-2026-10-GOLD',
+  auctionTitle = 'Spring Collector Auction — Session I',
+  auctionCode = 'AUC-001',
   onSuccess
 }) => {
+  const { user } = useAuth();
+  const dynamicUserEmail = user?.email || 'admin@gardnerauction.com';
+
   const [to, setTo] = useState('');
-  const [replyTo, setReplyTo] = useState('settlements@gardnerauction.com');
+  const [replyTo, setReplyTo] = useState(dynamicUserEmail);
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -32,22 +37,31 @@ export const EmailSettlementModal: React.FC<EmailSettlementModalProps> = ({
   // Sync state whenever customer or modal opens
   useEffect(() => {
     if (customer && isOpen) {
-      const defaultEmail = customer.email || (customer.name ? `${customer.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@example.com` : '');
-      setTo(defaultEmail);
-      setReplyTo('settlements@gardnerauction.com');
+      const resolvedTitle = auctionTitle || 'Spring Collector Auction — Session I';
+      const resolvedCode = auctionCode || 'AUC-001';
+      const currentSenderEmail = user?.email || 'admin@gardnerauction.com';
+
+      setTo('');
+      setReplyTo(currentSenderEmail);
       setBcc('');
-      setSubject(`Settlement - ${auctionTitle}`);
-      
-      const secureLink = `https://gardnerauction.com/portal/settlement/${customer.id}?token=auth_${Date.now().toString(36)}`;
+      setSubject(`Settlement - ${resolvedTitle}`);
+      setErrorMsg(null);
+      setIsSuccess(false);
+
+      const secureLink = `https://gardnerauction.com/portal/settlement/${customer.id || customer.invoiceNumber}`;
+      const invoiceNum = customer.invoiceNumber || `INV-GA-2026-${customer.bidderNumber}`;
+      const lotCnt = customer.lotCount || customer.lots?.length || 1;
+      const formattedBalance = customer.balance !== undefined ? Number(customer.balance).toFixed(2) : '0.00';
+
       const message = `Dear ${customer.name},
 
-Please find attached your official settlement statement for ${auctionTitle} (${auctionCode}).
+Please find attached your official settlement statement for ${resolvedTitle} (${resolvedCode}).
 
 Settlement Summary:
 • Customer / Paddle: #${customer.bidderNumber} (${customer.name})
-• Invoice Number: ${customer.invoiceNumber || 'INV-Pending'}
-• Lot Count: ${customer.lotCount || customer.lots?.length || 1}
-• Total Balance Due: $${customer.balance?.toFixed(2) || '0.00'}
+• Invoice Number: ${invoiceNum}
+• Lot Count: ${lotCnt}
+• Total Balance Due: $${formattedBalance}
 • Payment Status: ${customer.invoiceStatus || 'Pending'}
 • Shipping Requested: ${customer.shippingRequested ? 'Yes' : 'No'}
 
@@ -60,10 +74,8 @@ Sincerely,
 Gardner Auction Settlement & Consignor Clerking Services`;
 
       setBody(message);
-      setErrorMsg(null);
-      setIsSuccess(false);
     }
-  }, [customer, isOpen, auctionTitle, auctionCode]);
+  }, [customer, isOpen, auctionTitle, auctionCode, user?.email]);
 
   // Handle Escape key
   useEffect(() => {
@@ -82,10 +94,19 @@ Gardner Auction Settlement & Consignor Clerking Services`;
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validation
+    // Strict validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!to || !emailRegex.test(to.trim())) {
+    const cleanTo = to.trim();
+    if (!cleanTo) {
+      setErrorMsg('Please enter a recipient email address.');
+      return;
+    }
+    if (!emailRegex.test(cleanTo)) {
       setErrorMsg('Please enter a valid recipient email address.');
+      return;
+    }
+    if (cleanTo.toLowerCase().endsWith('@example.com') || cleanTo.toLowerCase().includes('example.com')) {
+      setErrorMsg('Please enter a real email address (example.com placeholder addresses are not permitted).');
       return;
     }
     if (bcc.trim() && !emailRegex.test(bcc.trim())) {
@@ -105,16 +126,16 @@ Gardner Auction Settlement & Consignor Clerking Services`;
 
     try {
       const result = await settlementService.sendSettlementEmail({
-        to: to.trim(),
-        replyTo: replyTo.trim(),
+        to: cleanTo,
+        replyTo: replyTo.trim() || dynamicUserEmail,
         bcc: bcc.trim() || undefined,
         subject: subject.trim(),
         body: body.trim(),
         customerName: customer.name,
         paddleNumber: customer.bidderNumber,
         invoiceNumber: customer.invoiceNumber || `INV-${customer.bidderNumber}`,
-        auctionTitle,
-        settlementLink: `https://gardnerauction.com/portal/settlement/${customer.id}`
+        auctionTitle: auctionTitle || 'Spring Collector Auction — Session I',
+        settlementLink: `https://gardnerauction.com/portal/settlement/${customer.id || customer.invoiceNumber}`
       });
 
       if (result.success) {
@@ -122,9 +143,9 @@ Gardner Auction Settlement & Consignor Clerking Services`;
         setTimeout(() => {
           onSuccess?.();
           onClose();
-        }, 1200);
+        }, 1100);
       } else {
-        setErrorMsg(result.error || 'Failed to dispatch email. Please verify settings.');
+        setErrorMsg(result.error || 'Failed to dispatch email. Please check email provider configuration.');
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'An error occurred while dispatching the settlement email.');
@@ -183,31 +204,32 @@ Gardner Auction Settlement & Consignor Clerking Services`;
             justifyContent: 'space-between',
             padding: '16px 20px',
             borderBottom: '1px solid #e2e8f0',
-            background: '#f8fafc'
+            background: '#ffffff'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
+                width: 36,
+                height: 36,
+                borderRadius: 8,
                 background: '#fdfaf3',
                 color: 'var(--gold-primary, #a37a3b)',
                 border: '1px solid #f0e6d2',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexShrink: 0
               }}
             >
-              <Mail size={17} />
+              <Mail size={18} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
                 Email Settlement Statement
               </h3>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
-                Recipient: <strong style={{ color: '#0f172a' }}>{customer.name}</strong> (Paddle #{customer.bidderNumber})
+              <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 2 }}>
+                Recipient: <strong style={{ color: '#0f172a', fontWeight: 600 }}>{customer.name}</strong> (Paddle #{customer.bidderNumber})
               </div>
             </div>
           </div>
@@ -221,12 +243,15 @@ Gardner Auction Settlement & Consignor Clerking Services`;
               border: 'none',
               color: '#64748b',
               cursor: isSending ? 'not-allowed' : 'pointer',
-              padding: 4,
-              borderRadius: 4,
+              padding: 6,
+              borderRadius: 6,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              transition: 'background-color 0.15s'
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
             aria-label="Close"
           >
             <X size={18} />
@@ -234,24 +259,28 @@ Gardner Auction Settlement & Consignor Clerking Services`;
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '18px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form noValidate onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {errorMsg && (
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '10px 14px',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '12px 14px',
                   borderRadius: 6,
                   background: '#fef2f2',
                   border: '1px solid #fecaca',
-                  color: '#b91c1c',
-                  fontSize: 13
+                  color: '#991b1b',
+                  fontSize: 12.5,
+                  lineHeight: 1.5
                 }}
               >
-                <AlertCircle size={16} />
-                <span>{errorMsg}</span>
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#dc2626' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 2, color: '#991b1b' }}>Email Delivery Failed</div>
+                  <div style={{ color: '#7f1d1d' }}>{errorMsg}</div>
+                </div>
               </div>
             )}
 
@@ -277,7 +306,7 @@ Gardner Auction Settlement & Consignor Clerking Services`;
 
             {/* To Field */}
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                 To (Customer Email) <span style={{ color: '#dc2626' }}>*</span>
               </label>
               <input
@@ -285,46 +314,52 @@ Gardner Auction Settlement & Consignor Clerking Services`;
                 required
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                placeholder="customer@example.com"
+                placeholder=""
                 style={{
                   width: '100%',
-                  height: 36,
+                  height: 38,
                   padding: '0 12px',
                   borderRadius: 6,
                   border: '1px solid #cbd5e1',
                   fontSize: 13,
                   boxSizing: 'border-box',
-                  color: '#0f172a'
+                  color: '#0f172a',
+                  outline: 'none'
                 }}
+                onFocus={(e) => { e.target.style.borderColor = '#0f172a'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; }}
               />
             </div>
 
             {/* Reply To & BCC Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                   Reply To
                 </label>
                 <input
                   type="email"
                   value={replyTo}
                   onChange={(e) => setReplyTo(e.target.value)}
-                  placeholder="settlements@gardnerauction.com"
+                  placeholder={dynamicUserEmail || 'admin@gardnerauction.com'}
                   style={{
                     width: '100%',
-                    height: 36,
+                    height: 38,
                     padding: '0 12px',
                     borderRadius: 6,
                     border: '1px solid #cbd5e1',
                     fontSize: 13,
                     boxSizing: 'border-box',
-                    color: '#0f172a'
+                    color: '#0f172a',
+                    outline: 'none'
                   }}
+                  onFocus={(e) => { e.target.style.borderColor = '#0f172a'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                   BCC (Optional)
                 </label>
                 <input
@@ -334,21 +369,24 @@ Gardner Auction Settlement & Consignor Clerking Services`;
                   placeholder="compliance@gardnerauction.com"
                   style={{
                     width: '100%',
-                    height: 36,
+                    height: 38,
                     padding: '0 12px',
                     borderRadius: 6,
                     border: '1px solid #cbd5e1',
                     fontSize: 13,
                     boxSizing: 'border-box',
-                    color: '#0f172a'
+                    color: '#0f172a',
+                    outline: 'none'
                   }}
+                  onFocus={(e) => { e.target.style.borderColor = '#0f172a'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; }}
                 />
               </div>
             </div>
 
             {/* Subject Field */}
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                 Subject <span style={{ color: '#dc2626' }}>*</span>
               </label>
               <input
@@ -359,21 +397,24 @@ Gardner Auction Settlement & Consignor Clerking Services`;
                 placeholder="Settlement - Auction Name"
                 style={{
                   width: '100%',
-                  height: 36,
+                  height: 38,
                   padding: '0 12px',
                   borderRadius: 6,
                   border: '1px solid #cbd5e1',
                   fontSize: 13,
                   boxSizing: 'border-box',
                   fontWeight: 600,
-                  color: '#0f172a'
+                  color: '#0f172a',
+                  outline: 'none'
                 }}
+                onFocus={(e) => { e.target.style.borderColor = '#0f172a'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; }}
               />
             </div>
 
             {/* Message Body Field */}
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                 Message Body
               </label>
               <textarea
@@ -386,12 +427,15 @@ Gardner Auction Settlement & Consignor Clerking Services`;
                   borderRadius: 6,
                   border: '1px solid #cbd5e1',
                   fontSize: 12.5,
-                  lineHeight: '1.5',
+                  lineHeight: '1.55',
                   boxSizing: 'border-box',
                   fontFamily: 'inherit',
                   color: '#0f172a',
-                  resize: 'vertical'
+                  resize: 'vertical',
+                  outline: 'none'
                 }}
+                onFocus={(e) => { e.target.style.borderColor = '#0f172a'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; }}
               />
             </div>
           </div>
@@ -401,7 +445,7 @@ Gardner Auction Settlement & Consignor Clerking Services`;
             style={{
               padding: '14px 20px',
               borderTop: '1px solid #e2e8f0',
-              background: '#f8fafc',
+              background: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
@@ -414,14 +458,27 @@ Gardner Auction Settlement & Consignor Clerking Services`;
               disabled={isSending}
               style={{
                 height: 36,
-                padding: '0 16px',
+                padding: '0 18px',
                 borderRadius: 6,
                 border: '1px solid #cbd5e1',
                 background: '#ffffff',
                 color: '#334155',
                 fontSize: 13,
                 fontWeight: 600,
-                cursor: isSending ? 'not-allowed' : 'pointer'
+                cursor: isSending ? 'not-allowed' : 'pointer',
+                transition: 'background-color 0.15s, border-color 0.15s'
+              }}
+              onMouseEnter={(e) => {
+                if (!isSending) {
+                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#94a3b8';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSending) {
+                  e.currentTarget.style.backgroundColor = '#ffffff';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }
               }}
             >
               Cancel
@@ -432,7 +489,7 @@ Gardner Auction Settlement & Consignor Clerking Services`;
               disabled={isSending || isSuccess}
               style={{
                 height: 36,
-                padding: '0 18px',
+                padding: '0 20px',
                 borderRadius: 6,
                 border: '1px solid #0f172a',
                 background: '#0f172a',
@@ -447,17 +504,19 @@ Gardner Auction Settlement & Consignor Clerking Services`;
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={(e) => {
-                if (!isSending && !isSuccess) {
-                  e.currentTarget.style.background = '#1e293b';
-                  e.currentTarget.style.borderColor = '#1e293b';
+                  if (!isSending && !isSuccess) {
+                    e.currentTarget.style.background = '#1e293b';
+                    e.currentTarget.style.borderColor = '#1e293b';
+                  }
                 }
-              }}
+              }
               onMouseLeave={(e) => {
-                if (!isSending && !isSuccess) {
-                  e.currentTarget.style.background = '#0f172a';
-                  e.currentTarget.style.borderColor = '#0f172a';
+                  if (!isSending && !isSuccess) {
+                    e.currentTarget.style.background = '#0f172a';
+                    e.currentTarget.style.borderColor = '#0f172a';
+                  }
                 }
-              }}
+              }
             >
               {isSending ? (
                 <>

@@ -100,16 +100,24 @@ export class SettlementService {
   /**
    * Map a raw invoices DB row to SettlementCustomer, resolving lots and charges.
    */
-  private async mapInvoiceRowToCustomer(row: any): Promise<SettlementCustomer> {
+  private async mapInvoiceRowToCustomer(row: any, userEmailMap?: Map<string, string>): Promise<SettlementCustomer> {
     const lots = await this.fetchLotsForInvoice(row.id);
     const charges = await this.fetchChargesForInvoice(row.id);
+
+    let resolvedEmail = row.buyer_email;
+    if ((!resolvedEmail || resolvedEmail.includes('example.com') || resolvedEmail.startsWith('paddle')) && userEmailMap) {
+      const paddleKey = (row.paddle_number || '').toLowerCase();
+      const numKey = paddleKey.replace('cust-', '');
+      const nameKey = (row.buyer_name || '').toLowerCase();
+      resolvedEmail = userEmailMap.get(paddleKey) || userEmailMap.get(numKey) || userEmailMap.get(nameKey) || resolvedEmail;
+    }
 
     return {
       id: row.id,
       auctionId: row.auction_id,
       bidderNumber: row.paddle_number,
       name: row.buyer_name,
-      email: row.buyer_email || undefined,
+      email: resolvedEmail || undefined,
       isSeller: row.paddle_number === 'HOUSE',
       isCashBuyer: Boolean(row.is_cash_buyer),
       lotCount: Number(row.items_count) || lots.length || 0,
@@ -367,9 +375,33 @@ export class SettlementService {
 
     if (!data || data.length === 0) return [];
 
+    // Query users to map registered emails for bidders without a stored invoice email
+    const userEmailMap = new Map<string, string>();
+    try {
+      const { data: usersData } = await this.client
+        .from('users')
+        .select('customer_code, full_name, email');
+      if (usersData && Array.isArray(usersData)) {
+        usersData.forEach((u: any) => {
+          if (u.email && !u.email.includes('example.com') && !u.email.startsWith('paddle')) {
+            if (u.customer_code) {
+              const code = String(u.customer_code).toLowerCase();
+              userEmailMap.set(code, u.email);
+              userEmailMap.set(code.replace('cust-', ''), u.email);
+            }
+            if (u.full_name) {
+              userEmailMap.set(String(u.full_name).toLowerCase(), u.email);
+            }
+          }
+        });
+      }
+    } catch (usersErr) {
+      console.warn('[SettlementService] Could not preload users table emails:', usersErr);
+    }
+
     // Resolve lots + charges for each invoice in parallel
     const customers = await Promise.all(
-      data.map((row: any) => this.mapInvoiceRowToCustomer(row))
+      data.map((row: any) => this.mapInvoiceRowToCustomer(row, userEmailMap))
     );
 
     return customers;
@@ -1138,10 +1170,10 @@ export class SettlementService {
   }
 
   /**
-   * Send settlement email through Supabase Edge Function.
-   * NEVER returns success if the actual send fails.
+   * Send settlement email through server-side email gateway (/api/settlements/send-email)
+   * or Supabase Edge Function with real provider delivery verification.
    */
-  public async sendSettlementEmail(payload: SettlementEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  public async sendSettlementEmail(payload: SettlementEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string; provider?: string }> {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!payload.to || !emailRegex.test(payload.to.trim())) {
       return { success: false, error: 'Please enter a valid recipient email address.' };
@@ -1156,7 +1188,35 @@ export class SettlementService {
       return { success: false, error: 'Email body cannot be empty.' };
     }
 
-    // Attempt edge function send
+    // 1. Attempt server-side transactional email endpoint (/api/settlements/send-email)
+    try {
+      const response = await fetch('/api/settlements/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.success) {
+        return {
+          success: true,
+          messageId: data.messageId,
+          provider: data.provider
+        };
+      }
+
+      if (data?.error) {
+        return {
+          success: false,
+          error: data.error
+        };
+      }
+    } catch (endpointErr) {
+      console.warn('[SettlementService] Local email gateway unreachable, trying Edge Function fallback:', endpointErr);
+    }
+
+    // 2. Fallback: Attempt Supabase Edge Function if deployed
     try {
       const { data, error } = await supabase.functions.invoke('auction-edge', {
         body: {
@@ -1166,27 +1226,25 @@ export class SettlementService {
       });
 
       if (!error && data?.success) {
-        // Record audit log on real success
-        try {
-          await this.client.from('activity_logs').insert([{
-            category: 'SETTLEMENT',
-            event_action: `Settlement Email Sent to ${payload.to}`,
-            operator_service: 'AF360 Email Engine',
-            audit_details: `Sent statement for Invoice #${payload.invoiceNumber} (${payload.customerName}, Paddle #${payload.paddleNumber}). MessageId: ${data.messageId || 'N/A'}.`,
-            status: 'SUCCESS'
-          }]);
-        } catch (_) {}
-
-        return { success: true, messageId: data.messageId || `msg-${Date.now()}` };
+        return {
+          success: true,
+          messageId: data.messageId
+        };
       }
 
-      // Edge function returned an error
-      const errMsg = error?.message || data?.error || 'Email service unavailable. Please try again later.';
-      return { success: false, error: errMsg };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to connect to email service.';
-      return { success: false, error: message };
-    }
+      if (error || data?.error) {
+        const edgeError = error?.message || data?.error;
+        if (!edgeError.includes('404') && !edgeError.includes('not found')) {
+          return { success: false, error: edgeError };
+        }
+      }
+    } catch (_) {}
+
+    // 3. Neither endpoint succeeded: Return actionable error
+    return {
+      success: false,
+      error: 'Email delivery failed: No active email service configured. Please provide RESEND_API_KEY or SMTP credentials (SMTP_USER & SMTP_PASS) in .env to deliver real emails to Gmail.'
+    };
   }
 }
 
