@@ -762,6 +762,41 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     return registrations.filter(r => selectedRegIds.has(r.id));
   }, [registrations, selectedRegIds]);
 
+  // Deduplicated list of registered bidders by paddle / name so duplicate options never appear in Select Bidder
+  const uniqueRegisteredBidders = useMemo(() => {
+    const seen = new Set<string>();
+    return (registrations || []).filter(r => {
+      if (!r) return false;
+      const paddle = (r.bidCardNumber || '').toString().trim().toLowerCase();
+      const name = (r.bidderName || '').toString().trim().toLowerCase();
+      const key = paddle ? `${paddle}:::${name}` : (r.id || name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [registrations]);
+
+  // Map any registration id to its canonical id in uniqueRegisteredBidders
+  const canonicalRegIdMap = useMemo(() => {
+    const keyToCanonicalId = new Map<string, string>();
+    for (const u of uniqueRegisteredBidders) {
+      const paddle = (u.bidCardNumber || '').toString().trim().toLowerCase();
+      const name = (u.bidderName || '').toString().trim().toLowerCase();
+      const key = paddle ? `${paddle}:::${name}` : (u.id || name);
+      if (!keyToCanonicalId.has(key)) {
+        keyToCanonicalId.set(key, u.id);
+      }
+    }
+    const idToCanonicalId = new Map<string, string>();
+    for (const r of registrations) {
+      const paddle = (r.bidCardNumber || '').toString().trim().toLowerCase();
+      const name = (r.bidderName || '').toString().trim().toLowerCase();
+      const key = paddle ? `${paddle}:::${name}` : (r.id || name);
+      idToCanonicalId.set(r.id, keyToCanonicalId.get(key) || r.id);
+    }
+    return idToCanonicalId;
+  }, [registrations, uniqueRegisteredBidders]);
+
   // Active lot on the clerking block
   const currentBlockLot = useMemo(() => {
     if (activeClerkLotId) {
@@ -1788,7 +1823,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       return;
     }
 
-    const matchedReg = registrations.find(r => r.id === newDepBidderRegId);
+    const targetRegId = canonicalRegIdMap.get(newDepBidderRegId) || newDepBidderRegId;
+    const matchedReg = registrations.find(r => r.id === targetRegId) || registrations.find(r => r.id === newDepBidderRegId);
     if (!matchedReg && newDepBidderRegId !== 'walk_in') {
       showToast('error', 'Bidder Required', 'Please select a registered bidder.');
       return;
@@ -2306,7 +2342,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     setIsSavingDrawerDeposit(true);
     try {
       if (depositDrawer.mode === 'add') {
-        const matchedReg = registrations.find(r => r.id === drawerDepBidderId);
+        const targetRegId = canonicalRegIdMap.get(drawerDepBidderId) || drawerDepBidderId;
+        const matchedReg = registrations.find(r => r.id === targetRegId) || registrations.find(r => r.id === drawerDepBidderId);
         const res = await auctionDayService.recordDeposit(auction.id, {
           registrationId: matchedReg?.id,
           bidCardNumber: matchedReg?.bidCardNumber || 'WALK-IN',
@@ -4015,8 +4052,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   setIsManageDepositsModalOpen(true);
                   setDepositFilterBidder('all');
                   setDepositSearchTerm('');
-                  if (registrations.length > 0) {
-                    setNewDepBidderRegId(registrations[0].id);
+                  if (uniqueRegisteredBidders.length > 0) {
+                    setNewDepBidderRegId(uniqueRegisteredBidders[0].id);
                   }
                 }}
                 className="af360-btn-teal"
@@ -7110,13 +7147,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 Filter by Bidder:
               </label>
               <ShadcnSelect
-                value={depositFilterBidder}
+                value={depositFilterBidder === 'all' ? 'all' : (canonicalRegIdMap.get(depositFilterBidder) || depositFilterBidder)}
                 onChange={(val) => setDepositFilterBidder(val)}
                 size="sm"
                 className="min-w-[210px]"
                 options={[
                   { value: 'all', label: '-- All Bidders --' },
-                  ...registrations.map(r => ({
+                  ...uniqueRegisteredBidders.map(r => ({
                     value: r.id,
                     label: `#${r.bidCardNumber} - ${r.bidderName}`
                   }))
@@ -7167,8 +7204,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 {(() => {
                   const term = depositSearchTerm.toLowerCase().trim();
                   const filtered = deposits.filter(dep => {
-                    if (depositFilterBidder !== 'all' && dep.registrationId !== depositFilterBidder) {
-                      return false;
+                    if (depositFilterBidder !== 'all') {
+                      const filterCanonical = canonicalRegIdMap.get(depositFilterBidder) || depositFilterBidder;
+                      const depCanonical = dep.registrationId ? (canonicalRegIdMap.get(dep.registrationId) || dep.registrationId) : null;
+                      if (dep.registrationId !== depositFilterBidder && depCanonical !== filterCanonical) {
+                        return false;
+                      }
                     }
                     if (term) {
                       return (
@@ -7309,13 +7350,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <FormField label="Select Bidder" required>
             <ShadcnSelect
-              value={newDepBidderRegId}
+              value={canonicalRegIdMap.get(newDepBidderRegId) || newDepBidderRegId}
               onChange={(val) => setNewDepBidderRegId(val)}
               placeholder="-- Choose Registered Bidder --"
               size="md"
               options={[
                 { value: '', label: '-- Choose Registered Bidder --' },
-                ...registrations.map(r => ({
+                ...uniqueRegisteredBidders.map(r => ({
                   value: r.id,
                   label: `#${r.bidCardNumber} - ${r.bidderName}${r.companyName ? ` (${r.companyName})` : ''}`
                 })),
@@ -8467,12 +8508,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             {depositDrawer.mode === 'add' && (
               <FormField label="Select Bidder" required>
                 <ShadcnSelect
-                  value={drawerDepBidderId}
+                  value={canonicalRegIdMap.get(drawerDepBidderId) || drawerDepBidderId}
                   onChange={(val) => setDrawerDepBidderId(val)}
                   size="md"
                   options={[
                     { value: '', label: '-- Choose Registered Bidder --' },
-                    ...registrations.map(r => ({
+                    ...uniqueRegisteredBidders.map(r => ({
                       value: r.id,
                       label: `#${r.bidCardNumber} - ${r.bidderName}`
                     })),

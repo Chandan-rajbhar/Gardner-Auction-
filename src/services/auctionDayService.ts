@@ -272,6 +272,17 @@ class AuctionDayService {
       }));
     }
 
+    // Ensure all registrations returned are uniquely identified by paddle number and bidder name
+    const seenRegKeys = new Set<string>();
+    registrations = registrations.filter(r => {
+      const paddle = (r.bidCardNumber || '').toString().trim().toLowerCase();
+      const name = (r.bidderName || '').toString().trim().toLowerCase();
+      const key = paddle ? `${paddle}:::${name}` : (r.id || name);
+      if (!key || seenRegKeys.has(key)) return false;
+      seenRegKeys.add(key);
+      return true;
+    });
+
     // Calculate live dynamic metrics
     const metrics = this.computeMetrics(
       auctionLots,
@@ -419,8 +430,50 @@ class AuctionDayService {
         createdAt: nowIso
       };
 
-      // 1. Try public.bidder_registrations table in Supabase
+      // 1. Try public.bidder_registrations table in Supabase (with idempotent deduplication)
       try {
+        const { data: existingRegs } = await supabaseAdmin
+          .from('bidder_registrations')
+          .select('id')
+          .eq('auction_id', auctionId)
+          .eq('bid_card_number', registration.bidCardNumber)
+          .limit(1);
+
+        if (existingRegs && existingRegs.length > 0) {
+          await supabaseAdmin
+            .from('bidder_registrations')
+            .update({
+              bidder_name: registration.bidderName,
+              company_name: registration.companyName || '',
+              email: registration.email || '',
+              phone: registration.phone || '',
+              is_checked_in: registration.isCheckedIn || false,
+              updated_at: nowIso
+            })
+            .eq('id', existingRegs[0].id);
+
+          const auction = await auctionService.getAuctionById(auctionId);
+          if (auction) {
+            const list = auction.dayStats.registrations || [];
+            const idx = list.findIndex((r: any) => String(r.bidCardNumber) === String(registration.bidCardNumber) || r.id === existingRegs[0].id);
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], ...registration, id: existingRegs[0].id };
+            } else {
+              list.unshift({ ...registration, id: existingRegs[0].id });
+            }
+            auction.dayStats.registrations = list;
+            await auctionService.saveAuction(auction);
+          }
+
+          return {
+            success: true,
+            registration: {
+              ...registration,
+              id: existingRegs[0].id
+            }
+          };
+        }
+
         await supabaseAdmin.from('bidder_registrations').insert([
           {
             id: registration.id,
