@@ -11,7 +11,6 @@ import {
   Edit2
 } from 'lucide-react';
 import { LotItem, Auction, UserBidder } from '../../types';
-import { SearchableSelect, SelectOption } from '../Common/SearchableSelect';
 import { FormModal } from '../Common/FormModal';
 import { ConfirmModal } from '../Common/ConfirmModal';
 import { useToast } from '../../context/ToastContext';
@@ -119,61 +118,6 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
     }
   }, [isOpen, editingLot, defaultAuctionId, auctions]);
 
-  // Seller Options
-  const sellerOptions: SelectOption[] = consignors.map(c => ({
-    value: c.id,
-    label: `${c.paddleNumber || c.id.slice(0, 8)} - ${c.name}`
-  }));
-
-  const handleSelectSeller = (chosenId: string) => {
-    setSellerId(chosenId);
-    const chosen = consignors.find(c => c.id === chosenId);
-    setSellerName(chosen ? chosen.name : '');
-    setIsDirty(true);
-  };
-
-  // Add New Seller Handler
-  const handleSaveNewSeller = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSellerName.trim()) return;
-
-    const newId = `usr-${Date.now()}`;
-    const newPaddle = `P-${Math.floor(1000 + Math.random() * 9000)}`;
-    const createdConsignor: UserBidder = {
-      id: newId,
-      paddleNumber: newPaddle,
-      name: newSellerName.trim(),
-      email: newSellerEmail.trim() || `${newSellerName.toLowerCase().replace(/\s+/g, '.')}@client.com`,
-      phone: newSellerPhone.trim() || '(406) 555-0100',
-      siteOrigin: 'Gardner Saleroom Desk',
-      registrationDate: new Date().toISOString().split('T')[0],
-      status: 'verified',
-      creditCardAuthorized: true,
-      cardLast4: '4242',
-      bidLimit: 250000,
-      totalSpent: 0,
-      totalBidsPlaced: 0,
-      lotsWon: 0,
-      address: '',
-      cityStateZip: '',
-      notes: `Consignor commission agreement: ${newSellerCommission}%`,
-      type: 'consignor'
-    };
-
-    if (onAddConsignor) {
-      onAddConsignor(createdConsignor);
-    }
-
-    setSellerId(newId);
-    setSellerName(createdConsignor.name);
-    setIsNewSellerModalOpen(false);
-    setNewSellerName('');
-    setNewSellerEmail('');
-    setNewSellerPhone('');
-    setIsDirty(true);
-
-    showToast('success', 'Consignor Created', `Created consignor "${createdConsignor.name}" (#${newPaddle}).`);
-  };
 
   // Drag and drop image upload
   const processFiles = (files: FileList) => {
@@ -366,7 +310,7 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isDirty, isNewSellerModalOpen, isTipsModalOpen, isDiscardConfirmOpen]);
+  }, [isOpen, isDirty, isTipsModalOpen, isDiscardConfirmOpen]);
 
   if (!isOpen) return null;
 
@@ -511,60 +455,6 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
                       Lot number must be unique within this auction.
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Seller */}
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', alignItems: 'flex-start', gap: 16 }}>
-                <label style={{ fontSize: 13.5, fontWeight: 700, color: '#334155', paddingTop: 8 }}>
-                  Seller
-                </label>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ flex: 1 }}>
-                      <SearchableSelect
-                        value={sellerId}
-                        onChange={handleSelectSeller}
-                        options={sellerOptions}
-                        placeholder="Search seller by ID or Name..."
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsNewSellerModalOpen(true)}
-                      style={{
-                        height: 38,
-                        padding: '0 16px',
-                        borderRadius: 6,
-                        background: '#0f172a',
-                        color: '#ffffff',
-                        border: '1px solid #1e293b',
-                        fontWeight: 700,
-                        fontSize: 12.5,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        whiteSpace: 'nowrap',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#1e293b';
-                        e.currentTarget.style.borderColor = '#334155';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#0f172a';
-                        e.currentTarget.style.borderColor = '#1e293b';
-                      }}
-                    >
-                      <Plus size={14} strokeWidth={3} />
-                      <span>NEW SELLER</span>
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#64748b', fontStyle: 'italic', marginTop: 6 }}>
-                    *If no seller is chosen a default seller will be used.
-                  </div>
                 </div>
               </div>
 
@@ -964,77 +854,6 @@ export const LotFormModal: React.FC<LotFormModalProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Sub-Modal: + New Seller */}
-      <FormModal
-        isOpen={isNewSellerModalOpen}
-        title="Add New Seller / Consignor"
-        onClose={() => setIsNewSellerModalOpen(false)}
-        onSubmit={handleSaveNewSeller}
-        submitLabel="Create Seller"
-        maxWidth={480}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-              Seller Full Name *
-            </label>
-            <input 
-              type="text" 
-              className="catalog-search-input"
-              value={newSellerName}
-              onChange={(e) => setNewSellerName(e.target.value)}
-              placeholder="e.g. Randy A Strauss"
-              required
-              autoFocus
-              style={{ width: '100%', height: 38 }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-              Email Address
-            </label>
-            <input 
-              type="email" 
-              className="catalog-search-input"
-              value={newSellerEmail}
-              onChange={(e) => setNewSellerEmail(e.target.value)}
-              placeholder="randy.strauss@numismatics.org"
-              style={{ width: '100%', height: 38 }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-              Phone Number
-            </label>
-            <input 
-              type="tel" 
-              className="catalog-search-input"
-              value={newSellerPhone}
-              onChange={(e) => setNewSellerPhone(e.target.value)}
-              placeholder="(406) 555-0199"
-              style={{ width: '100%', height: 38 }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-              Commission Rate (%)
-            </label>
-            <input 
-              type="number" 
-              min="0"
-              max="100"
-              className="catalog-search-input"
-              value={newSellerCommission}
-              onChange={(e) => setNewSellerCommission(e.target.value)}
-              style={{ width: '100%', height: 38 }}
-            />
-          </div>
-        </div>
-      </FormModal>
 
       {/* Sub-Modal: Tips & Tricks */}
       <FormModal
