@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
+import {
   LayoutDashboard,
-  LayoutGrid, 
+  LayoutGrid,
   Calendar,
   Clock,
-  Users, 
-  Layers, 
+  Users,
+  Layers,
   CreditCard,
-  BarChart3, 
+  BarChart3,
   Bell,
   BellRing,
   FileText,
-  Settings, 
+  Settings,
   Globe,
   ShieldCheck,
   ExternalLink,
@@ -92,12 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     badge?: string | number;
     isLive?: boolean;
   }> = [
-    { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { id: 'users', label: 'Customers', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
-    { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
-    { id: 'live_clerking', label: 'Auction Day', icon: Gavel },
-    // { id: 'admins', label: 'Admins', icon: ShieldCheck },
-  ];
+      { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
+      { id: 'users', label: 'Customers', icon: Users, badge: pendingVerifications > 0 ? pendingVerifications : undefined },
+      { id: 'auctions', label: 'Pre Auction', icon: Calendar, badge: auctionsCount },
+      { id: 'live_clerking', label: 'Auction Day', icon: Gavel },
+      // { id: 'admins', label: 'Admins', icon: ShieldCheck },
+    ];
 
   const financeNav: Array<{
     id: NavigationSection;
@@ -105,9 +105,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ElementType;
     badge?: string | number;
   }> = [
-    { id: 'payments', label: 'Settlement & Invoices', icon: CreditCard },
-    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
-  ];
+      { id: 'payments', label: 'Settlement & Invoices', icon: CreditCard },
+      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+    ];
 
   const systemNav: Array<{
     id: NavigationSection;
@@ -115,15 +115,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ElementType;
     badge?: string | number;
   }> = [
-    { 
-      id: 'notifications', 
-      label: 'Notifications', 
-      icon: BellRing, 
-      badge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined 
-    },
-    { id: 'logs', label: 'Activity & Audit Log', icon: FileText },
-    { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
-  ];
+      {
+        id: 'notifications',
+        label: 'Notifications',
+        icon: BellRing,
+        badge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined
+      },
+      { id: 'logs', label: 'Activity & Audit Log', icon: FileText },
+      { id: 'settings', label: 'Settings & Portal Config', icon: Settings },
+    ];
 
   const handleLogout = () => {
     setIsProfileMenuOpen(false);
@@ -135,10 +135,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
-        <div 
-          className="sidebar-mobile-backdrop" 
-          onClick={onClose} 
-          aria-hidden="true" 
+        <div
+          className="sidebar-mobile-backdrop"
+          onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
@@ -146,9 +146,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand Area */}
         <div className="sidebar-brand-area">
           <div className="sidebar-brand-crest" title="Gardner Auction">
-            <img 
-              src="/images/gardner_logo.png" 
-              alt="Gardner Auction" 
+            <img
+              src="/images/gardner_logo.png"
+              alt="Gardner Auction"
               className="sidebar-brand-logo-img"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
@@ -163,8 +163,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h2>Gardner Auction</h2>
             <p>Admin Console</p>
           </div>
-          <button 
-            className="sidebar-close-btn" 
+          <button
+            className="sidebar-close-btn"
             onClick={onClose}
             aria-label="Close sidebar menu"
           >
@@ -275,43 +275,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Sidebar Footer */}
         <div className="sidebar-executive-footer">
-          {isCollapsed ? (
-            <a 
-              href="https://gardner-auction.vercel.app/" 
-              target="_blank" 
-              rel="noreferrer" 
-              className="sidebar-collapsed-globe-btn"
-              title="Public Bidder Portal (Website)"
-              aria-label="Public Bidder Portal"
-            >
-              <Globe size={19} />
-            </a>
-          ) : (
-            <div className="sidebar-system-links">
-              <span className="sidebar-system-status">
-                <span className="status-live-dot" />
-                <span>Gardner v24.2 Linked</span>
-              </span>
-              <a 
-                href="https://gardner-auction.vercel.app/" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="sidebar-public-site-link"
-                title="Open public bidder portal"
-              >
-                <span>Public Site</span>
-                <ExternalLink size={11} />
-              </a>
-            </div>
-          )}
-
-          {/* Administrator Profile Card with Toggle Dropdown */}
           <div className="sidebar-profile-wrapper" ref={profileMenuRef}>
             {/* Popover Dropdown Menu (Opens upwards above card) */}
             {isProfileMenuOpen && (
-              <div 
-                className="sidebar-profile-dropdown" 
-                role="menu" 
+              <div
+                className="sidebar-profile-dropdown"
+                role="menu"
                 aria-label="Administrator profile menu"
               >
                 {/* 1. Admin Information */}
@@ -357,7 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
 
-            <div 
+            <div
               className={`sidebar-profile-card ${isProfileMenuOpen ? 'menu-active' : ''}`}
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               role="button"
@@ -373,9 +342,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="sidebar-profile-avatar">
                 {user?.avatarUrl ? (
-                  <img 
-                    src={user.avatarUrl} 
-                    alt={user?.name || 'Administrator'} 
+                  <img
+                    src={user.avatarUrl}
+                    alt={user?.name || 'Administrator'}
                     className="sidebar-profile-avatar-img"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
@@ -384,8 +353,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                   />
                 ) : null}
-                <span 
-                  className="sidebar-avatar-fallback" 
+                <span
+                  className="sidebar-avatar-fallback"
                   style={{ display: user?.avatarUrl ? 'none' : 'inline' }}
                 >
                   {user?.avatarText || 'CK'}
