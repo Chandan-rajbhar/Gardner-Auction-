@@ -4,10 +4,10 @@ import { UserBidder } from '../../types';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { deleteCustomerFromDb, updateCustomerInDb, deactivateCustomerInDb } from '../../services/adminActionService';
 import {
-  SlidersHorizontal, 
-  Search, 
-  ShieldCheck, 
-  Plus, 
+  SlidersHorizontal,
+  Search,
+  ShieldCheck,
+  Plus,
   CloudDownload,
   CloudUpload,
   Building,
@@ -45,7 +45,7 @@ interface UsersViewProps {
   onAddUser: (user: UserBidder) => void;
 }
 
-export type ColumnKey = 
+export type ColumnKey =
   | 'customerCode'
   | 'fullName'
   | 'company'
@@ -158,7 +158,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 }) => {
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Sorting state
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -175,7 +175,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           action: true // Action column remains always visible
         };
       }
-    } catch {}
+    } catch { }
     return DEFAULT_COLUMN_VISIBILITY;
   });
 
@@ -185,7 +185,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       if (saved !== null) {
         return JSON.parse(saved);
       }
-    } catch {}
+    } catch { }
     return true;
   });
 
@@ -204,8 +204,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
     const popoverWidth = 260;
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUpwards = spaceBelow < 380 && rect.top > 380;
-    const top = openUpwards 
-      ? Math.max(10, rect.top - 380) 
+    const top = openUpwards
+      ? Math.max(10, rect.top - 380)
       : Math.min(window.innerHeight - 380, rect.bottom + 6);
     let right = window.innerWidth - rect.right;
     if (right < 10) right = 10;
@@ -264,7 +264,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       const next = { ...prev, [key]: !prev[key] };
       try {
         localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -274,7 +274,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
     setColumnVisibility(next);
     try {
       localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
-    } catch {}
+    } catch { }
   };
 
   const handleResetColumns = () => {
@@ -284,14 +284,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
     try {
       localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(nextCols));
       localStorage.setItem(HEADERS_STORAGE_KEY, JSON.stringify(true));
-    } catch {}
+    } catch { }
   };
 
   const handleToggleHeaders = (checked: boolean) => {
     setShowTableHeaders(checked);
     try {
       localStorage.setItem(HEADERS_STORAGE_KEY, JSON.stringify(checked));
-    } catch {}
+    } catch { }
   };
 
   // Supabase dynamic users state
@@ -589,7 +589,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
     if (sortField !== field) {
       return <ArrowUpDown size={13} style={{ opacity: 0.45, marginLeft: 4 }} />;
     }
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ArrowUp size={13} style={{ color: 'var(--gold-primary, #d4af37)', marginLeft: 4 }} />
       : <ArrowDown size={13} style={{ color: 'var(--gold-primary, #d4af37)', marginLeft: 4 }} />;
   };
@@ -666,6 +666,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
         errors.email = 'Email Address is required.';
       } else if (!isValidEmailFormat(newEmail)) {
         errors.email = 'Please provide a valid email format (e.g. name@domain.com).';
+      } else if (supabaseUsers.some(u => u.email && u.email.toLowerCase() === newEmail.trim().toLowerCase())) {
+        errors.email = 'A customer with this email address is already registered.';
       }
     }
 
@@ -803,9 +805,19 @@ export const UsersView: React.FC<UsersViewProps> = ({
         const { error } = await client.from('users').insert([sbPayload]);
         if (error) {
           console.warn('[UsersView] Supabase insert warning:', error.message);
+          setIsSaving(false);
+          if (error.code === '23505' || error.message.toLowerCase().includes('unique') || error.message.toLowerCase().includes('already exists')) {
+            setFormErrors({ email: 'A customer with this email address already exists in Supabase.' });
+          } else {
+            setFormErrors({ email: `Database error: ${error.message}` });
+          }
+          return;
         }
       } catch (err: any) {
         console.warn('[UsersView] Supabase insert error:', err);
+        setIsSaving(false);
+        setFormErrors({ email: `Connection error: ${err?.message || 'Failed to reach database'}` });
+        return;
       }
 
       const created: UserBidder = {
@@ -1401,18 +1413,18 @@ export const UsersView: React.FC<UsersViewProps> = ({
         {/* 3 Buttons styled in sleek Black matching screenshot */}
         <div className="customers-header-actions-wrap" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* 1. NEW CUSTOMER - Black Button */}
-          <button 
+          <button
             type="button"
             className="customers-btn-black"
             onClick={openNewCustomerModal}
             id="btn-new-customer"
           >
             <Plus size={16} strokeWidth={2.8} />
-            <span>+ NEW CUSTOMER</span>
+            <span> NEW CUSTOMER</span>
           </button>
 
           {/* 2. IMPORT CUSTOMERS - Black Button */}
-          <button 
+          <button
             type="button"
             className="customers-btn-black"
             onClick={() => {
@@ -1426,7 +1438,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           </button>
 
           {/* 3. EXPORT CUSTOMER - Black Button */}
-          <button 
+          <button
             type="button"
             className="customers-btn-black"
             onClick={handleExportCustomers}
@@ -1495,8 +1507,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
       <div className="customers-search-row">
         <div className="input-search-wrapper customers-search-input-wrap">
           <Search size={16} className="search-icon" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by customer code, full name, company, phone, email, or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -1507,7 +1519,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         <div className="customers-search-actions">
           {/* Table Column Settings Toggle Button */}
           <div className="col-settings-container" style={{ position: 'relative' }}>
-            <button 
+            <button
               ref={settingsTriggerRef}
               type="button"
               className="btn btn-secondary"
@@ -1518,11 +1530,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
               title="Table Column Settings"
               aria-label="Table Column Settings"
               aria-expanded={isColumnSettingsOpen}
-              style={{ 
-                fontSize: 11, 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: 6, 
+              style={{
+                fontSize: 11,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
                 padding: '6px 12px',
                 background: isColumnSettingsOpen ? '#e2e8f0' : undefined
               }}
@@ -1532,7 +1544,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
             </button>
           </div>
 
-          <button 
+          <button
             type="button"
             className="btn btn-secondary"
             style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px' }}
@@ -1566,8 +1578,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   <tr>
                     {/* 1. CUSTOMER CODE */}
                     {columnVisibility.customerCode && (
-                      <th 
-                        onClick={() => handleSort('customerCode')} 
+                      <th
+                        onClick={() => handleSort('customerCode')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Customer Code"
                       >
@@ -1580,8 +1592,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     {/* 2. FULL NAME */}
                     {columnVisibility.fullName && (
-                      <th 
-                        onClick={() => handleSort('fullName')} 
+                      <th
+                        onClick={() => handleSort('fullName')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Full Name"
                       >
@@ -1594,8 +1606,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     {/* 3. COMPANY */}
                     {columnVisibility.company && (
-                      <th 
-                        onClick={() => handleSort('company')} 
+                      <th
+                        onClick={() => handleSort('company')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Company"
                       >
@@ -1608,8 +1620,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     {/* 4. PHONE 1 */}
                     {columnVisibility.phone1 && (
-                      <th 
-                        onClick={() => handleSort('phone1')} 
+                      <th
+                        onClick={() => handleSort('phone1')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Phone"
                       >
@@ -1622,8 +1634,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     {/* 5. EMAIL */}
                     {columnVisibility.email && (
-                      <th 
-                        onClick={() => handleSort('email')} 
+                      <th
+                        onClick={() => handleSort('email')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Email"
                       >
@@ -1636,8 +1648,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                     {/* 6. ROLE */}
                     {columnVisibility.role && (
-                      <th 
-                        onClick={() => handleSort('role')} 
+                      <th
+                        onClick={() => handleSort('role')}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title="Sort by Role"
                       >
@@ -1727,11 +1739,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         {/* 1. Customer Code */}
                         {columnVisibility.customerCode && (
                           <td>
-                            <span 
+                            <span
                               onClick={() => handleOpenViewCustomer(user)}
-                              style={{ 
-                                fontFamily: 'var(--font-mono, monospace)', 
-                                fontWeight: 700, 
+                              style={{
+                                fontFamily: 'var(--font-mono, monospace)',
+                                fontWeight: 700,
                                 color: user.paddleNumber === 'Pending' ? '#f59e0b' : 'var(--gold-primary, #d4af37)',
                                 background: 'rgba(212, 175, 55, 0.08)',
                                 padding: '4px 8px',
@@ -1757,7 +1769,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                         {/* 2. Full Name (clickable to open right sidebar) */}
                         {columnVisibility.fullName && (
-                          <td 
+                          <td
                             onClick={() => handleOpenViewCustomer(user)}
                             style={{ fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}
                             title="Click to view customer details in right sidebar"
@@ -1875,7 +1887,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           CREATE & EDIT CUSTOMER SLIDE-OVER DRAWER (RIGHT SIDEBAR)
           ========================================================================= */}
       {isCustomerDrawerOpen && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             inset: 0,
@@ -1888,9 +1900,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
           }}
           onClick={() => !isSaving && setIsCustomerDrawerOpen(false)}
         >
-          <div 
+          <div
             className="customer-drawer-panel"
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: '760px',
               maxWidth: '96vw',
@@ -1919,13 +1931,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
                       {editingCustomer ? 'Edit Customer' : 'New Customer'}
                     </h3>
-                    <span style={{ 
-                      fontSize: 11, 
-                      fontWeight: 600, 
-                      color: editingCustomer ? '#0f766e' : '#0284c7', 
-                      background: editingCustomer ? '#ccfbf1' : '#e0f2fe', 
-                      padding: '2px 9px', 
-                      borderRadius: 12 
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: editingCustomer ? '#0f766e' : '#0284c7',
+                      background: editingCustomer ? '#ccfbf1' : '#e0f2fe',
+                      padding: '2px 9px',
+                      borderRadius: 12
                     }}>
                       {editingCustomer ? 'Customer Editor' : 'Registration Form'}
                     </span>
@@ -1934,13 +1946,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     </span>
                   </div>
                   <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-                    {editingCustomer 
+                    {editingCustomer
                       ? 'Update customer contact, tax details, and saleroom billing address. Email is permanently read-only.'
                       : 'Enter customer contact, tax details, and saleroom credentials.'}
                   </p>
                 </div>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   disabled={isSaving}
                   onClick={() => setIsCustomerDrawerOpen(false)}
                   style={{
@@ -1986,9 +1998,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         First Name <span style={{ color: '#ef4444' }}>*</span>
                       </label>
-                      <input 
-                        type="text" 
-                        required 
+                      <input
+                        type="text"
+                        required
                         placeholder="e.g. Eleanor"
                         value={newFirstName}
                         onChange={(e) => {
@@ -2008,8 +2020,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Last Name
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="e.g. Sterling"
                         value={newLastName}
                         onChange={(e) => setNewLastName(e.target.value)}
@@ -2023,8 +2035,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Company Name (Optional)
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Company or Firm name"
                         value={newCompany}
                         onChange={(e) => setNewCompany(e.target.value)}
@@ -2036,11 +2048,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Customer Code
                       </label>
-                      <div 
-                        className="customer-drawer-input" 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
+                      <div
+                        className="customer-drawer-input"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
                           justifyContent: 'space-between',
                           background: '#f1f5f9',
                           cursor: 'default'
@@ -2075,16 +2087,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
                           Email Address <span style={{ color: '#ef4444' }}>*</span>
                         </label>
                         {editingCustomer && (
-                          <span style={{ 
-                            fontSize: 10, 
-                            fontWeight: 700, 
-                            color: '#64748b', 
-                            background: '#f1f5f9', 
-                            padding: '2px 7px', 
-                            borderRadius: 4, 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            gap: 4 
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: '#64748b',
+                            background: '#f1f5f9',
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
                           }}>
                             <Lock size={10} />
                             READ-ONLY
@@ -2094,16 +2106,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
                       {editingCustomer ? (
                         <>
-                          <input 
-                            type="email" 
-                            readOnly 
+                          <input
+                            type="email"
+                            readOnly
                             disabled
                             value={newEmail}
                             className="customer-drawer-input"
-                            style={{ 
-                              backgroundColor: '#f1f5f9', 
-                              color: '#64748b', 
-                              cursor: 'not-allowed', 
+                            style={{
+                              backgroundColor: '#f1f5f9',
+                              color: '#64748b',
+                              cursor: 'not-allowed',
                               borderColor: '#e2e8f0'
                             }}
                           />
@@ -2113,9 +2125,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         </>
                       ) : (
                         <>
-                          <input 
-                            type="email" 
-                            required 
+                          <input
+                            type="email"
+                            required
                             placeholder="customer@domain.com"
                             value={newEmail}
                             onChange={(e) => {
@@ -2138,8 +2150,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Phone 1 / Telephone
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="(406) 555-0100"
                         value={newPhone1}
                         onChange={(e) => {
@@ -2161,8 +2173,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Driver's License / Gov ID
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="State or National ID Number"
                         value={newDriversLicense}
                         onChange={(e) => setNewDriversLicense(e.target.value)}
@@ -2199,8 +2211,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Tax ID / Resale Certificate Number
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="e.g. TAX-8829104"
                         value={newTaxId}
                         onChange={(e) => setNewTaxId(e.target.value)}
@@ -2236,8 +2248,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Address Line 1
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Street address or P.O. Box"
                         value={newAddress1}
                         onChange={(e) => setNewAddress1(e.target.value)}
@@ -2249,8 +2261,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <label className="customer-drawer-label">
                         Address Line 2 (Optional)
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Apt, Suite, Unit, Building"
                         value={newAddress2}
                         onChange={(e) => setNewAddress2(e.target.value)}
@@ -2265,22 +2277,22 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         City, State, ZIP Code
                       </label>
                       <div className="customer-drawer-grid-3">
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="City"
                           value={newCity}
                           onChange={(e) => setNewCity(e.target.value)}
                           className="customer-drawer-input"
                         />
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="State"
                           value={newState}
                           onChange={(e) => setNewState(e.target.value)}
                           className="customer-drawer-input"
                         />
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="ZIP"
                           value={newZip}
                           onChange={(e) => setNewZip(e.target.value)}
@@ -2319,8 +2331,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 boxShadow: '0 -4px 14px rgba(0, 0, 0, 0.05)',
                 flexShrink: 0
               }}>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   disabled={isSaving}
                   onClick={() => setIsCustomerDrawerOpen(false)}
                   style={{
@@ -2339,12 +2351,12 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   CANCEL
                 </button>
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={isSaving}
-                  style={{ 
-                    background: '#0f172a', 
-                    color: '#ffffff', 
+                  style={{
+                    background: '#0f172a',
+                    color: '#ffffff',
                     fontWeight: 700,
                     fontSize: 13,
                     padding: '9px 28px',
@@ -2368,7 +2380,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       )}
 
-      
+
       {/* =========================================================================
           TABLE COLUMN SETTINGS POPOVER
           ========================================================================= */}
@@ -2510,7 +2522,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           VIEW CUSTOMER DETAILS PAGE - OPEN IN RIGHT SIDE BAR
           ========================================================================= */}
       {viewingCustomer && typeof document !== 'undefined' && createPortal(
-        <div 
+        <div
           style={{
             position: 'fixed',
             inset: 0,
@@ -2523,7 +2535,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           }}
           onClick={() => setViewingCustomer(null)}
         >
-          <div 
+          <div
             className="customer-drawer-panel"
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -2553,24 +2565,24 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
                     Customer Details
                   </h3>
-                  <span style={{ 
-                    fontSize: 11, 
-                    fontWeight: 600, 
-                    color: '#0f766e', 
-                    background: '#ccfbf1', 
-                    padding: '2px 9px', 
-                    borderRadius: 12 
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#0f766e',
+                    background: '#ccfbf1',
+                    padding: '2px 9px',
+                    borderRadius: 12
                   }}>
                     Saleroom Record
                   </span>
-                  <span style={{ 
-                    fontFamily: 'monospace', 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: 'var(--gold-primary, #b48324)', 
-                    background: 'rgba(212, 175, 55, 0.1)', 
-                    padding: '2px 8px', 
-                    borderRadius: 4 
+                  <span style={{
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--gold-primary, #b48324)',
+                    background: 'rgba(212, 175, 55, 0.1)',
+                    padding: '2px 8px',
+                    borderRadius: 4
                   }}>
                     {getCustomerCode(viewingCustomer)}
                   </span>
@@ -2580,8 +2592,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 </p>
               </div>
 
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setViewingCustomer(null)}
                 style={{
                   background: '#f1f5f9',
@@ -2656,13 +2668,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: 12 }}>
                     {viewingCustomer.type === 'both' ? 'Bidder & Seller' : 'Registered Bidder'}
                   </span>
-                  <span style={{ 
-                    fontSize: 11, 
-                    fontWeight: 600, 
-                    color: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#0f172a' : '#334155', 
-                    background: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#f1f5f9' : '#f8fafc', 
-                    border: '1px solid #e2e8f0', 
-                    padding: '4px 10px', 
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#0f172a' : '#334155',
+                    background: (viewingCustomer.role || '').toLowerCase() === 'super_admin' ? '#f1f5f9' : '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    padding: '4px 10px',
                     borderRadius: 12,
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -2912,8 +2924,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
           IMPORT CUSTOMERS MODAL
           ========================================================================= */}
       {isImportModalOpen && typeof document !== 'undefined' && createPortal(
-        <div 
-          className="modal-overlay" 
+        <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             inset: 0,
@@ -2927,11 +2939,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
           }}
           onClick={() => !isImporting && setIsImportModalOpen(false)}
         >
-          <div 
-            className="modal-content" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ 
-              maxWidth: 540, 
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 540,
               width: '100%',
               background: '#ffffff',
               borderRadius: 10,
@@ -2955,8 +2967,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   Import Customers
                 </h3>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 disabled={isImporting}
                 onClick={() => setIsImportModalOpen(false)}
                 style={{
@@ -2982,7 +2994,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               </p>
 
               {/* Upload Drop Area */}
-              <div 
+              <div
                 style={{
                   border: '2px dashed rgba(212, 175, 55, 0.45)',
                   borderRadius: 8,
@@ -3018,9 +3030,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     </div>
                   </>
                 )}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
+                <input
+                  type="file"
+                  ref={fileInputRef}
                   accept=".csv,.txt"
                   style={{ display: 'none' }}
                   onChange={handleFileUpload}
@@ -3035,23 +3047,22 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   borderRadius: 6,
                   fontSize: 13,
                   fontWeight: 500,
-                  backgroundColor: importStatusMessage.type === 'success' 
-                    ? 'rgba(16, 185, 129, 0.12)' 
+                  backgroundColor: importStatusMessage.type === 'success'
+                    ? 'rgba(16, 185, 129, 0.12)'
                     : importStatusMessage.type === 'warning'
-                    ? 'rgba(245, 158, 11, 0.12)'
-                    : 'rgba(239, 68, 68, 0.12)',
-                  color: importStatusMessage.type === 'success' 
-                    ? '#059669' 
+                      ? 'rgba(245, 158, 11, 0.12)'
+                      : 'rgba(239, 68, 68, 0.12)',
+                  color: importStatusMessage.type === 'success'
+                    ? '#059669'
                     : importStatusMessage.type === 'warning'
-                    ? '#d97706'
-                    : '#dc2626',
-                  border: `1px solid ${
-                    importStatusMessage.type === 'success' 
-                      ? '#a7f3d0' 
+                      ? '#d97706'
+                      : '#dc2626',
+                  border: `1px solid ${importStatusMessage.type === 'success'
+                      ? '#a7f3d0'
                       : importStatusMessage.type === 'warning'
-                      ? '#fde68a'
-                      : '#fecaca'
-                  }`
+                        ? '#fde68a'
+                        : '#fecaca'
+                    }`
                 }}>
                   {importStatusMessage.text}
                 </div>
@@ -3063,9 +3074,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>CSV Template</div>
                   <div style={{ fontSize: 11.5, color: '#64748b' }}>Download sample template with all customer column headers</div>
                 </div>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
+                <button
+                  type="button"
+                  className="btn btn-secondary"
                   style={{ fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}
                   onClick={handleDownloadSampleTemplate}
                   disabled={isImporting}
@@ -3083,9 +3094,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
               display: 'flex',
               justifyContent: 'flex-end'
             }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
+              <button
+                type="button"
+                className="btn btn-secondary"
                 disabled={isImporting}
                 onClick={() => setIsImportModalOpen(false)}
               >

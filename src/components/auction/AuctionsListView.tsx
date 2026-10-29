@@ -64,6 +64,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
   const [newEndDate, setNewEndDate] = useState(new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
   const [newType, setNewType] = useState<'HiBid' | 'Other Auctions'>('HiBid');
   const [newDesc, setNewDesc] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const loadAuctions = async () => {
     setIsLoading(true);
@@ -94,8 +95,9 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
   const handleCreateAuction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || isCreating) return;
 
+    setIsCreating(true);
     try {
       const created = await auctionService.createAuction({
         name: newName,
@@ -113,6 +115,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       onOpenAuction(created.id);
     } catch (err) {
       console.error('Failed to create auction:', err);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -729,6 +733,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         onClose={() => setIsNewModalOpen(false)}
         onSubmit={handleCreateAuction}
         submitLabel="Create Auction"
+        isLoading={isCreating}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <FormField label="Auction Name" required>
