@@ -259,8 +259,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   // Scan License Modal state
   const [isScanLicenseModalOpen, setIsScanLicenseModalOpen] = useState(false);
-  const [scanLicenseMode, setScanLicenseMode] = useState<'camera' | 'upload' | 'simulate'>('camera');
+  const [scanLicenseMode, setScanLicenseMode] = useState<'camera' | 'upload'>('camera');
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -756,6 +758,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
     return list;
   }, [supabaseAuctions, clerkTitle, auction?.name, auction?.code, auction?.id]);
+
+  // Safely mount and play the video stream whenever the camera modal or camera mode is active
+  useEffect(() => {
+    if (isScanLicenseModalOpen && scanLicenseMode === 'camera' && isCameraActive && cameraStreamRef.current) {
+      if (videoRef.current && videoRef.current.srcObject !== cameraStreamRef.current) {
+        videoRef.current.srcObject = cameraStreamRef.current;
+        videoRef.current.play().catch(err => {
+          console.warn('[AuctionDayTab] Video play auto-start error:', err);
+        });
+      }
+    }
+  }, [isScanLicenseModalOpen, scanLicenseMode, isCameraActive]);
 
   // Selected bidder records for Check In dialog
   const selectedBiddersList = useMemo(() => {
@@ -1657,37 +1671,89 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   };
 
   // Camera Management for License Scanning
-  const handleStartCamera = async () => {
+  const handleStartCamera = async (facing: 'environment' | 'user' = cameraFacingMode) => {
     setCameraError('');
+    setIsCameraStarting(true);
+
+    // Stop any existing active stream first
+    if (cameraStreamRef.current) {
+      try {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      } catch (_) {}
+      cameraStreamRef.current = null;
+    }
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      console.warn('[AuctionDayTab] getUserMedia not available in this context.');
+      setCameraError('Camera access is not supported by this browser environment.');
+      setIsCameraActive(false);
+      setIsCameraStarting(false);
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
+    // 1. Try preferred facingMode using 'ideal' constraint (never strict to prevent OverconstrainedError on desktop webcams)
     try {
-      if (!navigator?.mediaDevices?.getUserMedia) {
-        setCameraError('Camera access is not supported by this browser environment. Use document upload instead.');
-        setScanLicenseMode('upload');
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+    } catch (err1) {
+      console.warn('[AuctionDayTab] Ideal facingMode camera request failed, falling back to basic video:', err1);
+    }
+
+    // 2. Second fallback: generic video constraint
+    if (!stream) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      } catch (err2: any) {
+        console.warn('[AuctionDayTab] Generic video request failed:', err2);
+        setIsCameraActive(false);
+        setIsCameraStarting(false);
+
+        let msg = 'Unable to connect to camera.';
+        if (err2?.name === 'NotAllowedError' || err2?.name === 'PermissionDeniedError') {
+          msg = 'Camera permission was denied. Please allow camera access in your browser address bar.';
+        } else if (err2?.name === 'NotFoundError' || err2?.name === 'DevicesNotFoundError') {
+          msg = 'No physical webcam detected on this device.';
+        } else if (err2?.name === 'NotReadableError' || err2?.name === 'TrackStartError') {
+          msg = 'Camera is currently in use by another application.';
+        }
+        setCameraError(msg);
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
+    }
+
+    if (stream) {
       cameraStreamRef.current = stream;
+      setIsCameraActive(true);
+      setIsCameraStarting(false);
+      setCameraError('');
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(e => console.warn('[AuctionDayTab] Video play error:', e));
       }
-      setIsCameraActive(true);
-    } catch (err) {
-      console.warn('[AuctionDayTab] Camera access denied or unavailable:', err);
-      setCameraError('Camera access was denied or device is busy. Switched to document upload.');
-      setScanLicenseMode('upload');
-      setIsCameraActive(false);
     }
   };
 
   const handleStopCamera = () => {
     if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      try {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      } catch (_) {}
       cameraStreamRef.current = null;
     }
     setIsCameraActive(false);
+    setIsCameraStarting(false);
   };
 
   // Parse simulated / scanned AAMVA driver's license barcode text
@@ -1726,7 +1792,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       }
     }
 
-    // Next suggested paddle
+    // Dynamic next suggested paddle based on real registrations
     const maxExisting = registrations.reduce((max, r) => {
       const num = parseInt(r.bidCardNumber, 10);
       return !isNaN(num) && num > max ? num : max;
@@ -1734,36 +1800,56 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
     setScannedData(prev => ({
       ...prev,
-      firstName: firstName || prev.firstName || 'Sarah',
-      lastName: lastName || prev.lastName || 'Jenkins',
-      address: address || prev.address || '412 Higgins Ave',
-      city: city || prev.city || 'Missoula',
-      state: state || prev.state || 'MT',
-      zip: zip || prev.zip || '59802',
-      licenseNumber: dlNum || prev.licenseNumber || 'MT-DL-883921',
-      dob: dob || prev.dob || '05/14/1982',
-      paddleNumber: `${maxExisting + 1}`,
-      email: `${(firstName || 'sarah').toLowerCase()}.${(lastName || 'jenkins').toLowerCase()}@montanabids.com`,
-      phone: '(406) 555-0182'
+      firstName: firstName || prev.firstName || '',
+      lastName: lastName || prev.lastName || '',
+      address: address || prev.address || '',
+      city: city || prev.city || '',
+      state: state || prev.state || '',
+      zip: zip || prev.zip || '',
+      licenseNumber: dlNum || prev.licenseNumber || '',
+      dob: dob || prev.dob || '',
+      paddleNumber: prev.paddleNumber || `${maxExisting + 1}`,
+      email: firstName && lastName ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com` : prev.email || '',
+      phone: prev.phone || ''
     }));
   };
 
-  const handleCaptureFrame = () => {
-    if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const handleCaptureFrame = async () => {
+    if (!videoRef.current || !canvasRef.current) {
+      showToast('error', 'Camera Offline', 'Please connect or start camera before capturing.');
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
+    let detectedText = '';
+
+    if (typeof (window as any).BarcodeDetector !== 'undefined') {
+      try {
+        const detector = new (window as any).BarcodeDetector({
+          formats: ['pdf417', 'qr_code', 'code_128', 'data_matrix']
+        });
+        const barcodes = await detector.detect(canvas);
+        if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+          detectedText = barcodes[0].rawValue;
+        }
+      } catch (err) {
+        console.warn('[BarcodeDetector] error:', err);
       }
-      handleStopCamera();
-      // Parse barcode from frame
-      handleParseLicenseText(
-        `ANSI 636000080002DL00410260ZA03010042DLDAQM89230198\nDCSJenkins\nDACSarah\nDAG412 Higgins Ave\nDAIMissoula\nDAJMT\nDAK59802\nDBB05141982`
-      );
-      showToast('success', 'License Scanned', 'AAMVA Driver License credentials extracted. Please verify and confirm registration.');
+    }
+
+    if (detectedText) {
+      handleParseLicenseText(detectedText);
+      showToast('success', 'License Scanned', 'AAMVA Driver License barcode extracted.');
+    } else {
+      showToast('info', 'No Barcode Found', 'Hold the driver license barcode flat and centered within the target frame, then capture again.');
     }
   };
 
@@ -4030,8 +4116,29 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const maxExisting = registrations.reduce((max, r) => {
+                    const num = parseInt(r.bidCardNumber, 10);
+                    return !isNaN(num) && num > max ? num : max;
+                  }, 5000);
+
+                  setScannedData({
+                    firstName: '',
+                    lastName: '',
+                    address: '',
+                    city: '',
+                    state: '',
+                    zip: '',
+                    licenseNumber: '',
+                    dob: '',
+                    paddleNumber: `${maxExisting + 1}`,
+                    email: '',
+                    phone: '',
+                    companyName: '',
+                    hearAboutUs: 'Driver License Scan'
+                  });
                   setIsScanLicenseModalOpen(true);
                   setScanLicenseMode('camera');
+                  setCameraError('');
                   handleStartCamera();
                 }}
                 disabled={isAuctionClosed}
@@ -6864,68 +6971,218 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           {/* Camera View */}
           {scanLicenseMode === 'camera' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {/* Camera Header Status & Controls */}
               <div style={{
                 width: '100%',
-                maxHeight: 250,
-                background: '#0f172a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 2px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700 }}>
+                  {isCameraActive ? (
+                    <>
+                      <span className="camera-live-pulse-dot" />
+                      <span style={{ color: '#059669' }}>Live Camera Stream (Webcam Active)</span>
+                    </>
+                  ) : isCameraStarting ? (
+                    <>
+                      <RefreshCw size={12} className="spin-smooth" color="#3b82f6" />
+                      <span style={{ color: '#2563eb' }}>Connecting Camera...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }} />
+                      <span style={{ color: '#64748b' }}>Camera Offline</span>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {/* Flip / Switch Camera button */}
+                  {isCameraActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = cameraFacingMode === 'environment' ? 'user' : 'environment';
+                        setCameraFacingMode(next);
+                        handleStartCamera(next);
+                      }}
+                      style={{
+                        height: 26,
+                        padding: '0 8px',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        color: '#334155',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        cursor: 'pointer'
+                      }}
+                      title="Switch between front and back camera"
+                    >
+                      <RefreshCw size={11} />
+                      <span>Flip Camera</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Viewfinder Window */}
+              <div style={{
+                width: '100%',
+                height: 240,
+                background: '#090d16',
                 borderRadius: 8,
                 overflow: 'hidden',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid #1e293b'
+                border: '1px solid #1e293b',
+                boxShadow: 'inset 0 0 24px rgba(0, 0, 0, 0.6)'
               }}>
+                {/* Laser Scanning Line */}
+                {isCameraActive && <div className="scanner-laser-line" />}
+
+                {/* Real Video Element */}
                 <video
                   ref={videoRef}
-                  style={{ width: '100%', height: 230, objectFit: 'cover' }}
+                  autoPlay
                   playsInline
                   muted
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: isCameraActive ? 'block' : 'none'
+                  }}
                 />
                 <canvas ref={canvasRef} style={{ display: 'none' }} />
 
+                {/* Standby / Offline State inside Viewfinder */}
+                {!isCameraActive && !isCameraStarting && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#94a3b8',
+                    textAlign: 'center',
+                    padding: 20
+                  }}>
+                    <Camera size={36} color="#64748b" style={{ marginBottom: 8 }} />
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Webcam is Off</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, maxWidth: 280 }}>
+                      Connect your camera to scan physical driver licenses live
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleStartCamera()}
+                      style={{
+                        marginTop: 12,
+                        padding: '6px 16px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        background: '#0d9488',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: 6,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Start Camera
+                    </button>
+                  </div>
+                )}
+
                 {/* Target Frame Overlay */}
-                <div style={{
-                  position: 'absolute',
-                  width: '78%',
-                  height: '68%',
-                  border: '2px dashed #dfb74a',
-                  borderRadius: 8,
-                  boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.4)',
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ffffff',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textShadow: '0 1px 4px rgba(0,0,0,0.9)'
-                }}>
-                  Align Driver License / PDF417 Barcode Here
-                </div>
+                {isCameraActive && (
+                  <div style={{
+                    position: 'absolute',
+                    width: '84%',
+                    height: '76%',
+                    border: '2px dashed #dfb74a',
+                    borderRadius: 8,
+                    boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.42)',
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                    paddingBottom: 8,
+                    color: '#ffffff',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.9)'
+                  }}>
+                    Align Driver License Barcode in Frame
+                  </div>
+                )}
               </div>
 
+              {/* Status & Error Notification if any */}
               {cameraError && (
-                <div style={{ fontSize: 11.5, color: '#dc2626', background: '#fee2e2', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: 6, width: '100%', textAlign: 'center' }}>
-                  {cameraError}
+                <div style={{
+                  fontSize: 11.5,
+                  color: '#9a3412',
+                  background: '#ffedd5',
+                  border: '1px solid #fed7aa',
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8
+                }}>
+                  <span>{cameraError}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleStartCamera()}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: '#ea580c',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Retry
+                  </button>
                 </div>
               )}
 
-              <button
-                type="button"
-                className="af360-btn-teal"
-                onClick={handleCaptureFrame}
-                style={{
-                  height: 36,
-                  fontSize: 12.5,
-                  padding: '0 20px',
-                  borderRadius: 6
-                }}
-              >
-                <Camera size={14} />
-                <span>Capture & Extract Barcode</span>
-              </button>
+              {/* Capture Action Button */}
+              {isCameraActive && (
+                <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    className="af360-btn-teal"
+                    onClick={handleCaptureFrame}
+                    style={{
+                      height: 38,
+                      fontSize: 13,
+                      padding: '0 24px',
+                      borderRadius: 6,
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      boxShadow: '0 2px 8px rgba(13, 148, 136, 0.25)'
+                    }}
+                  >
+                    <Camera size={15} />
+                    <span>Capture & Extract Barcode</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -6939,29 +7196,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
-                  Simulate or Paste Barcode Scan Data (AAMVA PDF417):
+                  Paste or Scan Barcode Data (AAMVA PDF417 / 2D Scanner):
                 </div>
-                <button
-                  type="button"
-                  style={{
-                    height: 28,
-                    padding: '0 10px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: '#ffffff',
-                    color: '#0f172a',
-                    border: '1px solid #cbd5e1',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => {
-                    handleParseLicenseText(
-                      `ANSI 636000080002DL00410260ZA03010042DLDAQM89230198\nDCSJenkins\nDACSarah\nDAG412 Higgins Ave\nDAIMissoula\nDAJMT\nDAK59802\nDBB05141982`
-                    );
-                  }}
-                >
-                  Load Sample Montana DL Data
-                </button>
               </div>
 
               <textarea
