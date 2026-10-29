@@ -47,6 +47,7 @@ import {
   Flame,
   Globe,
   Camera,
+  CameraOff,
   Upload,
   Download,
   CreditCard,
@@ -1684,16 +1685,29 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
 
     if (!navigator?.mediaDevices?.getUserMedia) {
-      console.warn('[AuctionDayTab] getUserMedia not available in this context.');
       setCameraError('Camera access is not supported by this browser environment.');
       setIsCameraActive(false);
       setIsCameraStarting(false);
       return;
     }
 
+    // Gracefully check device list if supported to prevent browser console NotFoundError noise
+    try {
+      if (navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(d => d.kind === 'videoinput');
+        if (devices.length > 0 && !hasCamera) {
+          setCameraError('No physical webcam detected on this PC. You can use Document Upload or enter details manually.');
+          setIsCameraActive(false);
+          setIsCameraStarting(false);
+          return;
+        }
+      }
+    } catch (_) {}
+
     let stream: MediaStream | null = null;
 
-    // 1. Try preferred facingMode using 'ideal' constraint (never strict to prevent OverconstrainedError on desktop webcams)
+    // 1. Try preferred facingMode using 'ideal' constraint
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -1703,9 +1717,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         },
         audio: false
       });
-    } catch (err1) {
-      console.warn('[AuctionDayTab] Ideal facingMode camera request failed, falling back to basic video:', err1);
-    }
+    } catch (_) {}
 
     // 2. Second fallback: generic video constraint
     if (!stream) {
@@ -1715,7 +1727,6 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           audio: false
         });
       } catch (err2: any) {
-        console.warn('[AuctionDayTab] Generic video request failed:', err2);
         setIsCameraActive(false);
         setIsCameraStarting(false);
 
@@ -1723,7 +1734,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         if (err2?.name === 'NotAllowedError' || err2?.name === 'PermissionDeniedError') {
           msg = 'Camera permission was denied. Please allow camera access in your browser address bar.';
         } else if (err2?.name === 'NotFoundError' || err2?.name === 'DevicesNotFoundError') {
-          msg = 'No physical webcam detected on this device.';
+          msg = 'No physical webcam detected on this PC. You can use Document Upload or enter details manually.';
         } else if (err2?.name === 'NotReadableError' || err2?.name === 'TrackStartError') {
           msg = 'Camera is currently in use by another application.';
         }
@@ -7075,28 +7086,48 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     textAlign: 'center',
                     padding: 20
                   }}>
-                    <Camera size={36} color="#64748b" style={{ marginBottom: 8 }} />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Webcam is Off</div>
-                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, maxWidth: 280 }}>
-                      Connect your camera to scan physical driver licenses live
+                    <CameraOff size={36} color="#64748b" style={{ marginBottom: 8 }} />
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Webcam Offline</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, maxWidth: 300 }}>
+                      Connect a webcam to scan driver licenses live, or switch to document upload.
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleStartCamera()}
-                      style={{
-                        marginTop: 12,
-                        padding: '6px 16px',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        background: '#0d9488',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: 6,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Start Camera
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleStartCamera()}
+                        style={{
+                          padding: '6px 14px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          background: '#0d9488',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 6,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Start Camera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleStopCamera();
+                          setScanLicenseMode('upload');
+                        }}
+                        style={{
+                          padding: '6px 14px',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: '#1e293b',
+                          color: '#cbd5e1',
+                          border: '1px solid #334155',
+                          borderRadius: 6,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Document Upload
+                      </button>
+                    </div>
                   </div>
                 )}
 

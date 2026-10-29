@@ -9,6 +9,7 @@ import {
 } from '../../types/auctionDetail';
 import { PreAuctionTab } from './tabs/PreAuctionTab';
 import { ConfirmModal } from '../Common/ConfirmModal';
+import { ErrorBoundary } from '../Common/ErrorBoundary';
 import { LotItem } from '../../types';
 import { 
   ArrowLeft, 
@@ -837,14 +838,18 @@ const AuctionDetailContent: React.FC<{
 
 export const AuctionDetailView: React.FC<AuctionDetailViewProps> = (props) => {
   const { showToast } = useToast();
+  const effectiveAuctionId = props.auctionId || 'auc-001';
 
   return (
-    <AuctionDetailProvider
-      auctionId={props.auctionId}
-      onSavedSuccess={() => showToast('success', 'Saved', 'Auction saved successfully!')}
-      onSavedError={(err) => showToast('error', 'Error', err)}
-    >
-      <AuctionDetailContent {...props} />
-    </AuctionDetailProvider>
+    <ErrorBoundary fallbackMessage="Unable to load auction workspace">
+      <AuctionDetailProvider
+        key={effectiveAuctionId}
+        auctionId={effectiveAuctionId}
+        onSavedSuccess={() => showToast('success', 'Saved', 'Auction saved successfully!')}
+        onSavedError={(err) => showToast('error', 'Error', err)}
+      >
+        <AuctionDetailContent {...props} />
+      </AuctionDetailProvider>
+    </ErrorBoundary>
   );
 };

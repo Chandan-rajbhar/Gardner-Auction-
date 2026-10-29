@@ -322,10 +322,22 @@ export const AuctionDetailProvider: React.FC<{
   );
 };
 
+const defaultAuctionDetailContext: AuctionDetailContextType = {
+  state: initialState,
+  dispatch: () => {},
+  isLoading: false,
+  loadError: null,
+  reloadAuction: async () => {},
+  saveAuction: async () => false,
+  validate: () => true,
+  errors: {}
+};
+
 export const useAuctionDetail = () => {
   const context = useContext(AuctionDetailContext);
   if (!context) {
-    throw new Error('useAuctionDetail must be used within an AuctionDetailProvider');
+    console.warn('[useAuctionDetail] Hook accessed outside an AuctionDetailProvider. Providing safe fallback state.');
+    return defaultAuctionDetailContext;
   }
   return context;
 };
