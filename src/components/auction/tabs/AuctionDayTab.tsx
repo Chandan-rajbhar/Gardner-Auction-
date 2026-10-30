@@ -450,6 +450,28 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [drawerClerkXMoney, setDrawerClerkXMoney] = useState(false);
   const [isSavingDrawerClerking, setIsSavingDrawerClerking] = useState(false);
 
+  // Dedicated Read-Only View Details Modal state
+  const [viewLotModal, setViewLotModal] = useState<{
+    isOpen: boolean;
+    lot: LotItem | null;
+    isLoading: boolean;
+    buyerName?: string;
+    financials?: {
+      hammerPrice: number;
+      buyersPremium: number;
+      totalPurchase: number;
+      depositApplied: number;
+      depositRemaining: number;
+      balance: number;
+      invoiceNumber?: string;
+      invoiceStatus?: string;
+    };
+  }>({
+    isOpen: false,
+    lot: null,
+    isLoading: false
+  });
+
   // Bidder Check In Modal state (Matching AuctionFlex360 Bidder Check In)
   const [isBidderCheckInModalOpen, setIsBidderCheckInModalOpen] = useState(false);
   const [checkInTabMode, setCheckInTabMode] = useState<'find' | 'create'>('find');
@@ -645,6 +667,20 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       unsubscribe();
     };
   }, [auction?.id, lots, dispatch]);
+
+  // Dynamically load fresh deposits when opening Manage Deposits modal
+  useEffect(() => {
+    if (isManageDepositsModalOpen) {
+      const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+      if (targetEventId) {
+        auctionDayService.getDeposits(targetEventId).then(fresh => {
+          if (fresh && fresh.length > 0) {
+            setDeposits(fresh.filter(d => !isMockDepositItem(d)));
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [isManageDepositsModalOpen, activeEventId, selectedAuctionId, auction?.id]);
 
   // Sync custom lots if lots prop changes externally
   useEffect(() => {
@@ -2791,6 +2827,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         const ok = await auctionDayService.deleteDeposit(auction.id, deleteConfirm.id);
         if (ok) {
           setDeposits(prev => prev.filter(d => d.id !== deleteConfirm.id));
+          try {
+            const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+            const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+            await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
+          } catch (_) {}
           showToast('success', 'Deposit Deleted', `Removed deposit record for ${deleteConfirm.label}.`);
         } else {
           showToast('error', 'Error', 'Could not delete deposit record.');
@@ -2811,6 +2852,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             next.delete(deleteConfirm.id);
             return next;
           });
+          try {
+            const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+            const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+            await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
+            const refreshedDeps = await auctionDayService.getDeposits(targetEventId);
+            if (refreshedDeps) setDeposits(refreshedDeps);
+          } catch (_) {}
           showToast('success', 'Lot Deleted', 'Lot deleted successfully.');
         } else {
           showToast('error', 'Error', res.error || 'Failed to delete lot from Supabase.');
@@ -2986,7 +3034,54 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         }
       }
 
-      // 1. Update lot in Supabase
+      // 1. Validate available bidder funds before confirming sale
+      if (isSold) {
+        const hammerSubtotal = Math.round(finalPrice * clerkQuantity * 100) / 100;
+        const buyersPremium = Math.round(hammerSubtotal * 0.15 * 100) / 100;
+        const totalPurchaseAmount = Math.round((hammerSubtotal + buyersPremium) * 100) / 100;
+
+        let availableFunds = 0;
+        try {
+          const client = supabaseAdmin || supabase;
+          const { data: depRows, error: depErr } = await client
+            .from('bidder_deposits')
+            .select('amount, amount_applied, amount_remaining, status, bid_card_number, bidder_name')
+            .eq('auction_id', targetEventId)
+            .neq('status', 'Refunded');
+
+          if (!depErr && depRows && depRows.length > 0) {
+            const pLower = (finalPaddle || '').trim().toLowerCase();
+            const bLower = (resolvedBuyerName || clerkSeller || '').trim().toLowerCase();
+            const matched = depRows.filter((d: any) => 
+              (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+              (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+            );
+            availableFunds = matched.reduce((sum: number, d: any) => {
+              const rem = d.amount_remaining !== undefined && d.amount_remaining !== null
+                ? Number(d.amount_remaining)
+                : Math.max(0, (Number(d.amount) || 0) - (Number(d.amount_applied) || 0));
+              return sum + rem;
+            }, 0);
+          }
+        } catch (depErr) {
+          console.warn('[AuctionDayTab] Error querying available deposit funds:', depErr);
+        }
+
+        if (availableFunds < totalPurchaseAmount) {
+          setIsClerkingSaving(false);
+          showToast(
+            'error',
+            'Insufficient Funds',
+            `Insufficient bidder balance. Available funds: ${formatCurrency(availableFunds)}. Required amount: ${formatCurrency(totalPurchaseAmount)}.`
+          );
+          setInlineErrors({
+            hammerPrice: `Insufficient available funds (${formatCurrency(availableFunds)} < ${formatCurrency(totalPurchaseAmount)})`
+          });
+          return;
+        }
+      }
+
+      // 2. Update lot in Supabase
       const updatePayload: Partial<LotItem> = {
         status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
         hammerPrice: finalPrice,
@@ -3022,12 +3117,16 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           console.warn('[AuctionDayTab] Insert clerking bid error:', bidErr);
         }
 
-        try {
-          const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
-          await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
-        } catch (syncErr) {
-          console.warn('[AuctionDayTab] Sync settlements error:', syncErr);
-        }
+      }
+
+      // Sync settlements & refresh deposits in real time for all status transitions (Sold, Passed, Upcoming)
+      try {
+        const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+        await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
+        const refreshedDeps = await auctionDayService.getDeposits(targetEventId);
+        if (refreshedDeps) setDeposits(refreshedDeps);
+      } catch (syncErr) {
+        console.warn('[AuctionDayTab] Sync settlements error:', syncErr);
       }
 
       // 3. Update local customLots state
@@ -3057,9 +3156,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
       // Toast notification according to prompt requirements
       if (isSold) {
-        showToast('success', 'Sale Completed', 'Lot sold successfully.');
+        showToast('success', 'Lot Sold', `Lot #${targetLot.lotNumber} sold successfully to ${resolvedBuyerName}.`);
+      } else if (isPassed) {
+        showToast('info', 'Passed', `Lot #${targetLot.lotNumber} marked as Passed.`);
       } else {
-        showToast('success', 'Clerking Saved', 'Clerking record saved successfully.');
+        showToast('success', 'Clerking Saved', `Clerking record saved for Lot #${targetLot.lotNumber}.`);
       }
 
       // 4. Clerking Assist: Auto-advance to next lot
@@ -3110,6 +3211,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       if (onReopenLot) onReopenLot(lotId);
       try {
         await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+        const refreshedDeps = await auctionDayService.getDeposits(auction.id);
+        if (refreshedDeps) setDeposits(refreshedDeps);
       } catch (syncErr) {
         console.warn('[AuctionDayTab] Sync settlements after reopen error:', syncErr);
       }
@@ -3165,7 +3268,112 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     showToast('success', 'Batch Update Complete', `Updated ${ids.length} lot(s) to ${action}.`);
   };
 
-  // Open Clerking Drawer
+  // Open Dedicated Read-Only View Details Modal
+  const handleOpenViewLotDetails = async (lot: LotItem) => {
+    setViewLotModal({
+      isOpen: true,
+      lot,
+      isLoading: true
+    });
+
+    try {
+      const client = supabaseAdmin || supabase;
+      const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+
+      // 1. Fetch fresh lot data from Supabase
+      const { data: freshLot } = await client
+        .from('lots')
+        .select('*')
+        .eq('id', lot.id)
+        .maybeSingle();
+
+      const activeLotData: LotItem = freshLot ? {
+        id: freshLot.id,
+        lotNumber: freshLot.lot_number,
+        title: freshLot.title,
+        description: freshLot.description || lot.description,
+        category: freshLot.category || lot.category,
+        image: freshLot.image || lot.image,
+        startingBid: freshLot.starting_bid || 0,
+        reservePrice: freshLot.reserve_price || 0,
+        estimateLow: freshLot.estimate_low || 0,
+        estimateHigh: freshLot.estimate_high || 0,
+        currentBid: freshLot.current_bid || 0,
+        hammerPrice: freshLot.hammer_price || 0,
+        highBidderPaddle: freshLot.high_bidder_paddle || freshLot.winning_bidder_number,
+        highBidderName: freshLot.high_bidder_name,
+        status: freshLot.status,
+        quantity: freshLot.quantity || lot.quantity || 1,
+        consignorName: freshLot.consignor_name || lot.consignorName,
+        grade: freshLot.grade || lot.grade,
+        provenance: freshLot.provenance || lot.provenance,
+        conditionReport: freshLot.condition_report || lot.conditionReport
+      } : lot;
+
+      // 2. Fetch financial records (invoice & deposits)
+      let financials = undefined;
+      const isSold = activeLotData.status === 'sold';
+      const paddle = activeLotData.highBidderPaddle;
+      const hammer = Number(activeLotData.hammerPrice) || 0;
+      const resolvedBuyer = isSold ? resolveBuyerName(activeLotData) : undefined;
+
+      if (isSold && paddle) {
+        const bp = Math.round(hammer * 0.15 * 100) / 100;
+        const total = Math.round((hammer + bp) * (activeLotData.quantity || 1) * 100) / 100;
+
+        // Fetch invoice
+        const { data: invRows } = await client
+          .from('invoices')
+          .select('*')
+          .eq('auction_id', targetEventId)
+          .eq('paddle_number', paddle);
+        const inv = invRows && invRows[0];
+
+        // Fetch deposits
+        const { data: depRows } = await client
+          .from('bidder_deposits')
+          .select('*')
+          .eq('auction_id', targetEventId)
+          .eq('bid_card_number', paddle);
+
+        let depApplied = 0;
+        let depRemaining = 0;
+        if (depRows && depRows.length > 0) {
+          depApplied = depRows.reduce((s: number, d: any) => s + (Number(d.amount_applied) || 0), 0);
+          depRemaining = depRows.reduce((s: number, d: any) => {
+            const rem = d.amount_remaining !== undefined && d.amount_remaining !== null
+              ? Number(d.amount_remaining)
+              : Math.max(0, (Number(d.amount) || 0) - (Number(d.amount_applied) || 0));
+            return s + rem;
+          }, 0);
+        }
+
+        financials = {
+          hammerPrice: hammer,
+          buyersPremium: bp,
+          totalPurchase: total,
+          depositApplied: depApplied,
+          depositRemaining: depRemaining,
+          balance: inv ? Number(inv.balance) : Math.max(0, total - depApplied),
+          invoiceNumber: inv?.invoice_number || `INV-${paddle}`,
+          invoiceStatus: inv?.payment_status || (total <= depApplied ? 'Paid' : 'Pending')
+        };
+      }
+
+      setViewLotModal({
+        isOpen: true,
+        lot: activeLotData,
+        buyerName: resolvedBuyer,
+        isLoading: false,
+        financials
+      });
+    } catch (err) {
+      console.warn('[AuctionDayTab] Error fetching live lot details:', err);
+      setViewLotModal(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Open Clerking Drawer (Edit mode)
   const handleOpenClerkingDrawer = (mode: 'edit' | 'view', lot: LotItem) => {
     setDrawerClerkLotId(lot.id);
     setDrawerClerkLotNum(String(lot.lotNumber));
@@ -3193,6 +3401,48 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       const price = isSold ? parseFloat(drawerClerkHammerPrice) || 0 : 0;
       const paddle = isSold ? drawerClerkBidder.trim() : null;
       const buyerName = isSold ? drawerClerkSeller.trim() : undefined;
+
+      // Validate available bidder funds before confirming sale in drawer
+      if (isSold) {
+        const hammerSubtotal = Math.round(price * (drawerClerkQuantity || 1) * 100) / 100;
+        const buyersPremium = Math.round(hammerSubtotal * 0.15 * 100) / 100;
+        const totalPurchaseAmount = Math.round((hammerSubtotal + buyersPremium) * 100) / 100;
+
+        let availableFunds = 0;
+        try {
+          const client = supabaseAdmin || supabase;
+          const { data: depRows } = await client
+            .from('bidder_deposits')
+            .select('amount, amount_applied, amount_remaining, status, bid_card_number, bidder_name')
+            .eq('auction_id', targetEventId)
+            .neq('status', 'Refunded');
+
+          if (depRows && depRows.length > 0) {
+            const pLower = (paddle || '').trim().toLowerCase();
+            const bLower = (buyerName || '').trim().toLowerCase();
+            const matched = depRows.filter((d: any) => 
+              (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+              (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+            );
+            availableFunds = matched.reduce((sum: number, d: any) => {
+              const rem = d.amount_remaining !== undefined && d.amount_remaining !== null
+                ? Number(d.amount_remaining)
+                : Math.max(0, (Number(d.amount) || 0) - (Number(d.amount_applied) || 0));
+              return sum + rem;
+            }, 0);
+          }
+        } catch (_) {}
+
+        if (availableFunds < totalPurchaseAmount) {
+          setIsSavingDrawerClerking(false);
+          showToast(
+            'error',
+            'Insufficient Funds',
+            `Insufficient bidder balance. Available funds: ${formatCurrency(availableFunds)}. Required amount: ${formatCurrency(totalPurchaseAmount)}.`
+          );
+          return;
+        }
+      }
 
       const updateRes = await lotsService.updateLot(drawerClerkLotId, {
         status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
@@ -3222,16 +3472,20 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         return l;
       }));
 
-      if (isSold) {
-        try {
-          const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
-          await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
-        } catch (syncErr) {
-          console.warn('[AuctionDayTab] Sync settlements from drawer clerking error:', syncErr);
-        }
+      try {
+        const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+        await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
+        const refreshedDeps = await auctionDayService.getDeposits(targetEventId);
+        if (refreshedDeps) setDeposits(refreshedDeps);
+      } catch (syncErr) {
+        console.warn('[AuctionDayTab] Sync settlements from drawer clerking error:', syncErr);
       }
 
-      showToast('success', 'Clerking Updated', 'Clerking record updated successfully.');
+      if (isSold) {
+        showToast('success', 'Lot Sold', `Lot #${drawerClerkLotNum} sold successfully to ${buyerName || 'Buyer'}.`);
+      } else {
+        showToast('success', 'Clerking Updated', 'Clerking record updated successfully.');
+      }
       setClerkingDrawer({ isOpen: false, mode: 'view' });
     } catch (_) {
       showToast('error', 'Error', 'Failed to save clerking record. Please try again.');
@@ -5762,7 +6016,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                                 {
                                   label: 'View Details',
                                   icon: <Eye size={14} />,
-                                  onClick: () => handleOpenClerkingDrawer('view', lot)
+                                  onClick: () => handleOpenViewLotDetails(lot)
                                 },
                                 {
                                   label: 'Edit Clerking',
@@ -8096,7 +8350,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               color: '#334155'
             }}>
               <span>Total Deposits: {deposits.length}</span>
-              <span>Total Balance: {formatCurrency(deposits.reduce((s, d) => s + (Number(d.amount) || 0), 0))}</span>
+              <span>Total Balance: {formatCurrency(deposits.reduce((s, d) => s + (d.amountRemaining !== undefined ? Number(d.amountRemaining) : Math.max(0, (Number(d.amount) || 0) - (Number(d.amountApplied) || 0))), 0))}</span>
             </div>
           </div>
 
@@ -9807,6 +10061,325 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </button>
           </div>
         </form>
+      </ShadcnSheet>
+
+      {/* =========================================================================
+          RIGHT-SIDE DRAWER 7: DEDICATED READ-ONLY VIEW LOT DETAILS
+          ========================================================================= */}
+      <ShadcnSheet
+        isOpen={viewLotModal.isOpen}
+        onClose={() => setViewLotModal({ isOpen: false, lot: null, isLoading: false })}
+        title={
+          viewLotModal.lot
+            ? `Lot Details — #${viewLotModal.lot.lotNumber} ${viewLotModal.lot.title || ''}`
+            : 'Lot Details'
+        }
+        description="Comprehensive read-only records, clerking outcomes, and financial ledger from Supabase"
+        width={580}
+      >
+        {viewLotModal.isLoading ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+            <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto 16px', color: 'var(--gold-dark, #9a741e)' }} />
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Loading lot records from Supabase...</div>
+          </div>
+        ) : viewLotModal.lot ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Top Lot Overview Banner */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{
+                    fontSize: 12,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 800,
+                    color: 'var(--gold-dark, #9a741e)',
+                    background: '#fef3c7',
+                    padding: '3px 10px',
+                    borderRadius: 4
+                  }}>
+                    LOT #{viewLotModal.lot.lotNumber}
+                  </span>
+                  {viewLotModal.lot.category && (
+                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+                      {viewLotModal.lot.category}
+                    </span>
+                  )}
+                </div>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  {viewLotModal.lot.title}
+                </h3>
+                {viewLotModal.lot.description && (
+                  <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0', lineHeight: 1.4 }}>
+                    {viewLotModal.lot.description}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <span style={{
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: viewLotModal.lot.status === 'sold'
+                    ? '#dcfce7'
+                    : viewLotModal.lot.status === 'passed'
+                      ? '#fee2e2'
+                      : viewLotModal.lot.status === 'on_block'
+                        ? '#fef3c7'
+                        : '#f1f5f9',
+                  color: viewLotModal.lot.status === 'sold'
+                    ? '#15803d'
+                    : viewLotModal.lot.status === 'passed'
+                      ? '#b91c1c'
+                      : viewLotModal.lot.status === 'on_block'
+                        ? '#92400e'
+                        : '#64748b'
+                }}>
+                  {viewLotModal.lot.status === 'sold'
+                    ? 'Sold'
+                    : viewLotModal.lot.status === 'passed'
+                      ? 'Passed'
+                      : viewLotModal.lot.status === 'on_block'
+                        ? 'On Block'
+                        : 'Upcoming'}
+                </span>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                  Qty: {viewLotModal.lot.quantity || 1}
+                </div>
+              </div>
+            </div>
+
+            {/* Section 1: Pricing & Estimates */}
+            <div>
+              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', margin: '0 0 10px' }}>
+                Pricing & Valuation Estimates
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Starting Bid</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0f172a', marginTop: 2 }}>
+                    {formatCurrency(viewLotModal.lot.startingBid || 0)}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Reserve Price</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.reservePrice ? formatCurrency(viewLotModal.lot.reservePrice) : '— (No Reserve)'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Pre-Sale Estimate</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.estimateLow || viewLotModal.lot.estimateHigh
+                      ? `${formatCurrency(viewLotModal.lot.estimateLow || 0)} – ${formatCurrency(viewLotModal.lot.estimateHigh || 0)}`
+                      : '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>
+                    {viewLotModal.lot.status === 'sold' ? 'Hammer Price' : 'Current / Last Bid'}
+                  </div>
+                  <div style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-mono)',
+                    color: viewLotModal.lot.status === 'sold' ? '#15803d' : '#0f172a',
+                    marginTop: 2
+                  }}>
+                    {viewLotModal.lot.hammerPrice
+                      ? formatCurrency(viewLotModal.lot.hammerPrice)
+                      : viewLotModal.lot.currentBid
+                        ? formatCurrency(viewLotModal.lot.currentBid)
+                        : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Clerking & Buyer Telemetry */}
+            <div>
+              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', margin: '0 0 10px' }}>
+                Clerking & Buyer Details
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Sold To (Customer Name)</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.status === 'sold'
+                      ? (viewLotModal.buyerName || resolveBuyerName(viewLotModal.lot) || '—')
+                      : '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Winning Bidder Paddle</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--gold-dark, #9a741e)', marginTop: 2 }}>
+                    {viewLotModal.lot.highBidderPaddle ? `#${viewLotModal.lot.highBidderPaddle}` : '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Quantity Sold</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.quantity || 1}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Event Name</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginTop: 2 }}>
+                    {auction?.name || 'Spring Collector Auction'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Financial Ledger (if lot is sold or has financials) */}
+            {viewLotModal.financials && (
+              <div>
+                <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', margin: '0 0 10px' }}>
+                  Live Financial Ledger & Settlement
+                </h4>
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  padding: '14px 18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#334155' }}>
+                    <span>Hammer Subtotal:</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {formatCurrency(viewLotModal.financials.hammerPrice * (viewLotModal.lot.quantity || 1))}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#334155' }}>
+                    <span>Buyer's Premium (15%):</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {formatCurrency(viewLotModal.financials.buyersPremium * (viewLotModal.lot.quantity || 1))}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#0f172a', borderTop: '1px dashed #cbd5e1', paddingTop: 8 }}>
+                    <span>Total Purchase Amount:</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>
+                      {formatCurrency(viewLotModal.financials.totalPurchase)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#0369a1' }}>
+                    <span>Deposit Applied:</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      -{formatCurrency(viewLotModal.financials.depositApplied)}
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    borderTop: '1px solid #cbd5e1',
+                    paddingTop: 8,
+                    color: viewLotModal.financials.balance <= 0 ? '#15803d' : '#b91c1c'
+                  }}>
+                    <span>Outstanding Balance Owed:</span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>
+                      {formatCurrency(viewLotModal.financials.balance)}
+                    </span>
+                  </div>
+                  {viewLotModal.financials.depositRemaining > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#047857', background: '#ecfdf5', padding: '4px 8px', borderRadius: 4, marginTop: 4 }}>
+                      <span>Remaining Deposit Credit:</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                        {formatCurrency(viewLotModal.financials.depositRemaining)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 10, marginTop: 4, fontSize: 12 }}>
+                    <div style={{ color: '#64748b' }}>
+                      Invoice: <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#0f172a' }}>{viewLotModal.financials.invoiceNumber || '—'}</span>
+                    </div>
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: viewLotModal.financials.balance <= 0 ? '#dcfce7' : '#fef3c7',
+                      color: viewLotModal.financials.balance <= 0 ? '#15803d' : '#92400e'
+                    }}>
+                      Status: {viewLotModal.financials.balance <= 0 ? 'PAID' : (viewLotModal.financials.invoiceStatus || 'PENDING')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Section 4: Catalog Specifications */}
+            <div>
+              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', margin: '0 0 10px' }}>
+                Catalog Specifications
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Consignor Name</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.consignorName || '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Grade / Rating</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                    {viewLotModal.lot.grade || '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', gridColumn: 'span 2' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Provenance</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#334155', marginTop: 2 }}>
+                    {viewLotModal.lot.provenance || '—'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', gridColumn: 'span 2' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>Condition Report</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#334155', marginTop: 2 }}>
+                    {viewLotModal.lot.conditionReport || 'No defect disclosures on file.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Read-Only Dismiss Button (Strictly No Edit or Save Buttons) */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => setViewLotModal({ isOpen: false, lot: null, isLoading: false })}
+                className="btn btn-secondary"
+                style={{ height: 38, padding: '0 24px', fontSize: 13, fontWeight: 600 }}
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        ) : null}
       </ShadcnSheet>
 
       {/* =========================================================================

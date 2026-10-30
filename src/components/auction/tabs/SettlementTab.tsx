@@ -6,14 +6,14 @@ import { settlementService } from '../../../services/settlementService';
 import { SettlementCustomerDetail } from './SettlementCustomerDetail';
 import { TableRowActionMenu } from '../../Common/TableRowActionMenu';
 import { ShadcnPagination } from '../../ui/ShadcnPagination';
-import { 
-  PackageCheck, 
-  Printer, 
-  Mail, 
-  CreditCard, 
-  Search, 
-  X, 
-  ExternalLink, 
+import {
+  PackageCheck,
+  Printer,
+  Mail,
+  CreditCard,
+  Search,
+  X,
+  ExternalLink,
   RefreshCw,
   FileText,
   Eye,
@@ -70,7 +70,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (_) {}
+    } catch (_) { }
     return DEFAULT_BIDDER_COLUMNS;
   });
 
@@ -82,12 +82,33 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
   // Pagination state (Default 20 as requested)
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadSettlements = React.useCallback(async () => {
+    if (!auction?.id) return;
+    setIsLoading(true);
+    try {
+      const liveSettlements = await settlementService.getBidderSettlements(auction.id);
+      if (liveSettlements && liveSettlements.length > 0) {
+        setCustomers(liveSettlements);
+      } else if (auction?.settlements && auction.settlements.length > 0) {
+        setCustomers(auction.settlements);
+      } else {
+        setCustomers([]);
+      }
+    } catch (err) {
+      console.warn('[SettlementTab] Error loading settlements from Supabase:', err);
+      if (auction?.settlements) {
+        setCustomers(auction.settlements);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [auction?.id, auction?.settlements]);
 
   useEffect(() => {
-    if (auction?.settlements) {
-      setCustomers(auction.settlements);
-    }
-  }, [auction?.settlements]);
+    loadSettlements();
+  }, [loadSettlements]);
 
   if (!auction) return null;
 
@@ -99,12 +120,15 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
       <SettlementCustomerDetail
         auctionId={auction.id}
         customer={activeCustomer}
-        onBack={() => onSelectCustomer(null)}
+        onBack={() => {
+          onSelectCustomer(null);
+          loadSettlements();
+        }}
         onRefresh={async () => {
+          await loadSettlements();
           const updated = await auctionService.getAuctionById(auction.id);
           if (updated) {
             dispatch({ type: 'SET_AUCTION', payload: updated });
-            setCustomers(updated.settlements);
           }
         }}
       />
@@ -112,7 +136,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
   }
 
   // Filter settlements
-  const filteredCustomers = customers.filter(c => 
+  const filteredCustomers = customers.filter(c =>
     !searchTerm ||
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.bidderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -277,7 +301,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <div className="catalog-search-wrapper" style={{ maxWidth: 320, minWidth: 240, position: 'relative' }}>
               <Search size={15} className="catalog-search-icon" />
-              <input 
+              <input
                 type="text"
                 placeholder="Search settlements by bidder, name, invoice..."
                 value={searchTerm}
@@ -310,8 +334,28 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
               </button>
             </div>
 
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-              Total Settlements: <strong style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{filteredCustomers.length}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                Total Settlements: <strong style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{filteredCustomers.length}</strong>
+              </div>
+              <button
+                type="button"
+                title="Refresh settlements from Supabase"
+                onClick={loadSettlements}
+                disabled={isLoading}
+                style={{
+                  background: 'none',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  padding: '3px 6px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              </button>
             </div>
           </div>
         </div>
@@ -322,7 +366,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
             <thead>
               <tr>
                 <th style={{ width: 44, textAlign: 'center' }}>
-                  <input 
+                  <input
                     type="checkbox"
                     className="catalog-checkbox"
                     checked={allSelected}
@@ -346,12 +390,12 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
               {paginatedCustomers.map(customer => {
                 const isSelected = selectedIds.includes(customer.id);
                 return (
-                  <tr 
+                  <tr
                     key={customer.id}
                     style={{ background: isSelected ? '#fbf8f2' : undefined }}
                   >
                     <td style={{ textAlign: 'center' }}>
-                      <input 
+                      <input
                         type="checkbox"
                         className="catalog-checkbox"
                         checked={isSelected}
@@ -383,7 +427,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                     )}
                     {isColVisible('cashBuyer') && (
                       <td style={{ textAlign: 'center' }}>
-                        <input 
+                        <input
                           type="checkbox"
                           className="catalog-checkbox"
                           checked={customer.isCashBuyer}
@@ -410,8 +454,42 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                       </td>
                     )}
                     {isColVisible('balance') && (
-                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: customer.balance > 0 ? '#dc2626' : '#059669' }}>
-                        {formatCurrency(customer.balance)}
+                      <td style={{
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        color: customer.balance > 0 ? '#dc2626' : '#059669'
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span style={{ fontSize: 13.5 }}>
+                            {formatCurrency(customer.balance)}
+                          </span>
+                          {customer.depositApplied && customer.depositApplied > 0 && customer.balance === 0 ? (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              background: '#ecfdf5',
+                              color: '#059669',
+                              letterSpacing: '0.02em'
+                            }}>
+                              PAID (DEPOSIT)
+                            </span>
+                          ) : customer.balance > 0 ? (
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              background: '#fef2f2',
+                              color: '#dc2626',
+                              letterSpacing: '0.02em'
+                            }}>
+                              DUE
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                     )}
                     {isColVisible('invoiceNumber') && (
@@ -523,7 +601,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
           setColumns(updated);
           try {
             localStorage.setItem('af360_bidder_columns', JSON.stringify(updated));
-          } catch (_) {}
+          } catch (_) { }
         }}
       />
     </div>

@@ -61,7 +61,7 @@ Settlement Summary:
 • Customer / Paddle: #${customer.bidderNumber} (${customer.name})
 • Invoice Number: ${invoiceNum}
 • Lot Count: ${lotCnt}
-• Total Balance Due: $${formattedBalance}
+${customer.depositApplied && customer.depositApplied > 0 ? `• Deposit Applied: -$${Number(customer.depositApplied).toFixed(2)}\n` : ''}• Total Balance Due: $${formattedBalance}
 • Payment Status: ${customer.invoiceStatus || 'Pending'}
 • Shipping Requested: ${customer.shippingRequested ? 'Yes' : 'No'}
 

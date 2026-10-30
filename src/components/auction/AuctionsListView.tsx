@@ -6,17 +6,17 @@ import { StatusPill } from '../Common/StatusPill';
 import { ConfirmModal } from '../Common/ConfirmModal';
 import { FormModal } from '../Common/FormModal';
 import { FormField } from '../Common/FormField';
-import { 
-  Plus, 
-  List, 
-  Grid, 
-  ExternalLink, 
-  Copy, 
-  Trash2, 
-  Edit, 
-  Calendar, 
-  MapPin, 
-  Radio, 
+import {
+  Plus,
+  List,
+  Grid,
+  ExternalLink,
+  Copy,
+  Trash2,
+  Edit,
+  Calendar,
+  MapPin,
+  Radio,
   Layers,
   ArrowRight,
   RefreshCw,
@@ -217,12 +217,12 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       render: (a) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span 
+            <span
               onClick={() => onOpenAuction(a.id)}
-              style={{ 
-                fontWeight: 600, 
-                fontSize: 14, 
-                color: 'var(--text-main)', 
+              style={{
+                fontWeight: 600,
+                fontSize: 14,
+                color: 'var(--text-main)',
                 cursor: 'pointer',
                 transition: 'color 0.15s ease'
               }}
@@ -232,13 +232,13 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
               {a.name}
             </span>
             {a.auctionType === 'HiBid' && (
-              <span style={{ 
-                fontSize: 10, 
-                fontWeight: 700, 
-                background: '#e0f2fe', 
-                color: '#0369a1', 
-                padding: '1px 6px', 
-                borderRadius: 4 
+              <span style={{
+                fontSize: 10,
+                fontWeight: 700,
+                background: '#e0f2fe',
+                color: '#0369a1',
+                padding: '1px 6px',
+                borderRadius: 4
               }}>
                 HiBid
               </span>
@@ -294,8 +294,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           type="button"
           className="btn btn-secondary"
           onClick={() => onOpenAuction(a.id)}
-          style={{ 
-            fontSize: 12, 
+          style={{
+            fontSize: 12,
             padding: '5px 12px',
             borderColor: 'var(--gold-primary)',
             color: 'var(--gold-dark)',
@@ -354,8 +354,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn btn-gold"
             onClick={() => setIsNewModalOpen(true)}
           >
@@ -397,7 +397,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
         {/* Table / Grid Mode Toggle */}
         <div className="view-mode-toggle-group">
-          <button 
+          <button
             type="button"
             className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
             onClick={() => setViewMode('table')}
@@ -406,7 +406,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
             <List size={15} />
             <span>Table</span>
           </button>
-          <button 
+          <button
             type="button"
             className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
             onClick={() => setViewMode('grid')}
@@ -558,9 +558,9 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
               <div style={{ color: '#b91c1c', fontSize: 12.5 }}>{error}</div>
             </div>
           </div>
-          <button 
-            type="button" 
-            onClick={loadAuctions} 
+          <button
+            type="button"
+            onClick={loadAuctions}
             className="btn btn-secondary"
             style={{ fontSize: 12, padding: '6px 14px', borderColor: '#fca5a5', color: '#b91c1c', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
@@ -678,7 +678,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
             {filteredAuctions.map(a => (
-              <div 
+              <div
                 key={a.id}
                 className="syndication-card"
                 style={{
@@ -739,7 +739,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <FormField label="Auction Name" required>
-            <input 
+            <input
               type="text"
               required
               placeholder="e.g. Highlander Gold & Silver 10/22/26"
@@ -752,7 +752,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Auction Code">
-              <input 
+              <input
                 type="text"
                 placeholder="e.g. HGS-2026-10-22"
                 value={newCode}
@@ -763,7 +763,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
             </FormField>
 
             <FormField label="Auction Platform Type">
-              <select 
+              <select
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as any)}
                 className="catalog-filter-select"
@@ -777,7 +777,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Start Date">
-              <input 
+              <input
                 type="date"
                 value={newStartDate}
                 onChange={(e) => setNewStartDate(e.target.value)}
@@ -787,7 +787,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
             </FormField>
 
             <FormField label="End Date">
-              <input 
+              <input
                 type="date"
                 value={newEndDate}
                 onChange={(e) => setNewEndDate(e.target.value)}
@@ -798,7 +798,7 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           </div>
 
           <FormField label="Auction Description">
-            <textarea 
+            <textarea
               rows={3}
               placeholder="Welcome notes and bidding instructions..."
               value={newDesc}
@@ -834,10 +834,10 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
       >
         {auctionToChangeStatus && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ 
-              padding: '12px 14px', 
-              background: '#f8fafc', 
-              borderRadius: 8, 
+            <div style={{
+              padding: '12px 14px',
+              background: '#f8fafc',
+              borderRadius: 8,
               border: '1px solid var(--border-subtle)',
               display: 'flex',
               flexDirection: 'column',

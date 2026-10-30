@@ -671,12 +671,28 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                     </strong>
                   </div>
                 )}
+                {Boolean(customer.depositApplied && customer.depositApplied > 0) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#15803d', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>Deposit Applied:</span>
+                    <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                      -{formatCurrency(customer.depositApplied || 0)}
+                    </strong>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 4 }}>
                   <span>Balance Due:</span>
                   <span style={{ fontFamily: 'var(--font-mono, monospace)', color: customer.balance > 0 ? '#dc2626' : '#059669' }}>
                     {formatCurrency(customer.balance)}
                   </span>
                 </div>
+                {Boolean(customer.depositRemaining && customer.depositRemaining > 0) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#854d0e', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #cbd5e1' }}>
+                    <span>Remaining Deposit Credit:</span>
+                    <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                      {formatCurrency(customer.depositRemaining || 0)}
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -947,10 +963,22 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
               <span>Subtotal:</span>
               <strong>{formatCurrency(customer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}</strong>
             </div>
+            {Boolean(customer.depositApplied && customer.depositApplied > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: '#15803d' }}>
+                <span>Deposit Applied:</span>
+                <strong>-{formatCurrency(customer.depositApplied || 0)}</strong>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: '1px solid #ccc', paddingTop: 8 }}>
               <span>Balance Due:</span>
               <span style={{ color: customer.balance > 0 ? '#b91c1c' : '#15803d' }}>{formatCurrency(customer.balance)}</span>
             </div>
+            {Boolean(customer.depositRemaining && customer.depositRemaining > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, paddingTop: 6, borderTop: '1px dashed #ccc', color: '#854d0e' }}>
+                <span>Remaining Deposit Credit:</span>
+                <strong>{formatCurrency(customer.depositRemaining || 0)}</strong>
+              </div>
+            )}
           </div>
         </div>
 

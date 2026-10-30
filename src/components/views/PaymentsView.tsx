@@ -1116,7 +1116,23 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                           )}
                           {isColVisible('name') && (
                             <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1e293b' }}>
-                              {b.name}
+                              <button
+                                type="button"
+                                onClick={() => setViewingSettlementCustomer(b)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  font: 'inherit',
+                                  color: 'inherit',
+                                  cursor: 'pointer',
+                                  textAlign: 'left'
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold-dark, #9a741e)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.color = '#1e293b')}
+                              >
+                                {b.name}
+                              </button>
                               {b.isSeller && (
                                 <span style={{
                                   marginLeft: 6,
@@ -1169,7 +1185,36 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                               fontWeight: 700,
                               color: b.balance > 0 ? '#dc2626' : '#15803d'
                             }}>
-                              {formatCurrency(b.balance)}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5 }}>
+                                  {formatCurrency(b.balance)}
+                                </span>
+                                {b.depositApplied && b.depositApplied > 0 && b.balance === 0 ? (
+                                  <span style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    background: '#ecfdf5',
+                                    color: '#059669',
+                                    letterSpacing: '0.02em'
+                                  }}>
+                                    PAID (DEPOSIT)
+                                  </span>
+                                ) : b.balance > 0 ? (
+                                  <span style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    background: '#fef2f2',
+                                    color: '#dc2626',
+                                    letterSpacing: '0.02em'
+                                  }}>
+                                    DUE
+                                  </span>
+                                ) : null}
+                              </div>
                             </td>
                           )}
                           {isColVisible('invoiceNumber') && (
@@ -1181,6 +1226,9 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                                   if (matchingInvoice) {
                                     setPreviewInvoice(matchingInvoice);
                                   } else {
+                                    const computedTotal = b.totalDue || (b.lots?.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0)) || b.balance;
+                                    const computedHammer = (b.lots?.reduce((s, l) => s + (l.entries?.find(e => e.type === 'sold_lot')?.amount || 0), 0)) || (computedTotal / 1.15);
+                                    const computedBP = Math.round((computedTotal - computedHammer) * 100) / 100;
                                     setPreviewInvoice({
                                       id: b.id,
                                       invoiceNumber: b.invoiceNumber || `INV-${b.bidderNumber}`,
@@ -1188,16 +1236,25 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                                       auctionCode: currentAuction?.code || currentAuctionId,
                                       paddleNumber: b.bidderNumber,
                                       buyerName: b.name,
-                                      buyerEmail: '',
+                                      buyerEmail: b.email || '',
                                       itemsCount: b.lotCount,
-                                      hammerSubtotal: b.balance,
-                                      buyersPremium: b.balance * 0.15,
+                                      hammerSubtotal: Math.round(computedHammer * 100) / 100,
+                                      buyersPremium: computedBP,
                                       taxAmount: 0,
                                       shippingFee: 0,
-                                      totalDue: b.balance,
+                                      totalDue: computedTotal,
                                       paymentStatus: (b.invoiceStatus === 'Paid' ? 'Paid' : 'Unpaid') as any,
-                                      notes: '',
-                                      lots: []
+                                      notes: b.depositApplied && b.depositApplied > 0 ? `Deposit Applied: $${b.depositApplied.toFixed(2)}` : '',
+                                      lots: b.lots?.map(l => ({
+                                        id: l.id,
+                                        lotNumber: l.lotNumber,
+                                        title: l.title,
+                                        hammerPrice: l.entries?.find(e => e.type === 'sold_lot')?.amount || (computedTotal / 1.15),
+                                        buyersPremium: l.entries?.find(e => e.type === 'buyers_premium')?.amount || ((computedTotal / 1.15) * 0.15),
+                                        taxAmount: 0,
+                                        total: l.entries.reduce((s, e) => s + e.amount, 0) || computedTotal,
+                                        status: 'Sold'
+                                      })) || []
                                     });
                                   }
                                 }}

@@ -170,6 +170,10 @@ export interface SettlementCustomer {
   invoiceNumber: string;
   invoiceStatus: 'Pending' | 'Paid' | 'Processing';
   shippingRequested: boolean;
+  totalDue?: number;
+  depositApplied?: number;
+  depositRemaining?: number;
+  notes?: string;
   lots: SettlementLotItem[];
   charges: SettlementCharge[];
 }

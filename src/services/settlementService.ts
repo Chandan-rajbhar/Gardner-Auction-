@@ -112,6 +112,33 @@ export class SettlementService {
       resolvedEmail = userEmailMap.get(paddleKey) || userEmailMap.get(numKey) || userEmailMap.get(nameKey) || resolvedEmail;
     }
 
+    // Query deposits matching this invoice's auction_id and paddle_number/buyer_name
+    let depositApplied = 0;
+    let depositRemaining = 0;
+    try {
+      const { data: depRows } = await this.client
+        .from('bidder_deposits')
+        .select('amount, amount_applied, amount_remaining, status, bid_card_number, bidder_name')
+        .eq('auction_id', row.auction_id)
+        .neq('status', 'Refunded');
+
+      if (depRows && depRows.length > 0) {
+        const pLower = (row.paddle_number || '').trim().toLowerCase();
+        const bLower = (row.buyer_name || '').trim().toLowerCase();
+        const matched = depRows.filter((d: any) => 
+          (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+          (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+        );
+        depositApplied = matched.reduce((sum: number, d: any) => sum + (Number(d.amount_applied) || 0), 0);
+        depositRemaining = matched.reduce((sum: number, d: any) => sum + (Number(d.amount_remaining) || 0), 0);
+      }
+    } catch (_) {}
+
+    const totalDue = Number(row.total_due) || 0;
+    const rawBalance = row.balance !== undefined ? Number(row.balance) : (row.payment_status === 'Paid' ? 0 : totalDue);
+    const calculatedBalance = Math.max(0, rawBalance);
+    const invoiceStatus = calculatedBalance === 0 ? 'Paid' : (row.payment_status || 'Pending');
+
     return {
       id: row.id,
       auctionId: row.auction_id,
@@ -123,10 +150,14 @@ export class SettlementService {
       lotCount: Number(row.items_count) || lots.length || 0,
       shippedCount: Number(row.shipped_count) || 0,
       totalLotsCount: Number(row.total_lots_count) || Number(row.items_count) || lots.length || 0,
-      balance: Number(row.balance !== undefined ? row.balance : (row.payment_status === 'Paid' ? 0 : row.total_due)),
+      totalDue,
+      depositApplied,
+      depositRemaining,
+      balance: calculatedBalance,
       invoiceNumber: row.invoice_number,
-      invoiceStatus: row.payment_status === 'Paid' ? 'Paid' : 'Pending',
+      invoiceStatus,
       shippingRequested: Boolean(row.shipping_requested !== false),
+      notes: row.notes || undefined,
       lots,
       charges
     };
@@ -139,7 +170,7 @@ export class SettlementService {
   /**
    * Automatically synchronizes Bidder Settlements (invoices + invoice_lots)
    * and Seller Settlements (seller_settlements) in Supabase from all sold lots
-   * for a given auction.
+   * for a given auction. Accurately deducts bidder deposits and updates balances.
    */
   public async syncSettlementsFromSoldLots(auctionId: string, fallbackAuctionCode?: string): Promise<void> {
     if (!auctionId) return;
@@ -162,22 +193,76 @@ export class SettlementService {
         .eq('auction_id', auctionId)
         .eq('status', 'sold');
 
-      if (lotsErr || !soldLots) {
+      if (lotsErr) {
+        console.error('[SettlementService] syncSettlements lotsErr:', lotsErr.message);
         return;
       }
 
-      // If no sold lots exist, remove any auto-generated records for lots no longer sold
-      if (soldLots.length === 0) {
+      // 3. Fetch all bidder deposits for this auction
+      const { data: rawDeposits } = await client
+        .from('bidder_deposits')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .order('created_at', { ascending: true });
+      const allDeposits = rawDeposits || [];
+
+      // If no sold lots exist, reset all deposits and remove auto-generated records for lots no longer sold
+      if (!soldLots || soldLots.length === 0) {
+        if (allDeposits && allDeposits.length > 0) {
+          for (const dep of allDeposits) {
+            if (dep.status !== 'Refunded') {
+              if (dep.amount_applied !== 0 || dep.amount_remaining !== dep.amount || dep.status !== 'Collected') {
+                await client.from('bidder_deposits').update({
+                  amount_applied: 0,
+                  amount_remaining: dep.amount,
+                  status: 'Collected',
+                  updated_at: new Date().toISOString()
+                }).eq('id', dep.id);
+                dep.amount_applied = 0;
+                dep.amount_remaining = dep.amount;
+                dep.status = 'Collected';
+              }
+            }
+          }
+        }
+
         const { data: exLots } = await client.from('invoice_lots').select('id').eq('auction_id', auctionId);
         if (exLots && exLots.length > 0) {
           await client.from('invoice_lots').delete().eq('auction_id', auctionId);
           await client.from('invoices').delete().eq('auction_id', auctionId);
           await client.from('seller_settlements').delete().eq('auction_id', auctionId);
         }
+
+        // Sync day_stats deposits
+        try {
+          const { data: aucRow } = await client.from('auctions').select('day_stats').eq('id', auctionId).maybeSingle();
+          if (aucRow && aucRow.day_stats) {
+            const dayStats = aucRow.day_stats;
+            dayStats.deposits = allDeposits.map((d: any) => ({
+              id: d.id,
+              auctionId: d.auction_id,
+              registrationId: d.registration_id,
+              bidCardNumber: d.bid_card_number,
+              bidderName: d.bidder_name,
+              amount: Number(d.amount) || 0,
+              amountApplied: 0,
+              amountRemaining: Number(d.amount) || 0,
+              paymentMethod: d.payment_method || 'Credit Card',
+              status: 'Collected',
+              date: d.date || new Date(d.created_at).toISOString().split('T')[0],
+              referenceNumber: d.reference_number || '',
+              notes: d.notes || '',
+              receivedBy: d.received_by || '',
+              createdAt: d.created_at
+            }));
+            await client.from('auctions').update({ day_stats: dayStats, updated_at: new Date().toISOString() }).eq('id', auctionId);
+          }
+        } catch (_) {}
+
         return;
       }
 
-      // 3. Fetch users/customers to resolve name, email, paddle
+      // 4. Fetch users/customers to resolve name, email, paddle
       const { data: usersData } = await client
         .from('users')
         .select('id, full_name, first_name, last_name, email, permanent_bidder_number, customer_code');
@@ -191,7 +276,14 @@ export class SettlementService {
         });
       }
 
-      // 4. Fetch existing invoices for this auction
+      // 5. Fetch bidder registrations for paddle mappings
+      const { data: regData } = await client
+        .from('bidder_registrations')
+        .select('id, bid_card_number, bidder_name, email')
+        .eq('auction_id', auctionId);
+      const registrations = regData || [];
+
+      // 6. Fetch existing invoices for this auction
       const { data: existingInvoices } = await client
         .from('invoices')
         .select('*')
@@ -206,7 +298,7 @@ export class SettlementService {
         });
       }
 
-      // 5. Group sold lots by paddle number
+      // 7. Group sold lots by paddle number
       const lotsByPaddle = new Map<string, any[]>();
       soldLots.forEach((lot: any) => {
         const paddle = String(lot.high_bidder_paddle || '101').trim();
@@ -215,23 +307,80 @@ export class SettlementService {
         lotsByPaddle.set(paddle.toLowerCase(), list);
       });
 
-      // Process Bidder Settlements (Invoices)
+      // Track deposit IDs applied across this auction
+      const appliedDepositIds = new Set<string>();
+
+      // 8. Process Bidder Settlements (Invoices)
       for (const [paddleLower, paddleLots] of lotsByPaddle.entries()) {
         const firstLot = paddleLots[0];
         const paddleRaw = firstLot.high_bidder_paddle || '101';
         const matchedUser = userByPaddle.get(paddleLower);
-        const buyerName = firstLot.high_bidder_name?.trim() || matchedUser?.full_name?.trim() || `${matchedUser?.first_name || ''} ${matchedUser?.last_name || ''}`.trim() || `Bidder #${paddleRaw}`;
-        const buyerEmail = matchedUser?.email || `paddle${paddleRaw}@gardner-auction.com`;
+        const matchedReg = registrations.find((r: any) => String(r.bid_card_number).toLowerCase() === paddleLower);
+
+        const buyerName = firstLot.high_bidder_name?.trim() || matchedReg?.bidder_name?.trim() || matchedUser?.full_name?.trim() || `${matchedUser?.first_name || ''} ${matchedUser?.last_name || ''}`.trim() || `Bidder #${paddleRaw}`;
+        const buyerEmail = matchedReg?.email || matchedUser?.email || `paddle${paddleRaw}@gardner-auction.com`;
 
         const hammerSubtotal = paddleLots.reduce((sum: number, l: any) => sum + (Number(l.hammer_price) || 0), 0);
-        const buyersPremium = hammerSubtotal * 0.15;
-        const taxAmount = hammerSubtotal * 0.075;
+        const buyersPremium = Math.round(hammerSubtotal * 0.15 * 100) / 100;
+        const taxAmount = 0;
         const shippingFee = 0;
-        const totalDue = hammerSubtotal + buyersPremium + taxAmount + shippingFee;
         const itemsCount = paddleLots.length;
 
         let invoice = invoiceByPaddle.get(paddleLower);
         let invoiceId = invoice?.id;
+
+        // Fetch existing charges if invoice exists
+        let existingChargesTotal = 0;
+        if (invoiceId) {
+          const { data: chgRows } = await client
+            .from('invoice_charges')
+            .select('amount')
+            .eq('invoice_id', invoiceId);
+          if (chgRows && chgRows.length > 0) {
+            existingChargesTotal = chgRows.reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          }
+        }
+
+        const totalPurchaseAmount = Math.round((hammerSubtotal + buyersPremium + taxAmount + shippingFee + existingChargesTotal) * 100) / 100;
+
+        // Find available deposits for this paddle (sorted FIFO by created_at)
+        const bidderDeposits = allDeposits.filter((d: any) => {
+          if (d.status === 'Refunded') return false;
+          const depPaddle = String(d.bid_card_number || '').trim().toLowerCase();
+          const depName = String(d.bidder_name || '').trim().toLowerCase();
+          return depPaddle === paddleLower || (depName && depName === buyerName.toLowerCase());
+        });
+
+        let amountToCover = totalPurchaseAmount;
+        let totalDepositApplied = 0;
+
+        for (const dep of bidderDeposits) {
+          appliedDepositIds.add(dep.id);
+          const depAmount = Number(dep.amount) || 0;
+          const canApply = Math.round(Math.min(depAmount, Math.max(0, amountToCover)) * 100) / 100;
+          const newRemaining = Math.round((depAmount - canApply) * 100) / 100;
+          const newStatus = newRemaining === 0 ? 'Applied' : 'Collected';
+
+          if (dep.amount_applied !== canApply || dep.amount_remaining !== newRemaining || dep.status !== newStatus) {
+            await client.from('bidder_deposits').update({
+              amount_applied: canApply,
+              amount_remaining: newRemaining,
+              status: newStatus,
+              updated_at: new Date().toISOString()
+            }).eq('id', dep.id);
+
+            dep.amount_applied = canApply;
+            dep.amount_remaining = newRemaining;
+            dep.status = newStatus;
+          }
+
+          totalDepositApplied = Math.round((totalDepositApplied + canApply) * 100) / 100;
+          amountToCover = Math.round((amountToCover - canApply) * 100) / 100;
+        }
+
+        const finalBalance = Math.round(Math.max(0, amountToCover) * 100) / 100;
+        const paymentStatus = finalBalance === 0 ? 'Paid' : 'Pending';
+        const depositNote = totalDepositApplied > 0 ? `Deposit Applied: $${totalDepositApplied.toFixed(2)}` : '';
 
         if (!invoice) {
           const invoiceNumber = `INV-GA-${new Date().getFullYear()}-${paddleRaw.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -249,9 +398,10 @@ export class SettlementService {
             buyers_premium: buyersPremium,
             tax_amount: taxAmount,
             shipping_fee: shippingFee,
-            total_due: totalDue,
-            balance: totalDue,
-            payment_status: 'Pending',
+            total_due: totalPurchaseAmount,
+            balance: finalBalance,
+            payment_status: paymentStatus,
+            notes: depositNote,
             is_cash_buyer: false,
             is_shipped: false,
             shipped_count: 0,
@@ -274,9 +424,12 @@ export class SettlementService {
             hammer_subtotal: hammerSubtotal,
             buyers_premium: buyersPremium,
             tax_amount: taxAmount,
-            total_due: totalDue,
-            balance: invoice.payment_status === 'Paid' ? 0 : totalDue,
+            total_due: totalPurchaseAmount,
+            balance: finalBalance,
+            payment_status: paymentStatus,
+            notes: depositNote,
             buyer_name: buyerName,
+            buyer_email: buyerEmail,
             updated_at: new Date().toISOString()
           }).eq('id', invoiceId);
         }
@@ -286,7 +439,7 @@ export class SettlementService {
           for (const lot of paddleLots) {
             const ilotId = `ilot-${invoiceId}-${lot.id}`;
             const hammer = Number(lot.hammer_price) || 0;
-            const bp = hammer * 0.15;
+            const bp = Math.round(hammer * 0.15 * 100) / 100;
 
             await client.from('invoice_lots').upsert([{
               id: ilotId,
@@ -308,7 +461,61 @@ export class SettlementService {
         }
       }
 
-      // 6. Process Seller Settlements (Consignor Statements)
+      // 9. Reset deposits for bidders in this auction who did not purchase lots
+      for (const dep of allDeposits) {
+        if (dep.status !== 'Refunded' && !appliedDepositIds.has(dep.id)) {
+          if (dep.amount_applied !== 0 || dep.amount_remaining !== dep.amount || dep.status !== 'Collected') {
+            await client.from('bidder_deposits').update({
+              amount_applied: 0,
+              amount_remaining: dep.amount,
+              status: 'Collected',
+              updated_at: new Date().toISOString()
+            }).eq('id', dep.id);
+            dep.amount_applied = 0;
+            dep.amount_remaining = dep.amount;
+            dep.status = 'Collected';
+          }
+        }
+      }
+
+      // 10. Remove orphaned invoices for paddles no longer having sold lots
+      if (existingInvoices && existingInvoices.length > 0) {
+        for (const inv of existingInvoices) {
+          const p = (inv.paddle_number || '').trim().toLowerCase();
+          if (!lotsByPaddle.has(p)) {
+            await client.from('invoice_lots').delete().eq('invoice_id', inv.id);
+            await client.from('invoices').delete().eq('id', inv.id);
+          }
+        }
+      }
+
+      // 11. Sync day_stats deposits in auctions table
+      try {
+        const { data: aucRow } = await client.from('auctions').select('day_stats').eq('id', auctionId).maybeSingle();
+        if (aucRow && aucRow.day_stats) {
+          const dayStats = aucRow.day_stats;
+          dayStats.deposits = allDeposits.map((d: any) => ({
+            id: d.id,
+            auctionId: d.auction_id,
+            registrationId: d.registration_id,
+            bidCardNumber: d.bid_card_number,
+            bidderName: d.bidder_name,
+            amount: Number(d.amount) || 0,
+            amountApplied: Number(d.amount_applied) || 0,
+            amountRemaining: Number(d.amount_remaining !== undefined ? d.amount_remaining : ((Number(d.amount) || 0) - (Number(d.amount_applied) || 0))),
+            paymentMethod: d.payment_method || 'Credit Card',
+            status: d.status || 'Collected',
+            date: d.date || new Date(d.created_at).toISOString().split('T')[0],
+            referenceNumber: d.reference_number || '',
+            notes: d.notes || '',
+            receivedBy: d.received_by || '',
+            createdAt: d.created_at
+          }));
+          await client.from('auctions').update({ day_stats: dayStats, updated_at: new Date().toISOString() }).eq('id', auctionId);
+        }
+      } catch (_) {}
+
+      // 12. Process Seller Settlements (Consignor Statements)
       const lotsByConsignor = new Map<string, any[]>();
       soldLots.forEach((lot: any) => {
         const consignorName = (lot.consignor_name || lot.consignorName || 'House Consignor').trim();
@@ -859,6 +1066,9 @@ export class SettlementService {
           total_due: newTotal,
           updated_at: new Date().toISOString()
         }).eq('id', customerId);
+
+        // Sync deposits and balances
+        await this.syncSettlementsFromSoldLots(auctionId);
       }
 
       // 3. Audit log
@@ -932,6 +1142,9 @@ export class SettlementService {
           total_due: newTotal,
           updated_at: new Date().toISOString()
         }).eq('id', customerId);
+
+        // Sync deposits and balances
+        await this.syncSettlementsFromSoldLots(auctionId);
       }
 
       // 4. Audit log
@@ -1004,6 +1217,9 @@ export class SettlementService {
           total_due: newTotal,
           updated_at: new Date().toISOString()
         }).eq('id', customerId);
+
+        // Sync deposits and balances
+        await this.syncSettlementsFromSoldLots(auctionId);
       }
 
       // 4. Audit log

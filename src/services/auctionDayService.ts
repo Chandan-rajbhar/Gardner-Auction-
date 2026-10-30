@@ -10,6 +10,7 @@ import {
 import { LotItem } from '../types';
 import { auctionService } from './auctionService';
 import { lotsService } from './lotsService';
+import { settlementService } from './settlementService';
 import { DEFAULT_HIBID_SITES, MOCK_AUCTIONS_DETAIL } from '../data/mockAuctionDetailData';
 
 export interface AuctionDayMetrics {
@@ -659,6 +660,57 @@ class AuctionDayService {
   }
 
   /**
+   * Fetch all bidder deposits for a specific auction directly from Supabase
+   */
+  public async getDeposits(auctionId: string): Promise<BidderDeposit[]> {
+    if (!auctionId) return [];
+    try {
+      const { data: depData, error } = await supabaseAdmin
+        .from('bidder_deposits')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .order('created_at', { ascending: true });
+
+      if (!error && depData && depData.length > 0) {
+        return depData.map((row: any) => ({
+          id: row.id,
+          auctionId: row.auction_id,
+          registrationId: row.registration_id,
+          bidCardNumber: row.bid_card_number,
+          bidderName: row.bidder_name,
+          amount: Number(row.amount) || 0,
+          amountApplied: Number(row.amount_applied) || 0,
+          amountRemaining: row.amount_remaining !== undefined && row.amount_remaining !== null
+            ? Number(row.amount_remaining)
+            : Math.max(0, (Number(row.amount) || 0) - (Number(row.amount_applied) || 0)),
+          paymentMethod: row.payment_method || 'Credit Card',
+          status: row.status || 'Collected',
+          date: row.date || new Date(row.created_at).toISOString().split('T')[0],
+          referenceNumber: row.reference_number || '',
+          notes: row.notes || '',
+          receivedBy: row.received_by || '',
+          createdAt: row.created_at
+        }));
+      }
+    } catch (err) {
+      console.warn('[AuctionDayService] getDeposits table error:', err);
+    }
+
+    try {
+      const auction = await auctionService.getAuctionById(auctionId);
+      if (auction?.dayStats?.deposits) {
+        return auction.dayStats.deposits.filter((d: any) =>
+          !['dep-1001', 'dep-1002', 'dep-1003'].includes(d?.id) &&
+          !['5001', '2001', '5003'].includes(String(d?.bidCardNumber)) &&
+          !['Helena Vance', 'Roger Perry', 'Eleanor Rigby'].includes(d?.bidderName)
+        );
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  /**
    * Record a bidder deposit and persist to Supabase
    */
   public async recordDeposit(
@@ -680,6 +732,8 @@ class AuctionDayService {
         amount,
         amountApplied,
         amountRemaining,
+        date: depositData.date || nowIso.split('T')[0],
+        status: depositData.status || 'Collected',
         createdAt: nowIso
       };
 
@@ -695,7 +749,7 @@ class AuctionDayService {
             amount: newDeposit.amount,
             amount_applied: newDeposit.amountApplied || 0,
             amount_remaining: newDeposit.amountRemaining || 0,
-            payment_method: newDeposit.paymentMethod,
+            payment_method: newDeposit.paymentMethod || 'Credit Card',
             status: newDeposit.status,
             date: newDeposit.date,
             reference_number: newDeposit.referenceNumber || '',
@@ -716,7 +770,9 @@ class AuctionDayService {
             })
             .eq('id', newDeposit.registrationId);
         }
-      } catch (_) {}
+      } catch (dbErr) {
+        console.warn('[AuctionDayService] recordDeposit direct table insert error:', dbErr);
+      }
 
       // 2. Persist in auction.dayStats JSONB
       const auction = await auctionService.getAuctionById(auctionId);
@@ -741,6 +797,25 @@ class AuctionDayService {
             updated_at: nowIso
           })
           .eq('id', auctionId);
+      }
+
+      // 3. Immediately trigger settlement sync so deposit is applied if bidder already has sold lots
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+        // Refresh deposit to reflect any applied amount immediately
+        const { data: updatedDep } = await supabaseAdmin
+          .from('bidder_deposits')
+          .select('*')
+          .eq('id', newDeposit.id)
+          .maybeSingle();
+
+        if (updatedDep) {
+          newDeposit.amountApplied = Number(updatedDep.amount_applied) || 0;
+          newDeposit.amountRemaining = Number(updatedDep.amount_remaining);
+          newDeposit.status = updatedDep.status || newDeposit.status;
+        }
+      } catch (syncErr) {
+        console.warn('[AuctionDayService] syncSettlements after deposit error:', syncErr);
       }
 
       return { success: true, deposit: newDeposit };
@@ -1012,6 +1087,11 @@ class AuctionDayService {
         }
       }
 
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return { success: true, data: updatedRecord };
     } catch (err) {
       console.error('[AuctionDayService] updateBidderRegistration error:', err);
@@ -1041,6 +1121,12 @@ class AuctionDayService {
           })
           .eq('id', auctionId);
       }
+
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return true;
     } catch (_) {
       return false;
@@ -1098,6 +1184,11 @@ class AuctionDayService {
         }
       }
 
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return { success: true, data: updatedRecord };
     } catch (err) {
       console.error('[AuctionDayService] updateAlternateBid error:', err);
@@ -1153,6 +1244,11 @@ class AuctionDayService {
         }
       }
 
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return { success: true, data: updatedRecord };
     } catch (err) {
       console.error('[AuctionDayService] updateDeposit error:', err);
@@ -1182,6 +1278,12 @@ class AuctionDayService {
           })
           .eq('id', auctionId);
       }
+
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return true;
     } catch (_) {
       return false;
@@ -1214,6 +1316,12 @@ class AuctionDayService {
           })
           .eq('id', auctionId);
       }
+
+      // Re-sync settlements to recompute invoice balance
+      try {
+        await settlementService.syncSettlementsFromSoldLots(auctionId);
+      } catch (_) {}
+
       return true;
     } catch (_) {
       return false;
