@@ -584,6 +584,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           rowActions={rowActions}
           itemNoun="auctions"
           isLoading={isLoading}
+          defaultPageSize={20}
+          pageSizeOptions={[10, 20, 50, 100]}
           emptyMessage={
             statusFilter === 'All'
               ? 'No auction events found in the database. Click "Create Auction" above to create your first event.'

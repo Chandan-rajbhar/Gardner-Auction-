@@ -47,8 +47,8 @@ export function DataTable<T>({
   enableSelection = false,
   selectedIds = [],
   onSelectionChange,
-  defaultPageSize = 10,
-  pageSizeOptions = [5, 10, 20, 50],
+  defaultPageSize = 20,
+  pageSizeOptions = [10, 20, 50, 100],
   itemNoun = 'records',
   isLoading = false,
   emptyMessage = 'No data available in table',
@@ -243,7 +243,7 @@ export function DataTable<T>({
       </div>
 
       {/* Table Container */}
-      <div className="catalog-table-card" style={{ position: 'relative' }}>
+      <div className="catalog-table-card" style={{ position: 'relative', overflow: 'visible' }}>
         {isLoading && (
           <div style={{
             position: 'absolute',
@@ -262,8 +262,8 @@ export function DataTable<T>({
           </div>
         )}
 
-        <div className="catalog-table-scroll">
-          <table className="catalog-luxury-table">
+        <div className="catalog-table-scroll" style={{ overflow: 'visible', width: '100%' }}>
+          <table className="catalog-luxury-table" style={{ width: '100%', minWidth: '100%' }}>
             <thead>
               <tr>
                 {enableSelection && (
@@ -369,7 +369,7 @@ export function DataTable<T>({
                           </button>
 
                           {openMenuId === id && (
-                            <div className="lot-action-dropdown" style={{ minWidth: 150 }}>
+                            <div className={`lot-action-dropdown ${idx >= paginatedData.length - 2 && paginatedData.length > 2 ? 'drop-up' : 'drop-down'}`} style={{ minWidth: 150 }}>
                               {rowActions.map((action, aIdx) => {
                                 const Icon = action.icon;
                                 return (
@@ -420,7 +420,8 @@ export function DataTable<T>({
           </table>
         </div>
 
-        {/* Standard Pagination Footer matching Lot Catalog exactly */}
+        {/* Standard Pagination Footer - rendered only if more than 20 records */}
+        {totalItems > 20 && (
         <div className="catalog-pagination-bar">
           <div className="pagination-info">
             Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalItems}</strong> {itemNoun}
@@ -564,6 +565,7 @@ export function DataTable<T>({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
