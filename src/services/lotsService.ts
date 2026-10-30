@@ -103,21 +103,41 @@ export const lotsService = {
         .order('lot_number', { ascending: true });
 
       if (error) {
-        console.warn('[lotsService] Supabase fetch error, using fallback:', error.message);
-        return INITIAL_LOTS;
+        console.warn('[lotsService] Supabase fetch error:', error.message);
+        return [];
       }
 
       if (!data || data.length === 0) {
-        // If empty, auto-seed INITIAL_LOTS into Supabase so table is populated
-        console.log('[lotsService] Table empty, seeding initial lots into Supabase...');
-        await this.seedLots(INITIAL_LOTS);
-        return INITIAL_LOTS;
+        return [];
       }
 
       return (data as DBLotRow[]).map(dbToLotItem);
     } catch (err) {
       console.error('[lotsService] Unexpected error in fetchLots:', err);
       return INITIAL_LOTS;
+    }
+  },
+
+  /**
+   * Fetch lots specifically belonging to a given auction event ID from Supabase
+   */
+  async fetchLotsByAuction(auctionId: string): Promise<LotItem[]> {
+    try {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from('lots')
+        .select('*')
+        .eq('auction_id', auctionId)
+        .order('lot_number', { ascending: true });
+
+      if (error) {
+        console.warn('[lotsService] fetchLotsByAuction error:', error.message);
+        return [];
+      }
+      return (data || []).map(dbToLotItem);
+    } catch (err) {
+      console.error('[lotsService] Unexpected error in fetchLotsByAuction:', err);
+      return [];
     }
   },
 

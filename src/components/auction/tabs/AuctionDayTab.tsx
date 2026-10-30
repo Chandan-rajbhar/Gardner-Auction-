@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuctionDetail } from '../../../context/AuctionDetailContext';
-import { 
-  AuctionDaySubTab, 
-  BidderRegistration, 
-  AuctionLotStat, 
+import {
+  AuctionDaySubTab,
+  BidderRegistration,
+  AuctionLotStat,
   AlternateBid,
   HiBidSiteStat,
   BidderDeposit
@@ -14,22 +14,22 @@ import { auctionDayService, AuctionDayMetrics } from '../../../services/auctionD
 import { lotsService } from '../../../services/lotsService';
 import { settlementService } from '../../../services/settlementService';
 import { supabase, supabaseAdmin } from '../../../lib/supabase';
-import { 
+import {
   Loader2,
-  ExternalLink, 
-  CheckCircle, 
-  RotateCcw, 
-  Plus, 
-  Gavel, 
-  Radio, 
-  Search, 
-  Check, 
-  Layers, 
-  Users, 
-  UserCheck, 
-  TrendingDown, 
-  TrendingUp, 
-  DollarSign, 
+  ExternalLink,
+  CheckCircle,
+  RotateCcw,
+  Plus,
+  Gavel,
+  Radio,
+  Search,
+  Check,
+  Layers,
+  Users,
+  UserCheck,
+  TrendingDown,
+  TrendingUp,
+  DollarSign,
   ArrowRight,
   Maximize2,
   RefreshCw,
@@ -81,12 +81,12 @@ import Papa from 'papaparse';
 import '../AuctionDetailsStyles.css';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { LotItem, LiveBid, UserBidder, ClerkingState } from '../../../types';
-import { 
-  getStandardBidIncrement, 
-  getNextValidBid, 
-  getQuickIncrementOptions, 
-  calculateReserveStatus, 
-  validateProposedBid 
+import {
+  getStandardBidIncrement,
+  getNextValidBid,
+  getQuickIncrementOptions,
+  calculateReserveStatus,
+  validateProposedBid
 } from '../../../utils/biddingRules';
 import { useToast } from '../../../context/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -105,12 +105,12 @@ const HiBidLogo: React.FC<{ height?: number }> = ({ height = 30 }) => (
       <path d="M20 11L11 27H16L20 19L24 27H29L20 11Z" fill="#0284c7" />
     </svg>
     <div style={{ display: 'flex', alignItems: 'baseline' }}>
-      <span style={{ 
-        fontSize: height * 0.76, 
-        fontWeight: 800, 
-        color: '#1e3a5f', 
-        letterSpacing: '-0.02em', 
-        fontFamily: "'Inter', -apple-system, sans-serif" 
+      <span style={{
+        fontSize: height * 0.76,
+        fontWeight: 800,
+        color: '#1e3a5f',
+        letterSpacing: '-0.02em',
+        fontFamily: "'Inter', -apple-system, sans-serif"
       }}>
         Hi<span style={{ color: '#0284c7' }}>Bid</span>
       </span>
@@ -163,6 +163,35 @@ const DEFAULT_CHECKIN_VISIBLE_COLUMNS: { [key: string]: boolean } = {
   status: true,
   actions: true
 };
+
+// Module-level caches to eliminate loading screens on page refresh and tab switches
+let moduleCachedCustomers: Array<{
+  id: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  customerCode: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  isPermanent: boolean;
+  permanentBidderNumber: string | null;
+}> | null = null;
+
+let moduleCachedAuctions: Array<{
+  id: string;
+  title: string;
+  code: string;
+  status?: string;
+}> | null = null;
+
+let moduleCachedBidders: Array<{
+  id: string;
+  bidCardNumber: string;
+  bidderName: string;
+  email?: string;
+  phone?: string;
+}> | null = null;
 
 export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   currentTab,
@@ -231,7 +260,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           ...JSON.parse(saved)
         };
       }
-    } catch (_) {}
+    } catch (_) { }
     return DEFAULT_CHECKIN_VISIBLE_COLUMNS;
   });
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
@@ -347,7 +376,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [audioGavelEnabled, setAudioGavelEnabled] = useState<boolean>(true);
 
   // AF360 Live Clerking Workflow State
+  const [activeEventId, setActiveEventId] = useState<string>(() => selectedAuctionId || auction?.id || '');
   const [customLots, setCustomLots] = useState<LotItem[]>(lots || []);
+  const [isLotsLoading, setIsLotsLoading] = useState<boolean>(false);
+  const [clerkingStatusFilter, setClerkingStatusFilter] = useState<'all' | 'upcoming' | 'sold' | 'passed'>('all');
+  const [inlineErrors, setInlineErrors] = useState<{
+    lotNumber?: string;
+    soldTo?: string;
+    eventName?: string;
+    hammerPrice?: string;
+    bidderNumber?: string;
+    quantity?: string;
+  }>({});
   const [clerkLotNumber, setClerkLotNumber] = useState<string>('1');
   const [clerkSeller, setClerkSeller] = useState<string>('');
   const [clerkTitle, setClerkTitle] = useState<string>('');
@@ -365,6 +405,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [isClerkingStatsExpanded, setIsClerkingStatsExpanded] = useState<boolean>(false);
 
   // Dynamic Supabase Customers and Auctions for Live Clerking Dropdowns
+  const [allBiddersList, setAllBiddersList] = useState<Array<{
+    id: string;
+    bidCardNumber: string;
+    bidderName: string;
+    email?: string;
+    phone?: string;
+  }>>(() => moduleCachedBidders || []);
   const [supabaseCustomers, setSupabaseCustomers] = useState<Array<{
     id: string;
     fullName: string;
@@ -376,13 +423,15 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     companyName?: string;
     isPermanent?: boolean;
     permanentBidderNumber?: string | null;
-  }>>([]);
+  }>>(() => moduleCachedCustomers || []);
+  const [isCustomersLoading, setIsCustomersLoading] = useState<boolean>(() => !moduleCachedCustomers);
   const [supabaseAuctions, setSupabaseAuctions] = useState<Array<{
     id: string;
     title: string;
     code: string;
     status?: string;
-  }>>([]);
+  }>>(() => moduleCachedAuctions || []);
+  const [isAuctionsLoading, setIsAuctionsLoading] = useState<boolean>(() => !moduleCachedAuctions);
 
   // Clerking Drawer State (Edit / View)
   const [clerkingDrawer, setClerkingDrawer] = useState<{
@@ -478,7 +527,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   // Delete Confirmation Dialog State
   const [deleteConfirm, setDeleteConfirm] = useState<{
     isOpen: boolean;
-    entityType: 'bidder' | 'altBid' | 'siteStat' | 'deposit';
+    entityType: 'bidder' | 'altBid' | 'siteStat' | 'deposit' | 'lot';
     id: string;
     title: string;
     label: string;
@@ -604,12 +653,83 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   }, [lots]);
 
-  // Scoped lots for currently selected auction (strictly dynamic lots only)
+  // Current active event ID for clerking desk
+  const currentClerkEventId = activeEventId || selectedAuctionId || auction?.id || '';
+
+  // Scoped lots for currently selected auction event (strictly dynamic lots only)
   const auctionLots = useMemo(() => {
-    if (!auction) return [];
+    if (!currentClerkEventId) return [];
     const baseLots = customLots.length > 0 ? customLots : (lots || []);
-    return baseLots.filter(l => l.auctionId === auction.id && !l.id?.startsWith('lot-ref-'));
-  }, [lots, customLots, auction?.id]);
+    return baseLots.filter(l => (l.auctionId === currentClerkEventId || (l as any).auction_id === currentClerkEventId) && !l.id?.startsWith('lot-ref-'));
+  }, [currentClerkEventId, customLots, lots]);
+
+  // Synchronize activeEventId when external selectedAuctionId or auction changes
+  useEffect(() => {
+    if (!activeEventId && (selectedAuctionId || auction?.id)) {
+      setActiveEventId(selectedAuctionId || auction?.id || '');
+    }
+  }, [selectedAuctionId, auction?.id, activeEventId]);
+
+  // Load lots dynamically from Supabase whenever active event changes
+  useEffect(() => {
+    if (!currentClerkEventId) return;
+    let isCancelled = false;
+    if (customLots.length === 0) {
+      setIsLotsLoading(true);
+    }
+    lotsService.fetchLotsByAuction(currentClerkEventId)
+      .then(fetched => {
+        if (!isCancelled) {
+          setCustomLots(fetched);
+          if (fetched.length > 0) {
+            const firstActive = fetched.find(l => l.status === 'on_block') || fetched[0];
+            setClerkLotNumber(String(firstActive.lotNumber));
+            setActiveClerkLotId(firstActive.id);
+          } else {
+            setClerkLotNumber('');
+            setActiveClerkLotId('');
+          }
+        }
+      })
+      .catch(err => {
+        console.error('[AuctionDayTab] Error fetching lots for active event:', err);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsLotsLoading(false);
+      });
+
+    return () => { isCancelled = true; };
+  }, [currentClerkEventId]);
+
+  // Handle switching auction event dynamically
+  const handleSelectEvent = async (newEventId: string) => {
+    if (!newEventId) return;
+    setActiveEventId(newEventId);
+    if (inlineErrors.eventName) {
+      setInlineErrors(prev => ({ ...prev, eventName: undefined }));
+    }
+    if (onSelectAuction) {
+      onSelectAuction(newEventId);
+    }
+    setIsLotsLoading(true);
+    try {
+      const fetched = await lotsService.fetchLotsByAuction(newEventId);
+      setCustomLots(fetched);
+      if (fetched.length > 0) {
+        const firstActive = fetched.find(l => l.status === 'on_block') || fetched[0];
+        setClerkLotNumber(String(firstActive.lotNumber));
+        setActiveClerkLotId(firstActive.id);
+      } else {
+        setClerkLotNumber('');
+        setActiveClerkLotId('');
+      }
+    } catch (err) {
+      console.error('[AuctionDayTab] Error fetching lots for event:', err);
+      showToast('error', 'Error', 'Failed to load lots for the selected event.');
+    } finally {
+      setIsLotsLoading(false);
+    }
+  };
 
   // Unique consignors/sellers across current auction lots (dynamic from lot records)
   const uniqueSellersList = useMemo(() => {
@@ -625,6 +745,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   // Real database fetch for Customers (users table) and Auctions (auctions table)
   const fetchDropdownData = useCallback(async () => {
+    if (!moduleCachedCustomers && supabaseCustomers.length === 0) setIsCustomersLoading(true);
+    if (!moduleCachedAuctions && supabaseAuctions.length === 0) setIsAuctionsLoading(true);
     try {
       const client = supabaseAdmin || supabase;
 
@@ -634,7 +756,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         .select('id, full_name, first_name, last_name, customer_code, permanent_bidder_number, is_permanent_bidder, email, phone, company_name, role')
         .order('full_name', { ascending: true });
 
-      if (!usersErr && usersData) {
+      if (usersErr) {
+        console.warn('[AuctionDayTab] Error fetching users from Supabase:', usersErr);
+        showToast('error', 'Error', 'Failed to load customers from database.');
+      } else if (usersData) {
         const mappedCustomers = usersData.map((u: any) => {
           const fullName = u.full_name?.trim() || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || 'Customer';
           const cleanPaddle = u.permanent_bidder_number ? String(u.permanent_bidder_number) : null;
@@ -652,7 +777,30 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             permanentBidderNumber: cleanPaddle
           };
         });
+        moduleCachedCustomers = mappedCustomers;
         setSupabaseCustomers(mappedCustomers);
+      }
+
+      // 2b. Fetch all bidder registrations from Supabase to dynamically resolve customer full names
+      try {
+        const { data: allRegData } = await client
+          .from('bidder_registrations')
+          .select('id, bid_card_number, bidder_name, email, phone')
+          .order('created_at', { ascending: false });
+
+        if (allRegData && allRegData.length > 0) {
+          const mappedBidders = allRegData.map((r: any) => ({
+            id: r.id,
+            bidCardNumber: String(r.bid_card_number || ''),
+            bidderName: r.bidder_name || '',
+            email: r.email || '',
+            phone: r.phone || ''
+          }));
+          moduleCachedBidders = mappedBidders;
+          setAllBiddersList(mappedBidders);
+        }
+      } catch (regErr) {
+        console.warn('[AuctionDayTab] Error fetching all bidder registrations:', regErr);
       }
 
       // 2. Fetch real auctions from Supabase 'auctions' table
@@ -661,19 +809,26 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         .select('id, name, code, status')
         .order('name', { ascending: true });
 
-      if (!auctionsErr && auctionsData) {
+      if (auctionsErr) {
+        console.warn('[AuctionDayTab] Error fetching auctions from Supabase:', auctionsErr);
+        showToast('error', 'Error', 'Failed to load auction events from database.');
+      } else if (auctionsData) {
         const mappedAuctions = auctionsData.map((a: any) => ({
           id: a.id,
           title: a.name || 'Untitled Auction',
           code: a.code || `AUC-${a.id.slice(0, 6).toUpperCase()}`,
           status: a.status || 'Active'
         }));
+        moduleCachedAuctions = mappedAuctions;
         setSupabaseAuctions(mappedAuctions);
       }
     } catch (err) {
       console.warn('[AuctionDayTab] Error fetching dynamic dropdown data from Supabase:', err);
+    } finally {
+      setIsCustomersLoading(false);
+      setIsAuctionsLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   // Fetch dropdown data on mount & subscribe to Supabase Realtime for 'users' table
   useEffect(() => {
@@ -719,46 +874,21 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
 
     if (list.length === 0) {
-      return [
-        { value: 'SAURABH YADAVS', label: 'SAURABH YADAVS', badge: 'CUST-866149', description: 'sky1@gmail.com • ID: 866149c8' },
-        { value: 'Super Admin', label: 'Super Admin', badge: 'STAFF', description: 'admin@gardnerauction.com • ID: e4daf034' }
-      ];
+      return [];
     }
 
     return list;
   }, [supabaseCustomers, clerkSeller]);
 
-  // Dynamic Auction Title Options for "Title" dropdown with Shadcn styling & search
-  const auctionTitleSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
-    const list: ShadcnSelectOption[] = supabaseAuctions.map(a => ({
-      value: a.title,
+  // Dynamic Auction Event Options for "Event Name" dropdown with Shadcn styling & search
+  const auctionEventSelectOptions = useMemo<ShadcnSelectOption[]>(() => {
+    return supabaseAuctions.map(a => ({
+      value: a.id,
       label: a.title,
       badge: a.code,
-      description: `ID: ${a.id} • Status: ${a.status}`
+      description: `Status: ${a.status}`
     }));
-
-    // If clerkTitle has a custom value (e.g. from current lot) not yet in list, keep it visible
-    if (clerkTitle && !list.some(o => o.value.toLowerCase() === clerkTitle.toLowerCase())) {
-      list.unshift({
-        value: clerkTitle,
-        label: clerkTitle,
-        badge: 'Lot Title'
-      });
-    }
-
-    if (list.length === 0) {
-      if (auction?.name) {
-        return [{ value: auction.name, label: auction.name, badge: auction.code || 'AUC-001', description: `ID: ${auction.id}` }];
-      }
-      return [
-        { value: 'Spring Collector Auction — Session I', label: 'Spring Collector Auction — Session I', badge: 'AUC-001', description: 'ID: auc-001' },
-        { value: 'Test saurabh', label: 'Test saurabh', badge: 'SA4169', description: 'ID: auc-1792654367075' },
-        { value: 'Test gold', label: 'Test gold', badge: 'sss44', description: 'ID: auc-1792664749020' }
-      ];
-    }
-
-    return list;
-  }, [supabaseAuctions, clerkTitle, auction?.name, auction?.code, auction?.id]);
+  }, [supabaseAuctions]);
 
   // Safely mount and play the video stream whenever the camera modal or camera mode is active
   useEffect(() => {
@@ -829,6 +959,53 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   }, [currentBlockLot?.id]);
 
+  // Dynamically resolve customer full name for a sold lot (eliminating "Bidder #474")
+  const resolveBuyerName = useCallback((lot: LotItem) => {
+    if (lot.status !== 'sold') return '—';
+
+    const rawName = (lot.highBidderName || (lot as any).soldTo || '').trim();
+    const paddle = String(lot.highBidderPaddle || (lot as any).soldToBidderId || '').trim();
+    const extractedPaddle = paddle || (rawName.match(/bidder\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || '');
+
+    // 1. If we have a paddle or extracted bidder number, look up actual customer in registrations
+    if (extractedPaddle) {
+      const searchPaddle = extractedPaddle.toLowerCase();
+      const matchedReg = allBiddersList.find(r => 
+        r.bidCardNumber.toLowerCase() === searchPaddle ||
+        (r as any).paddleNumber?.toLowerCase() === searchPaddle
+      ) || registrations.find(r => 
+        r.bidCardNumber.toLowerCase() === searchPaddle ||
+        r.paddleNumber?.toLowerCase() === searchPaddle
+      );
+      if (matchedReg?.bidderName && !/^bidder\s*(?:#|\b)/i.test(matchedReg.bidderName)) {
+        return matchedReg.bidderName;
+      }
+
+      // Look up in Supabase customers
+      const matchedCust = supabaseCustomers.find(c =>
+        c.permanentBidderNumber?.toLowerCase() === searchPaddle ||
+        c.customerCode.replace(/\D+/g, '').toLowerCase() === searchPaddle ||
+        c.customerCode.toLowerCase() === searchPaddle ||
+        c.id.toLowerCase() === searchPaddle
+      );
+      if (matchedCust?.fullName && !/^bidder\s*(?:#|\b)/i.test(matchedCust.fullName)) {
+        return matchedCust.fullName;
+      }
+    }
+
+    // 2. If rawName is already a valid customer full name and not a "Bidder #..." placeholder
+    if (rawName && !/^bidder\s*(?:#|\b)/i.test(rawName)) {
+      return rawName;
+    }
+
+    // 3. Fallback: clean paddle number without "Bidder #" prefix
+    if (extractedPaddle) {
+      return `#${extractedPaddle}`;
+    }
+
+    return rawName ? rawName.replace(/^bidder\s*#?\s*/i, '') : '—';
+  }, [allBiddersList, registrations, supabaseCustomers]);
+
   // Active selected lot in Clerking entry form
   const selectedClerkLot = useMemo(() => {
     const num = parseInt(clerkLotNumber, 10);
@@ -836,22 +1013,30 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       const found = auctionLots.find(l => l.lotNumber === num);
       if (found) return found;
     }
-    return currentBlockLot || auctionLots[0];
+    return currentBlockLot || auctionLots[0] || null;
   }, [auctionLots, clerkLotNumber, currentBlockLot]);
 
   // When selectedClerkLot changes or active lot changes, synchronize form
   useEffect(() => {
     if (selectedClerkLot) {
-      setClerkTitle(selectedClerkLot.title || (auction?.name || ''));
-      const s = (selectedClerkLot as any).highBidderName || (selectedClerkLot as any).soldTo || selectedClerkLot.consignorName || (selectedClerkLot as any).sellerName || (selectedClerkLot as any).consignor_name || '';
-      setClerkSeller(s);
-      if (selectedClerkLot.status === 'sold') {
+      setClerkTitle(selectedClerkLot.title || '');
+      const isSold = selectedClerkLot.status === 'sold';
+      // "Sold To" is the buyer/winning bidder, NOT the consignor/seller
+      const buyerName = isSold
+        ? resolveBuyerName(selectedClerkLot)
+        : '';
+      setClerkSeller(buyerName);
+      if (isSold) {
         setClerkHammerPrice(String(selectedClerkLot.hammerPrice || selectedClerkLot.currentBid || ''));
         setClerkBidderNumber(selectedClerkLot.highBidderPaddle || (selectedClerkLot as any).soldToBidderId || '');
         setClerkStatus('Sold');
       } else if (selectedClerkLot.status === 'passed') {
+        setClerkHammerPrice('');
+        setClerkBidderNumber('');
         setClerkStatus('Passed');
       } else {
+        setClerkHammerPrice('');
+        setClerkBidderNumber('');
         setClerkStatus('Sold');
       }
     }
@@ -880,7 +1065,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       }
     }
     // Match against real Supabase database customers
-    const dbCustomer = supabaseCustomers.find(c => 
+    const dbCustomer = supabaseCustomers.find(c =>
       c.permanentBidderNumber?.toLowerCase() === searchPaddle ||
       c.customerCode.replace(/\D+/g, '').toLowerCase() === searchPaddle ||
       c.id.slice(0, 6).toLowerCase() === searchPaddle ||
@@ -969,7 +1154,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.16);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   // Refresh handler to pull latest records from Supabase
@@ -1144,7 +1329,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
     return supabaseCustomers.map(u => {
       // Find matching registration in current auction, if any
-      const reg = registrations.find(r => 
+      const reg = registrations.find(r =>
         (r.email && u.email && r.email.toLowerCase() === u.email.toLowerCase()) ||
         r.id === u.id ||
         (r.username && u.customerCode && r.username.toLowerCase() === u.customerCode.toLowerCase()) ||
@@ -1280,7 +1465,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     if (!auction) return;
     if (item.isRegisteredInAuction) {
       await handleToggleCheckIn(item.regId, Boolean(item.isCheckedIn));
-      setCheckInSearchResults(prev => prev.map(res => 
+      setCheckInSearchResults(prev => prev.map(res =>
         res.id === item.id ? { ...res, isCheckedIn: !item.isCheckedIn } : res
       ));
     } else {
@@ -1289,8 +1474,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         const num = parseInt(r.bidCardNumber, 10);
         return !isNaN(num) && num > max ? num : max;
       }, (auction?.liveStartingBidCard || 100));
-      const assignedPaddle = item.bidCardNumber !== 'Unassigned' 
-        ? item.bidCardNumber 
+      const assignedPaddle = item.bidCardNumber !== 'Unassigned'
+        ? item.bidCardNumber
         : (item.customerCode ? item.customerCode.replace(/\D+/g, '') || `${maxExisting + 1}` : `${maxExisting + 1}`);
 
       const res = await auctionDayService.registerBidder(auction.id, {
@@ -1314,13 +1499,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
       if (res.success && res.registration) {
         setRegistrations(prev => [res.registration!, ...prev]);
-        setCheckInSearchResults(prev => prev.map(res => 
-          res.id === item.id ? { 
-            ...res, 
-            regId: res.registration?.id, 
-            bidCardNumber: assignedPaddle, 
-            isCheckedIn: true, 
-            isRegisteredInAuction: true 
+        setCheckInSearchResults(prev => prev.map(res =>
+          res.id === item.id ? {
+            ...res,
+            regId: res.registration?.id,
+            bidCardNumber: assignedPaddle,
+            isCheckedIn: true,
+            isRegisteredInAuction: true
           } : res
         ));
         showToast('success', 'Bidder Checked In', `Registered and checked in ${item.fullName} (Paddle #${assignedPaddle}).`);
@@ -1424,8 +1609,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         // Dynamically re-fetch latest customers from Supabase without full page refresh
         await fetchDropdownData();
         showToast(
-          'success', 
-          'Customer Registered', 
+          'success',
+          'Customer Registered',
           `Registered ${fullName} (Paddle #${assignedPaddle})${newCustCheckInImmediately ? ' and checked into auction' : ''}.`
         );
         setIsBidderCheckInModalOpen(false);
@@ -1651,8 +1836,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       const res = await auctionDayService.importBidders(auction.id, toInsert);
       if (res.success) {
         showToast(
-          'success', 
-          'Import Complete', 
+          'success',
+          'Import Complete',
           `Successfully imported ${res.importedCount} bidder records to Supabase (${res.skippedCount} skipped).`
         );
         setIsImportModalOpen(false);
@@ -1680,7 +1865,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     if (cameraStreamRef.current) {
       try {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
-      } catch (_) {}
+      } catch (_) { }
       cameraStreamRef.current = null;
     }
 
@@ -1703,7 +1888,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           return;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     let stream: MediaStream | null = null;
 
@@ -1717,7 +1902,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         },
         audio: false
       });
-    } catch (_) {}
+    } catch (_) { }
 
     // 2. Second fallback: generic video constraint
     if (!stream) {
@@ -1760,7 +1945,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     if (cameraStreamRef.current) {
       try {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
-      } catch (_) {}
+      } catch (_) { }
       cameraStreamRef.current = null;
     }
     setIsCameraActive(false);
@@ -1947,9 +2132,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         setDeposits(prev => [res.deposit!, ...prev]);
         // Update registration record in local state
         if (matchedReg) {
-          setRegistrations(prev => prev.map(r => 
-            r.id === matchedReg.id ? { 
-              ...r, 
+          setRegistrations(prev => prev.map(r =>
+            r.id === matchedReg.id ? {
+              ...r,
               depositAmount: (r.depositAmount || 0) + parsedAmount,
               depositStatus: newDepStatus
             } : r
@@ -1988,9 +2173,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
       // Duplicate check: check if bidder already has active bid on same lot
       const existing = alternateBids.find(
-        b => b.lotNumber === parsedLot && 
-        b.bidderName.toLowerCase() === altBidderName.trim().toLowerCase() && 
-        b.status === 'Active'
+        b => b.lotNumber === parsedLot &&
+          b.bidderName.toLowerCase() === altBidderName.trim().toLowerCase() &&
+          b.status === 'Active'
       );
       if (existing) {
         showToast('error', 'Duplicate Bid', `Bidder already has an active order bid on Lot #${parsedLot}.`);
@@ -2551,7 +2736,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   // Prompt Delete
   const handlePromptDelete = (
-    entityType: 'bidder' | 'altBid' | 'siteStat' | 'deposit',
+    entityType: 'bidder' | 'altBid' | 'siteStat' | 'deposit' | 'lot',
     id: string,
     label: string
   ) => {
@@ -2559,7 +2744,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       bidder: 'Delete Bidder Registration',
       altBid: 'Delete Alternate Bid',
       siteStat: 'Delete Portal Node',
-      deposit: 'Delete Bidder Deposit'
+      deposit: 'Delete Bidder Deposit',
+      lot: 'Delete Lot'
     };
     setDeleteConfirm({
       isOpen: true,
@@ -2609,6 +2795,26 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         } else {
           showToast('error', 'Error', 'Could not delete deposit record.');
         }
+      } else if (deleteConfirm.entityType === 'lot') {
+        const res = await lotsService.deleteLot(deleteConfirm.id);
+        if (res.success) {
+          setCustomLots(prev => prev.filter(l => l.id !== deleteConfirm.id));
+          if (clerkLotNumber && (clerkLotNumber === deleteConfirm.id || customLots.find(l => l.id === deleteConfirm.id)?.lotNumber === parseInt(clerkLotNumber, 10))) {
+            setClerkLotNumber('');
+            setClerkSeller('');
+            setClerkTitle('');
+            setClerkHammerPrice('');
+            setClerkBidderNumber('');
+          }
+          setSelectedClerkingLotIds(prev => {
+            const next = new Set(prev);
+            next.delete(deleteConfirm.id);
+            return next;
+          });
+          showToast('success', 'Lot Deleted', 'Lot deleted successfully.');
+        } else {
+          showToast('error', 'Error', res.error || 'Failed to delete lot from Supabase.');
+        }
       }
       setDeleteConfirm(prev => ({ ...prev, isOpen: false }));
     } catch (_) {
@@ -2632,11 +2838,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
   // Filtered registrations for Check In tab
   const filteredRegistrations = registrations.filter(r => {
-    const matchesSearch = !checkInSearch || 
+    const matchesSearch = !checkInSearch ||
       r.bidderName.toLowerCase().includes(checkInSearch.toLowerCase()) ||
       r.bidCardNumber.includes(checkInSearch) ||
       (r.username && r.username.toLowerCase().includes(checkInSearch.toLowerCase()));
-    
+
     if (checkInStatusFilter === 'checked_in') return matchesSearch && r.isCheckedIn;
     if (checkInStatusFilter === 'pending') return matchesSearch && !r.isCheckedIn;
     return matchesSearch;
@@ -2648,31 +2854,69 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       b.bidderName.toLowerCase().includes(altBidSearch.toLowerCase()) ||
       b.lotNumber.toString().includes(altBidSearch) ||
       b.paddleNumber.includes(altBidSearch);
-    
+
     const matchesType = altBidTypeFilter === 'all' || b.bidType.toLowerCase() === altBidTypeFilter.toLowerCase();
     const matchesStatus = altBidStatusFilter === 'all' || b.status.toLowerCase() === altBidStatusFilter.toLowerCase();
     return matchesSearch && matchesType && matchesStatus;
   });
 
+  // Clerking status counts for filter tabs
+  const clerkingCounts = useMemo(() => {
+    let upcoming = 0;
+    let sold = 0;
+    let passed = 0;
+    auctionLots.forEach(l => {
+      if (l.status === 'sold') sold++;
+      else if (l.status === 'passed') passed++;
+      else upcoming++;
+    });
+    return { all: auctionLots.length, upcoming, sold, passed };
+  }, [auctionLots]);
+
   // Filtered clerking lots for table
-  const filteredClerkingLots = auctionLots.filter(l => {
-    if (!clerkingSearch.trim()) return true;
-    const q = clerkingSearch.toLowerCase();
-    const s = (l.consignorName || (l as any).sellerName || (l as any).consignor_name || '').toLowerCase();
-    const paddle = (l.highBidderPaddle || (l as any).soldToBidderId || '').toLowerCase();
-    return l.lotNumber.toString().includes(q) ||
-      l.title.toLowerCase().includes(q) ||
-      s.includes(q) ||
-      paddle.includes(q);
-  });
+  const filteredClerkingLots = useMemo(() => {
+    return auctionLots.filter(l => {
+      // 1. Status Filter
+      if (clerkingStatusFilter === 'sold' && l.status !== 'sold') return false;
+      if (clerkingStatusFilter === 'passed' && l.status !== 'passed') return false;
+      if (clerkingStatusFilter === 'upcoming' && (l.status === 'sold' || l.status === 'passed')) return false;
+
+      // 2. Search query
+      if (!clerkingSearch.trim()) return true;
+      const q = clerkingSearch.toLowerCase();
+      const num = String(l.lotNumber);
+      const title = (l.title || '').toLowerCase();
+      const buyer = ((l as any).highBidderName || '').toLowerCase();
+      const paddle = ((l as any).highBidderPaddle || '').toLowerCase();
+      return (
+        num.includes(q) ||
+        title.includes(q) ||
+        buyer.includes(q) ||
+        paddle.includes(q)
+      );
+    });
+  }, [auctionLots, clerkingStatusFilter, clerkingSearch]);
 
   // Handle Save Clerking Entry
   const handleSaveClerking = async () => {
-    if (!auction) return;
+    const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+    if (!targetEventId) {
+      showToast('error', 'Validation Error', 'Please select a valid event.');
+      setInlineErrors({ eventName: 'Please select an auction event' });
+      return;
+    }
+
     const parsedLotNum = parseInt(clerkLotNumber, 10);
+    if (isNaN(parsedLotNum) || !clerkLotNumber.trim()) {
+      showToast('error', 'Validation Error', 'Please complete all required fields.');
+      setInlineErrors({ lotNumber: 'Please enter a valid lot number' });
+      return;
+    }
+
     const targetLot = auctionLots.find(l => l.lotNumber === parsedLotNum);
     if (!targetLot) {
-      showToast('error', 'Lot Not Found', `Lot #${clerkLotNumber} does not exist in this catalog.`);
+      showToast('error', 'Lot Not Found', `Lot #${clerkLotNumber} does not exist in the selected event.`);
+      setInlineErrors({ lotNumber: `Lot #${clerkLotNumber} not in this event` });
       return;
     }
 
@@ -2680,39 +2924,92 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     const isPassed = clerkStatus === 'Passed';
     const finalPrice = isSold ? parseFloat(clerkHammerPrice) : 0;
     const finalPaddle = isSold ? clerkBidderNumber.trim() : null;
+    const errors: typeof inlineErrors = {};
+
+    // Duplicate sale attempt
+    if (isSold && targetLot.status === 'sold') {
+      showToast('warning', 'Already Sold', 'This lot has already been sold.');
+      return;
+    }
 
     if (isSold) {
+      if (!clerkSeller || !clerkSeller.trim()) {
+        errors.soldTo = 'Sold To buyer is required';
+      }
       if (isNaN(finalPrice) || finalPrice <= 0) {
-        showToast('error', 'Validation Error', 'Please enter a valid Hammer Price greater than $0.');
-        return;
+        errors.hammerPrice = 'Hammer price must be > 0';
       }
       if (!finalPaddle) {
-        showToast('error', 'Validation Error', 'Bidder Number is required for Sold status.');
+        errors.bidderNumber = 'Bidder Number is required';
+      }
+      if (clerkQuantity < 1) {
+        errors.quantity = 'Quantity must be at least 1';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setInlineErrors(errors);
+        if (errors.soldTo) {
+          showToast('error', 'Validation Error', 'Please complete all required fields.');
+        } else if (errors.hammerPrice) {
+          showToast('error', 'Validation Error', 'Please enter a valid Hammer Price greater than $0.');
+        } else if (errors.bidderNumber) {
+          showToast('error', 'Validation Error', 'Bidder Number is required for Sold status.');
+        } else if (errors.quantity) {
+          showToast('error', 'Validation Error', 'Please enter a valid positive integer quantity.');
+        }
         return;
       }
     }
 
+    // Clear inline errors
+    setInlineErrors({});
     setIsClerkingSaving(true);
+
     try {
+      // Resolve clean buyer customer full name dynamically
+      let resolvedBuyerName = clerkSeller.trim();
+      if (!resolvedBuyerName || /^bidder\s*(?:#|\b)/i.test(resolvedBuyerName)) {
+        const searchPaddle = finalPaddle?.toLowerCase();
+        const matched = (searchPaddle ? allBiddersList.find(b => b.bidCardNumber.toLowerCase() === searchPaddle) : null)
+          || (searchPaddle ? registrations.find(r => r.bidCardNumber.toLowerCase() === searchPaddle) : null);
+        if (matched?.bidderName && !/^bidder\s*(?:#|\b)/i.test(matched.bidderName)) {
+          resolvedBuyerName = matched.bidderName;
+        } else if (searchPaddle) {
+          const dbCust = supabaseCustomers.find(c =>
+            c.permanentBidderNumber?.toLowerCase() === searchPaddle ||
+            c.customerCode.replace(/\D+/g, '').toLowerCase() === searchPaddle ||
+            c.customerCode.toLowerCase() === searchPaddle
+          );
+          if (dbCust?.fullName && !/^bidder\s*(?:#|\b)/i.test(dbCust.fullName)) {
+            resolvedBuyerName = dbCust.fullName;
+          }
+        }
+      }
+
       // 1. Update lot in Supabase
-      await lotsService.updateLot(targetLot.id, {
+      const updatePayload: Partial<LotItem> = {
         status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
         hammerPrice: finalPrice,
         currentBid: isSold ? finalPrice : targetLot.startingBid,
         highBidderPaddle: finalPaddle || undefined,
-        highBidderName: clerkSeller.trim() || undefined,
-        consignorName: clerkSeller.trim() || targetLot.consignorName,
-        title: clerkTitle.trim() || targetLot.title
-      });
+        highBidderName: resolvedBuyerName || clerkSeller.trim() || undefined,
+        quantity: clerkQuantity,
+        title: targetLot.title // Preserve lot title, do not overwrite with event name
+      };
 
-      // 2. If sold, insert winning bid in public.bids
+      const updateRes = await lotsService.updateLot(targetLot.id, updatePayload);
+      if (!updateRes.success) {
+        throw new Error(updateRes.error || 'Failed to update clerking record');
+      }
+
+      // 2. If sold, insert winning bid in public.bids and sync settlements
       if (isSold) {
         try {
           const matchedReg = registrations.find(r => r.bidCardNumber.toLowerCase() === finalPaddle?.toLowerCase());
           await (supabaseAdmin || supabase).from('bids').insert([{
             id: `bid-${Date.now()}`,
             lot_id: targetLot.id,
-            auction_id: auction.id,
+            auction_id: targetEventId,
             lot_number: targetLot.lotNumber,
             amount: finalPrice,
             paddle_number: finalPaddle,
@@ -2725,9 +3022,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           console.warn('[AuctionDayTab] Insert clerking bid error:', bidErr);
         }
 
-        // Dynamically create/sync Bidder & Seller Settlements in Supabase
         try {
-          await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+          const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+          await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
         } catch (syncErr) {
           console.warn('[AuctionDayTab] Sync settlements error:', syncErr);
         }
@@ -2742,9 +3039,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             hammerPrice: finalPrice,
             currentBid: isSold ? finalPrice : l.startingBid,
             highBidderPaddle: finalPaddle || undefined,
-            highBidderName: clerkSeller.trim() || undefined,
-            consignorName: clerkSeller.trim() || l.consignorName,
-            title: clerkTitle.trim() || l.title
+            highBidderName: resolvedBuyerName || clerkSeller.trim() || undefined,
+            quantity: clerkQuantity
           };
         }
         return l;
@@ -2758,17 +3054,24 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       }
 
       playGavelSound();
-      showToast('success', 'Clerking Saved', `Lot #${targetLot.lotNumber} marked as ${clerkStatus}${isSold ? ` for ${formatCurrency(finalPrice)} to Paddle #${finalPaddle}` : ''}.`);
 
-      // 4. Clerking Assist: Auto-advance to next lot if ON
+      // Toast notification according to prompt requirements
+      if (isSold) {
+        showToast('success', 'Sale Completed', 'Lot sold successfully.');
+      } else {
+        showToast('success', 'Clerking Saved', 'Clerking record saved successfully.');
+      }
+
+      // 4. Clerking Assist: Auto-advance to next lot
       if (clerkingAssist) {
         const sortedLots = [...auctionLots].sort((a, b) => a.lotNumber - b.lotNumber);
         const currentIndex = sortedLots.findIndex(l => l.lotNumber === targetLot.lotNumber);
-        const nextLot = sortedLots.slice(currentIndex + 1).find(l => l.status !== 'sold' && l.status !== 'passed') 
+        const nextLot = sortedLots.slice(currentIndex + 1).find(l => l.status !== 'sold' && l.status !== 'passed')
           || sortedLots[currentIndex + 1];
 
         if (nextLot) {
           setClerkLotNumber(String(nextLot.lotNumber));
+          setActiveClerkLotId(nextLot.id);
           setClerkHammerPrice('');
           setClerkBidderNumber('');
           setClerkStatus('Sold');
@@ -2778,7 +3081,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       }
     } catch (err) {
       console.error('[AuctionDayTab] Clerking save error:', err);
-      showToast('error', 'Error', 'Failed to save clerking record to Supabase.');
+      showToast('error', 'Error', 'Failed to save clerking record. Please try again.');
     } finally {
       setIsClerkingSaving(false);
     }
@@ -2866,20 +3169,22 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const handleOpenClerkingDrawer = (mode: 'edit' | 'view', lot: LotItem) => {
     setDrawerClerkLotId(lot.id);
     setDrawerClerkLotNum(String(lot.lotNumber));
-    setDrawerClerkSeller(lot.consignorName || (lot as any).sellerName || (lot as any).consignor_name || '');
+    const buyerName = lot.status === 'sold' ? resolveBuyerName(lot) : '';
+    setDrawerClerkSeller(buyerName);
     setDrawerClerkTitle(lot.title);
     setDrawerClerkHammerPrice(String(lot.hammerPrice || lot.currentBid || ''));
     setDrawerClerkBidder(lot.highBidderPaddle || (lot as any).soldToBidderId || '');
     setDrawerClerkStatus(lot.status === 'sold' ? 'Sold' : lot.status === 'passed' ? 'Passed' : 'Pending');
-    setDrawerClerkQuantity(1);
-    setDrawerClerkXMoney(false);
+    setDrawerClerkQuantity(lot.quantity || 1);
+    setDrawerClerkXMoney(lot.isXMoney || false);
     setClerkingDrawer({ isOpen: true, mode, lot });
   };
 
   // Save Clerking Drawer
   const handleSaveDrawerClerking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auction || !drawerClerkLotId) return;
+    const targetEventId = activeEventId || selectedAuctionId || auction?.id;
+    if (!targetEventId || !drawerClerkLotId) return;
 
     setIsSavingDrawerClerking(true);
     try {
@@ -2887,14 +3192,20 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       const isPassed = drawerClerkStatus === 'Passed';
       const price = isSold ? parseFloat(drawerClerkHammerPrice) || 0 : 0;
       const paddle = isSold ? drawerClerkBidder.trim() : null;
+      const buyerName = isSold ? drawerClerkSeller.trim() : undefined;
 
-      await lotsService.updateLot(drawerClerkLotId, {
+      const updateRes = await lotsService.updateLot(drawerClerkLotId, {
         status: isSold ? 'sold' : isPassed ? 'passed' : 'upcoming',
         hammerPrice: price,
         currentBid: isSold ? price : undefined,
         highBidderPaddle: paddle || undefined,
-        consignorName: drawerClerkSeller.trim() || undefined
+        highBidderName: buyerName,
+        title: drawerClerkTitle.trim() || undefined
       });
+
+      if (!updateRes.success) {
+        throw new Error(updateRes.error || 'Failed to update clerking record');
+      }
 
       setCustomLots(prev => prev.map(l => {
         if (l.id === drawerClerkLotId) {
@@ -2904,7 +3215,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             hammerPrice: price,
             currentBid: isSold ? price : l.startingBid,
             highBidderPaddle: paddle || undefined,
-            consignorName: drawerClerkSeller.trim() || l.consignorName
+            highBidderName: buyerName,
+            title: drawerClerkTitle.trim() || l.title
           };
         }
         return l;
@@ -2912,55 +3224,23 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
       if (isSold) {
         try {
-          await settlementService.syncSettlementsFromSoldLots(auction.id, auction.code);
+          const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
+          await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
         } catch (syncErr) {
           console.warn('[AuctionDayTab] Sync settlements from drawer clerking error:', syncErr);
         }
       }
 
-      showToast('success', 'Clerking Updated', `Updated clerking record for Lot #${drawerClerkLotNum}.`);
+      showToast('success', 'Clerking Updated', 'Clerking record updated successfully.');
       setClerkingDrawer({ isOpen: false, mode: 'view' });
     } catch (_) {
-      showToast('error', 'Error', 'Failed to update clerking record in Supabase.');
+      showToast('error', 'Error', 'Failed to save clerking record. Please try again.');
     } finally {
       setIsSavingDrawerClerking(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div
-        className="auction-day-loading-state"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 320,
-          padding: '40px 20px',
-          gap: 14
-        }}
-        role="status"
-        aria-live="polite"
-      >
-        <Loader2
-          size={32}
-          className="animate-spin spin-animation"
-          style={{ color: 'var(--gold-primary, #dfba52)' }}
-        />
-        <span
-          style={{
-            fontSize: 13.5,
-            fontWeight: 500,
-            color: 'var(--text-muted, #64748b)',
-            letterSpacing: '0.01em'
-          }}
-        >
-          Loading Auction Day…
-        </span>
-      </div>
-    );
-  }
+// Full-page loading screen removed to enable instant rendering on refresh
 
   if (loadError && !auction) {
     return (
@@ -3045,7 +3325,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  try { window.history.pushState({}, '', '/auctions'); } catch (_) {}
+                  try { window.history.pushState({}, '', '/auctions'); } catch (_) { }
                   window.location.href = '/auctions';
                 }}
                 className="btn btn-secondary"
@@ -3092,7 +3372,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  try { window.history.pushState({}, '', '/auctions'); } catch (_) {}
+                  try { window.history.pushState({}, '', '/auctions'); } catch (_) { }
                   window.location.href = '/auctions';
                 }}
                 style={{
@@ -3224,8 +3504,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           AUCTION DAY SUB-TABS (Harmonized with Pre-Auction & Console Modules)
           ========================================================================= */}
       <div className="image2-subtabs-row" style={{ marginBottom: 14 }}>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className={`image2-subtab ${currentTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => onSelectTab('dashboard')}
           id="tab-auction-dashboard"
@@ -3233,8 +3513,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           {currentTab === 'dashboard' && <span className="image2-subtab-dot" />}
           <span>Dashboard</span>
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className={`image2-subtab ${currentTab === 'check-in' ? 'active' : ''}`}
           onClick={() => onSelectTab('check-in')}
           id="tab-auction-checkin"
@@ -3243,8 +3523,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           <span>Check In</span>
           <span className="image2-tab-badge neutral">{registrations.filter(r => r.isCheckedIn).length}</span>
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className={`image2-subtab ${currentTab === 'clerking' ? 'active' : ''}`}
           onClick={() => onSelectTab('clerking')}
           id="tab-auction-clerking"
@@ -3252,8 +3532,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           {currentTab === 'clerking' && <span className="image2-subtab-dot" />}
           <span>Clerking</span>
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
           className={`image2-subtab ${currentTab === 'alternate-bids' ? 'active' : ''}`}
           onClick={() => onSelectTab('alternate-bids')}
           id="tab-auction-altbids"
@@ -3443,12 +3723,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   <Maximize2 size={20} />
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ 
-                    fontFamily: 'var(--font-mono)', 
-                    fontSize: 20, 
-                    fontWeight: 700, 
-                    color: metrics.avgEstimate !== null ? 'var(--text-main)' : 'var(--text-dim)', 
-                    lineHeight: 1.1 
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: metrics.avgEstimate !== null ? 'var(--text-main)' : 'var(--text-dim)',
+                    lineHeight: 1.1
                   }}>
                     {metrics.avgEstimate !== null ? formatCurrency(metrics.avgEstimate) : '--'}
                   </div>
@@ -3480,12 +3760,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   <DollarSign size={22} />
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ 
-                    fontFamily: 'var(--font-mono)', 
-                    fontSize: 20, 
-                    fontWeight: 700, 
-                    color: metrics.avgSalesPrice !== null ? '#059669' : 'var(--text-dim)', 
-                    lineHeight: 1.1 
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: metrics.avgSalesPrice !== null ? '#059669' : 'var(--text-dim)',
+                    lineHeight: 1.1
                   }}>
                     {metrics.avgSalesPrice !== null ? formatCurrency(metrics.avgSalesPrice) : '--'}
                   </div>
@@ -3556,14 +3836,14 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   {/* Empty state exact match to Screenshot 2 */}
                   {siteStats.length === 0 ? (
                     <tr>
-                      <td 
-                        colSpan={10} 
-                        style={{ 
-                          textAlign: 'center', 
-                          padding: '40px 16px', 
-                          color: '#64748b', 
+                      <td
+                        colSpan={10}
+                        style={{
+                          textAlign: 'center',
+                          padding: '40px 16px',
+                          color: '#64748b',
                           fontStyle: 'italic',
-                          fontSize: 14 
+                          fontSize: 14
                         }}
                       >
                         Currently No HiBid Auction Stats.
@@ -4442,11 +4722,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     ].map(col => {
                       const isChecked = Boolean(visibleColumns[col.key]);
                       return (
-                        <label 
-                          key={col.key} 
-                          className="shadcn-dropdown-item" 
-                          style={{ 
-                            cursor: 'pointer', 
+                        <label
+                          key={col.key}
+                          className="shadcn-dropdown-item"
+                          style={{
+                            cursor: 'pointer',
                             justifyContent: 'space-between',
                             padding: '6px 10px'
                           }}
@@ -4463,7 +4743,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                                 const updated = { ...prev, [col.key]: checked };
                                 try {
                                   localStorage.setItem('af360_auction_day_checkin_columns', JSON.stringify(updated));
-                                } catch (_) {}
+                                } catch (_) { }
                                 return updated;
                               });
                             }}
@@ -4616,9 +4896,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     const isSelected = selectedRegIds.has(reg.id);
 
                     return (
-                      <tr 
-                        key={reg.id} 
-                        style={{ 
+                      <tr
+                        key={reg.id}
+                        style={{
                           background: isSelected ? 'rgba(203, 161, 53, 0.08)' : undefined,
                           transition: 'background 0.15s ease'
                         }}
@@ -4697,10 +4977,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                         {/* Status */}
                         {visibleColumns.status && (
                           <td style={{ textAlign: 'center' }}>
-                            <span style={{ 
-                              padding: '3px 10px', 
-                              borderRadius: 20, 
-                              fontSize: 11.5, 
+                            <span style={{
+                              padding: '3px 10px',
+                              borderRadius: 20,
+                              fontSize: 11.5,
                               fontWeight: 700,
                               background: reg.isCheckedIn ? '#dcfce7' : '#fee2e2',
                               color: reg.isCheckedIn ? '#15803d' : '#b91c1c',
@@ -4718,7 +4998,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                         {visibleColumns.actions && (
                           <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              <button 
+                              <button
                                 type="button"
                                 disabled={isAuctionClosed}
                                 onClick={() => handleToggleCheckIn(reg.id, reg.isCheckedIn)}
@@ -4812,13 +5092,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 Live Clerking Desk
               </h3>
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Active Lot #{selectedClerkLot?.lotNumber || clerkLotNumber} — {selectedClerkLot?.title || 'Saleroom Lot'}
+                {selectedClerkLot
+                  ? `Active Lot #${selectedClerkLot.lotNumber} — ${selectedClerkLot.title}`
+                  : auctionLots.length > 0
+                  ? `Active Lot #${clerkLotNumber || auctionLots[0].lotNumber} — ${auctionLots[0].title}`
+                  : 'No lots found for this auction event'}
               </p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button 
-                type="button" 
+            {/* Auctioneer Screen button commented per request */}
+            {/* <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
                 className="btn btn-gold"
                 onClick={onNavigateClerking}
                 style={{ fontSize: 13, padding: '8px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}
@@ -4827,7 +5112,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 <Radio size={15} />
                 <span>Auctioneer Screen</span>
               </button>
-            </div>
+            </div> */}
           </div>
 
           {/* Reserve & Pre-Sale Summary Card */}
@@ -4889,14 +5174,43 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   type="number"
                   disabled={isAuctionClosed}
                   value={clerkLotNumber}
-                  onChange={(e) => setClerkLotNumber(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setClerkLotNumber(val);
+                    if (inlineErrors.lotNumber) {
+                      setInlineErrors(prev => ({ ...prev, lotNumber: undefined }));
+                    }
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) {
+                      const matched = auctionLots.find(l => l.lotNumber === num);
+                      if (matched) {
+                        setActiveClerkLotId(matched.id);
+                      }
+                    }
+                  }}
                   className="catalog-search-input"
-                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    borderColor: inlineErrors.lotNumber ? '#dc2626' : undefined
+                  }}
                   placeholder="e.g. 1"
                 />
+                {inlineErrors.lotNumber ? (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.lotNumber}
+                  </span>
+                ) : selectedClerkLot ? (
+                  <span style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedClerkLot.title}>
+                    {selectedClerkLot.title}
+                  </span>
+                ) : null}
               </div>
 
-              {/* Sold To (formerly Seller) */}
+              {/* Sold To */}
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
                   Sold To *
@@ -4906,38 +5220,67 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   value={clerkSeller}
                   onChange={(val) => {
                     setClerkSeller(val);
-                    const matched = supabaseCustomers.find(c => c.fullName === val);
-                    if (matched?.permanentBidderNumber) {
-                      setClerkBidderNumber(matched.permanentBidderNumber);
+                    if (inlineErrors.soldTo) {
+                      setInlineErrors(prev => ({ ...prev, soldTo: undefined }));
+                    }
+                    const searchName = val.toLowerCase();
+                    const matchedReg = allBiddersList.find(b => b.bidderName.toLowerCase() === searchName)
+                      || registrations.find(r => r.bidderName.toLowerCase() === searchName);
+                    if (matchedReg?.bidCardNumber) {
+                      setClerkBidderNumber(matchedReg.bidCardNumber);
+                      if (inlineErrors.bidderNumber) {
+                        setInlineErrors(prev => ({ ...prev, bidderNumber: undefined }));
+                      }
+                    } else {
+                      const matched = supabaseCustomers.find(c => c.fullName === val || c.id === val);
+                      if (matched) {
+                        const paddle = matched.permanentBidderNumber || matched.customerCode.replace(/\D+/g, '');
+                        if (paddle) {
+                          setClerkBidderNumber(paddle);
+                          if (inlineErrors.bidderNumber) {
+                            setInlineErrors(prev => ({ ...prev, bidderNumber: undefined }));
+                          }
+                        }
+                      }
                     }
                   }}
                   size="md"
                   fullWidth
                   searchable={true}
                   searchPlaceholder="Search customer..."
-                  placeholder="Select customer..."
+                  placeholder={isCustomersLoading ? "Loading customers..." : customerSelectOptions.length === 0 ? "No customers found" : "Select customer..."}
                   clearable={true}
                   options={customerSelectOptions}
                 />
+                {inlineErrors.soldTo && (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.soldTo}
+                  </span>
+                )}
               </div>
 
-              {/* Title */}
+              {/* Event Name */}
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', height: 20, lineHeight: '20px', marginBottom: 4, whiteSpace: 'nowrap' }}>
-                  Title
+                  Event Name *
                 </label>
                 <ShadcnSelect
                   disabled={isAuctionClosed}
-                  value={clerkTitle}
-                  onChange={(val) => setClerkTitle(val)}
+                  value={currentClerkEventId}
+                  onChange={(val) => handleSelectEvent(val)}
                   size="md"
                   fullWidth
                   searchable={true}
-                  searchPlaceholder="Search title..."
-                  placeholder="Select auction title..."
-                  clearable={true}
-                  options={auctionTitleSelectOptions}
+                  searchPlaceholder="Search event..."
+                  placeholder={isAuctionsLoading ? "Loading events..." : "Select auction event..."}
+                  clearable={false}
+                  options={auctionEventSelectOptions}
                 />
+                {inlineErrors.eventName && (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.eventName}
+                  </span>
+                )}
               </div>
 
               {/* Hammer Price with X Money */}
@@ -4958,14 +5301,32 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 </div>
                 <input
                   type="number"
-                  step="10"
+                  step="any"
                   disabled={isAuctionClosed}
                   value={clerkHammerPrice}
-                  onChange={(e) => setClerkHammerPrice(e.target.value)}
+                  onChange={(e) => {
+                    setClerkHammerPrice(e.target.value);
+                    if (inlineErrors.hammerPrice) {
+                      setInlineErrors(prev => ({ ...prev, hammerPrice: undefined }));
+                    }
+                  }}
                   className="catalog-search-input"
-                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 15, color: '#15803d' }}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 800,
+                    fontSize: 15,
+                    color: '#15803d',
+                    borderColor: inlineErrors.hammerPrice ? '#dc2626' : undefined
+                  }}
                   placeholder="0.00"
                 />
+                {inlineErrors.hammerPrice && (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.hammerPrice}
+                  </span>
+                )}
               </div>
 
               {/* Bidder Number with validation helper */}
@@ -5000,29 +5361,71 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   type="text"
                   disabled={isAuctionClosed}
                   value={clerkBidderNumber}
-                  onChange={(e) => setClerkBidderNumber(e.target.value)}
+                  onChange={(e) => {
+                    const newPaddle = e.target.value;
+                    setClerkBidderNumber(newPaddle);
+                    if (inlineErrors.bidderNumber) {
+                      setInlineErrors(prev => ({ ...prev, bidderNumber: undefined }));
+                    }
+                    if (newPaddle.trim()) {
+                      const searchPaddle = newPaddle.trim().toLowerCase();
+                      const matched = allBiddersList.find(b => b.bidCardNumber.toLowerCase() === searchPaddle)
+                        || registrations.find(r => r.bidCardNumber.toLowerCase() === searchPaddle);
+                      if (matched?.bidderName && !/^bidder\s*(?:#|\b)/i.test(matched.bidderName)) {
+                        setClerkSeller(matched.bidderName);
+                        if (inlineErrors.soldTo) {
+                          setInlineErrors(prev => ({ ...prev, soldTo: undefined }));
+                        }
+                      } else {
+                        const dbCust = supabaseCustomers.find(c =>
+                          c.permanentBidderNumber?.toLowerCase() === searchPaddle ||
+                          c.customerCode.replace(/\D+/g, '').toLowerCase() === searchPaddle ||
+                          c.customerCode.toLowerCase() === searchPaddle
+                        );
+                        if (dbCust?.fullName && !/^bidder\s*(?:#|\b)/i.test(dbCust.fullName)) {
+                          setClerkSeller(dbCust.fullName);
+                          if (inlineErrors.soldTo) {
+                            setInlineErrors(prev => ({ ...prev, soldTo: undefined }));
+                          }
+                        }
+                      }
+                    }
+                  }}
                   className="catalog-search-input"
-                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    borderColor: inlineErrors.bidderNumber ? '#dc2626' : undefined
+                  }}
                   placeholder="e.g. 104"
                 />
-                <div style={{ marginTop: 4, minHeight: 18 }}>
-                  {bidderValidationStatus ? (
-                    <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background: bidderValidationStatus.bg,
-                      color: bidderValidationStatus.color,
-                      display: 'inline-block',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {bidderValidationStatus.text}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 10.5, color: '#94a3b8', whiteSpace: 'nowrap' }}>Enter paddle number</span>
-                  )}
-                </div>
+                {inlineErrors.bidderNumber ? (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.bidderNumber}
+                  </span>
+                ) : (
+                  <div style={{ marginTop: 4, minHeight: 18 }}>
+                    {bidderValidationStatus ? (
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        background: bidderValidationStatus.bg,
+                        color: bidderValidationStatus.color,
+                        display: 'inline-block',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {bidderValidationStatus.text}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 10.5, color: '#94a3b8', whiteSpace: 'nowrap' }}>Enter paddle number</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Quantity */}
@@ -5035,10 +5438,28 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   min="1"
                   disabled={isAuctionClosed}
                   value={clerkQuantity}
-                  onChange={(e) => setClerkQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setClerkQuantity(isNaN(val) ? 1 : val);
+                    if (inlineErrors.quantity) {
+                      setInlineErrors(prev => ({ ...prev, quantity: undefined }));
+                    }
+                  }}
                   className="catalog-search-input"
-                  style={{ width: '100%', height: 38, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    borderColor: inlineErrors.quantity ? '#dc2626' : undefined
+                  }}
                 />
+                {inlineErrors.quantity && (
+                  <span style={{ fontSize: 11, color: '#dc2626', marginTop: 2, display: 'block' }}>
+                    {inlineErrors.quantity}
+                  </span>
+                )}
               </div>
 
               {/* Status */}
@@ -5049,7 +5470,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 <ShadcnSelect
                   disabled={isAuctionClosed}
                   value={clerkStatus}
-                  onChange={(val) => setClerkStatus(val)}
+                  onChange={(val) => {
+                    setClerkStatus(val);
+                    if (val !== 'Sold') {
+                      setInlineErrors({});
+                    }
+                  }}
                   size="md"
                   fullWidth
                   options={[
@@ -5091,8 +5517,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           {/* Clerking Records Table Section */}
           <div className="card-luxury" style={{ padding: 20, background: '#ffffff' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-              {/* Batch Action Dropdown */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Batch Action Dropdown & Status Filter Tabs */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                 <ShadcnDropdownMenu
                   trigger={
                     <button
@@ -5122,6 +5548,53 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     }
                   ]}
                 />
+
+                {/* Status Tabs */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginRight: 2 }}>
+                    Status:
+                  </span>
+                  {(['all', 'upcoming', 'sold', 'passed'] as const).map(tab => {
+                    const isActive = clerkingStatusFilter === tab;
+                    const count = clerkingCounts[tab];
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => {
+                          setClerkingStatusFilter(tab);
+                          setClerkingPage(1);
+                        }}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          border: isActive ? '1px solid var(--gold-primary, #cba135)' : '1px solid #e2e8f0',
+                          background: isActive ? '#fffbeb' : '#ffffff',
+                          color: isActive ? 'var(--gold-dark, #9a741e)' : '#64748b',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <span>{tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                        <span style={{
+                          fontSize: 10.5,
+                          padding: '1px 6px',
+                          borderRadius: 10,
+                          background: isActive ? 'var(--gold-primary, #cba135)' : '#f1f5f9',
+                          color: isActive ? '#ffffff' : '#64748b',
+                          fontWeight: 700
+                        }}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Search with gear configuration icon */}
@@ -5153,7 +5626,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
             {/* Table */}
             <div className="catalog-table-scroll" style={{ border: '1px solid var(--border-subtle)', borderRadius: 6 }}>
-              <table className="catalog-luxury-table" style={{ fontSize: 13 }}>
+              <table className="catalog-luxury-table" style={{ fontSize: 13, width: '100%' }}>
                 <thead>
                   <tr>
                     <th style={{ width: 44, textAlign: 'center' }}>
@@ -5171,27 +5644,43 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                         aria-label="Select all clerkings"
                       />
                     </th>
-                    <th style={{ width: 95 }}>LOT NUMBER</th>
-                    <th style={{ width: 140 }}>SELLER</th>
-                    <th style={{ minWidth: 200 }}>TITLE</th>
-                    <th style={{ width: 130, textAlign: 'right' }}>HAMMER PRICE</th>
-                    <th style={{ width: 85, textAlign: 'center' }}>X MONEY</th>
+                    <th style={{ width: 85 }}>LOT NUMBER</th>
+                    <th style={{ minWidth: 150 }}>LOT NAME</th>
+                    <th style={{ minWidth: 150 }}>EVENT NAME</th>
+                    <th style={{ minWidth: 140 }}>SOLD TO</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>HAMMER PRICE</th>
+                    <th style={{ width: 80, textAlign: 'center' }}>X MONEY</th>
                     <th style={{ width: 110, textAlign: 'center' }}>BIDDER NUMBER</th>
-                    <th style={{ width: 85, textAlign: 'center' }}>QUANTITY</th>
-                    <th style={{ width: 100, textAlign: 'center' }}>STATUS</th>
-                    <th style={{ width: 110, textAlign: 'center' }}>ACTIONS</th>
+                    <th style={{ width: 75, textAlign: 'center' }}>QUANTITY</th>
+                    <th style={{ width: 95, textAlign: 'center' }}>STATUS</th>
+                    <th style={{ width: 80, textAlign: 'center' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(() => {
+                    if (isLotsLoading && auctionLots.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={11} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Loading lots for selected event...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     const clerkStartIndex = (clerkingPage - 1) * clerkingPageSize;
                     const pageSlice = filteredClerkingLots.slice(clerkStartIndex, clerkStartIndex + clerkingPageSize);
 
                     if (pageSlice.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={10} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
-                            No items to display.
+                          <td colSpan={11} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-dim)' }}>
+                            {auctionLots.length === 0
+                              ? 'No lots found for this auction event. Please add lots to this event in the Pre-Auction Catalog.'
+                              : `No ${clerkingStatusFilter === 'all' ? '' : clerkingStatusFilter + ' '}items match your criteria.`}
                           </td>
                         </tr>
                       );
@@ -5201,9 +5690,11 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                       const isSelected = selectedClerkingLotIds.has(lot.id);
                       const isSold = lot.status === 'sold';
                       const isPassed = lot.status === 'passed';
-                      const sellerName = lot.consignorName || (lot as any).sellerName || (lot as any).consignor_name || '—';
+                      const lotEvent = supabaseAuctions.find(a => a.id === (lot.auctionId || currentClerkEventId));
+                      const lotEventName = lotEvent?.title || auction?.name || 'Live Auction';
+                      const buyerName = isSold ? resolveBuyerName(lot) : '—';
                       const hammerVal = isSold ? (lot.hammerPrice || lot.currentBid || 0) : null;
-                      const paddleNum = lot.highBidderPaddle || (lot as any).soldToBidderId || (isSold ? '101' : null);
+                      const paddleNum = isSold ? (lot.highBidderPaddle || (lot as any).soldToBidderId || null) : null;
 
                       return (
                         <tr
@@ -5230,25 +5721,28 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                           <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold-dark, #9a741e)' }}>
                             #{lot.lotNumber}
                           </td>
-                          <td style={{ color: '#475569', fontWeight: 500 }}>
-                            {sellerName}
-                          </td>
                           <td>
                             <div style={{ fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>
                               {lot.title}
                             </div>
                           </td>
+                          <td style={{ color: '#475569', fontWeight: 500 }}>
+                            {lotEventName}
+                          </td>
+                          <td style={{ color: isSold ? 'var(--text-main)' : '#94a3b8', fontWeight: isSold ? 600 : 400 }}>
+                            {buyerName}
+                          </td>
                           <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: isSold ? '#15803d' : '#94a3b8' }}>
                             {hammerVal !== null ? formatCurrency(hammerVal) : '—'}
                           </td>
                           <td style={{ textAlign: 'center', fontSize: 12, color: '#64748b' }}>
-                            {clerkXMoney ? 'Yes' : 'No'}
+                            {lot.isXMoney || (lot as any).x_money ? 'Yes' : 'No'}
                           </td>
                           <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                             {paddleNum ? `#${paddleNum}` : '—'}
                           </td>
                           <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                            1
+                            {lot.quantity || 1}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{
@@ -5286,13 +5780,32 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                                   {
                                     label: 'Mark as Passed',
                                     icon: <AlertCircle size={14} />,
-                                    onClick: () => {
-                                      if (onPassLot) onPassLot(lot.id, 'Reserve Not Met');
-                                      setCustomLots(prev => prev.map(l => l.id === lot.id ? { ...l, status: 'passed', hammerPrice: 0 } : l));
-                                      showToast('info', 'Passed', `Lot #${lot.lotNumber} marked as Passed.`);
+                                    onClick: async () => {
+                                      try {
+                                        const res = await lotsService.updateLot(lot.id, {
+                                          status: 'passed',
+                                          hammerPrice: 0,
+                                          highBidderPaddle: undefined,
+                                          highBidderName: undefined
+                                        });
+                                        if (!res.success) {
+                                          throw new Error(res.error || 'Failed to mark lot as passed');
+                                        }
+                                        if (onPassLot) onPassLot(lot.id, 'Reserve Not Met');
+                                        setCustomLots(prev => prev.map(l => l.id === lot.id ? { ...l, status: 'passed', hammerPrice: 0, highBidderPaddle: undefined, highBidderName: undefined } : l));
+                                        showToast('info', 'Passed', `Lot #${lot.lotNumber} marked as Passed.`);
+                                      } catch (err) {
+                                        showToast('error', 'Error', 'Failed to update lot status in Supabase.');
+                                      }
                                     }
                                   }
-                                ] : [])
+                                ] : []),
+                                {
+                                  label: 'Delete Lot',
+                                  icon: <Trash2 size={14} />,
+                                  variant: 'destructive',
+                                  onClick: () => handlePromptDelete('lot', lot.id, `Lot #${lot.lotNumber}`)
+                                }
                               ]}
                             />
                           </td>
@@ -5431,8 +5944,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div className="catalog-search-wrapper" style={{ width: 220 }}>
                 <Search size={14} className="catalog-search-icon" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Search lot, bidder..."
                   value={altBidSearch}
                   onChange={(e) => {
@@ -5493,8 +6006,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               </button>
 
               {/* Add Alternate Bids button */}
-              <button 
-                type="button" 
+              <button
+                type="button"
                 disabled={isAuctionClosed}
                 onClick={() => handleOpenAltBidDrawer('add')}
                 className="btn btn-gold"
@@ -5587,13 +6100,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                           {formatCurrency(maxVal * 1)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <span style={{ 
-                            fontSize: 11, 
-                            fontWeight: 700, 
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 700,
                             padding: '3px 8px',
                             borderRadius: 12,
                             background: bid.status === 'Active' ? '#dcfce7' : bid.status === 'Executed' ? '#e0f2fe' : bid.status === 'Rejected' ? '#fee2e2' : '#f1f5f9',
-                            color: bid.status === 'Active' ? '#15803d' : bid.status === 'Executed' ? '#0369a1' : bid.status === 'Rejected' ? '#b91c1c' : '#64748b' 
+                            color: bid.status === 'Active' ? '#15803d' : bid.status === 'Executed' ? '#0369a1' : bid.status === 'Rejected' ? '#b91c1c' : '#64748b'
                           }}>
                             {bid.status}
                           </span>
@@ -5671,7 +6184,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Lot Number *" required>
-              <input 
+              <input
                 type="number"
                 required
                 placeholder="e.g. 101"
@@ -5710,7 +6223,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <FormField label="Bidder Name *" required>
-              <input 
+              <input
                 type="text"
                 required
                 placeholder="e.g. Senator James Caldwell"
@@ -5722,7 +6235,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Paddle #">
-              <input 
+              <input
                 type="text"
                 placeholder="e.g. 4005"
                 value={altPaddle}
@@ -5735,9 +6248,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Opening / Start Bid ($) *" required>
-              <input 
+              <input
                 type="number"
-                step="50"
+                step="any"
                 required
                 placeholder="19000"
                 value={altAmount}
@@ -5748,9 +6261,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Max Order Limit ($)">
-              <input 
+              <input
                 type="number"
-                step="50"
+                step="any"
                 placeholder="26000"
                 value={altMaxAmount}
                 onChange={(e) => setAltMaxAmount(e.target.value)}
@@ -5761,7 +6274,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           </div>
 
           <FormField label="Clerking Notes">
-            <textarea 
+            <textarea
               rows={2}
               placeholder="e.g. Direct phone clerk line arranged with Todd Gardner."
               value={altNotes}
@@ -5787,7 +6300,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
             <FormField label="Paddle / Bid Card #" required>
-              <input 
+              <input
                 type="text"
                 required
                 placeholder="e.g. 5001"
@@ -5799,7 +6312,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Bidder Full Name" required>
-              <input 
+              <input
                 type="text"
                 required
                 placeholder="e.g. Helena Vance"
@@ -5813,7 +6326,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             <FormField label="Company Name">
-              <input 
+              <input
                 type="text"
                 placeholder="e.g. Vance Fine Antiques LLC"
                 value={newRegCompany}
@@ -5824,7 +6337,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Email Address">
-              <input 
+              <input
                 type="email"
                 placeholder="helena@vanceantiques.com"
                 value={newRegEmail}
@@ -5837,7 +6350,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             <FormField label="Phone Number">
-              <input 
+              <input
                 type="tel"
                 placeholder="(406) 555-0144"
                 value={newRegPhone}
@@ -5869,7 +6382,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             <FormField label="Credit Approval Limit ($)">
-              <input 
+              <input
                 type="number"
                 placeholder="25000"
                 value={newRegLimit}
@@ -5880,7 +6393,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Origin / Registration Site">
-              <input 
+              <input
                 type="text"
                 placeholder="Saleroom In-House"
                 value={newRegSite}
@@ -5892,7 +6405,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           </div>
 
           <FormField label="Admin Notes">
-            <input 
+            <input
               type="text"
               placeholder="Verified government photo ID and credit card authorization."
               value={newRegNotes}
@@ -6273,7 +6786,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           {/* MODE 2: CREATE NEW CUSTOMER & CHECK IN */}
           {checkInTabMode === 'create' && (
-            <form onSubmit={handleCreateNewCustomerAndCheckIn} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form noValidate onSubmit={handleCreateNewCustomerAndCheckIn} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                 <FormField label="First Name" required>
                   <input
@@ -6637,7 +7150,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <label 
+                  <label
                     style={{
                       height: 34,
                       padding: '0 16px',
@@ -7512,8 +8025,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     const hasRemaining = remaining > 0;
 
                     return (
-                      <tr 
-                        key={dep.id} 
+                      <tr
+                        key={dep.id}
                         style={{
                           borderTop: '1px solid #f1f5f9',
                           background: hasRemaining ? '#fffdf7' : '#ffffff',
@@ -7636,9 +8149,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             <FormField label="Deposit Amount ($)" required>
               <input
                 type="number"
-                step="50"
-                min="1"
-                required
+                step="any"
+                min="0"
                 placeholder="1000"
                 value={newDepAmount}
                 onChange={(e) => setNewDepAmount(e.target.value)}
@@ -7933,7 +8445,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <FormField label="Portal Domain *" required>
-            <input 
+            <input
               type="text"
               required
               placeholder="e.g. northwestcoins.hibid.com"
@@ -7946,7 +8458,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Registrations">
-              <input 
+              <input
                 type="number"
                 placeholder="25"
                 value={newSiteRegs}
@@ -7957,7 +8469,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="CC Authorizations">
-              <input 
+              <input
                 type="number"
                 placeholder="24"
                 value={newSiteAuths}
@@ -7970,7 +8482,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <FormField label="Portal Views">
-              <input 
+              <input
                 type="number"
                 placeholder="1500"
                 value={newSiteViews}
@@ -7981,7 +8493,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </FormField>
 
             <FormField label="Unique Bids">
-              <input 
+              <input
                 type="number"
                 placeholder="65"
                 value={newSiteBids}
@@ -8004,8 +8516,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           bidderDrawer.mode === 'add'
             ? 'Register New Bidder'
             : bidderDrawer.mode === 'edit'
-            ? `Edit Bidder — Paddle #${bidderDrawer.data?.bidCardNumber}`
-            : `Bidder Profile — #${bidderDrawer.data?.bidCardNumber} ${bidderDrawer.data?.bidderName}`
+              ? `Edit Bidder — Paddle #${bidderDrawer.data?.bidCardNumber}`
+              : `Bidder Profile — #${bidderDrawer.data?.bidCardNumber} ${bidderDrawer.data?.bidderName}`
         }
         description={
           bidderDrawer.mode === 'view'
@@ -8204,7 +8716,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSaveBidderDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form noValidate onSubmit={handleSaveBidderDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
               <FormField label="Paddle # *" required>
                 <input
@@ -8270,7 +8782,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="Credit Approval Limit ($)">
                 <input
                   type="number"
-                  step="1000"
+                  step="any"
                   value={drawerLimit}
                   onChange={(e) => setDrawerLimit(e.target.value)}
                   className="catalog-search-input"
@@ -8353,8 +8865,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           altBidDrawer.mode === 'add'
             ? 'Add Alternate Order Bid'
             : altBidDrawer.mode === 'edit'
-            ? `Edit Order Bid — Lot #${altBidDrawer.data?.lotNumber}`
-            : `Alternate Bid Details — Lot #${altBidDrawer.data?.lotNumber}`
+              ? `Edit Order Bid — Lot #${altBidDrawer.data?.lotNumber}`
+              : `Alternate Bid Details — Lot #${altBidDrawer.data?.lotNumber}`
         }
         description="Phone clerk line instructions, absentee left book orders, and max limit bids"
         width={540}
@@ -8497,7 +9009,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSaveAltBidDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form noValidate onSubmit={handleSaveAltBidDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
               <FormField label="Lot Number *" required>
                 <input
@@ -8555,7 +9067,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="Opening / Start Bid ($) *" required>
                 <input
                   type="number"
-                  step="50"
+                  step="any"
                   required
                   value={drawerAltAmount}
                   onChange={(e) => setDrawerAltAmount(e.target.value)}
@@ -8568,7 +9080,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="Max Order Limit ($)">
                 <input
                   type="number"
-                  step="50"
+                  step="any"
                   value={drawerAltMaxAmount}
                   onChange={(e) => setDrawerAltMaxAmount(e.target.value)}
                   className="catalog-search-input"
@@ -8637,8 +9149,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           depositDrawer.mode === 'add'
             ? 'Record Bidder Deposit'
             : depositDrawer.mode === 'edit'
-            ? `Edit Deposit — #${depositDrawer.data?.bidCardNumber}`
-            : `Deposit Receipt — #${depositDrawer.data?.bidCardNumber} ${depositDrawer.data?.bidderName}`
+              ? `Edit Deposit — #${depositDrawer.data?.bidCardNumber}`
+              : `Deposit Receipt — #${depositDrawer.data?.bidCardNumber} ${depositDrawer.data?.bidderName}`
         }
         description="Saleroom cashier security deposits, auth holds, and applied payments"
         width={520}
@@ -8771,7 +9283,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSaveDepositDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form noValidate onSubmit={handleSaveDepositDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {depositDrawer.mode === 'add' && (
               <FormField label="Select Bidder" required>
                 <ShadcnSelect
@@ -8794,9 +9306,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="Deposit Amount ($) *" required>
                 <input
                   type="number"
-                  step="50"
-                  min="1"
-                  required
+                  step="any"
+                  min="0"
                   value={drawerDepAmount}
                   onChange={(e) => setDrawerDepAmount(e.target.value)}
                   className="catalog-search-input"
@@ -8892,8 +9403,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           siteStatDrawer.mode === 'add'
             ? 'Add HiBid Syndication Node'
             : siteStatDrawer.mode === 'edit'
-            ? `Edit Node — ${siteStatDrawer.data?.site}`
-            : `Portal Telemetry — ${siteStatDrawer.data?.site}`
+              ? `Edit Node — ${siteStatDrawer.data?.site}`
+              : `Portal Telemetry — ${siteStatDrawer.data?.site}`
         }
         description="Cross-portal syndication metrics, page views, and simulcast registrations"
         width={500}
@@ -8982,7 +9493,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSaveSiteStatDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form noValidate onSubmit={handleSaveSiteStatDrawer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <FormField label="Portal Domain *" required>
               <input
                 type="text"
@@ -9048,7 +9559,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="High Bid ($)">
                 <input
                   type="number"
-                  step="50"
+                  step="any"
                   value={drawerSiteHighBid}
                   onChange={(e) => setDrawerSiteHighBid(e.target.value)}
                   className="catalog-search-input"
@@ -9060,7 +9571,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               <FormField label="Max Bid ($)">
                 <input
                   type="number"
-                  step="50"
+                  step="any"
                   value={drawerSiteMaxBid}
                   onChange={(e) => setDrawerSiteMaxBid(e.target.value)}
                   className="catalog-search-input"
@@ -9205,7 +9716,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         description="Verify or adjust hammer price, successful bidder, and sale status in Supabase"
         width={540}
       >
-        <form onSubmit={handleSaveDrawerClerking} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <form noValidate onSubmit={handleSaveDrawerClerking} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
             <FormField label="Lot Number">
               <input
@@ -9241,9 +9752,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             />
           </FormField>
 
-          <FormField label="Seller / Consignor">
+          <FormField label="Sold To (Buyer)">
             <input
               type="text"
+              placeholder="Buyer name..."
               value={drawerClerkSeller}
               onChange={(e) => setDrawerClerkSeller(e.target.value)}
               className="catalog-search-input"
@@ -9255,7 +9767,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             <FormField label="Hammer Price ($)">
               <input
                 type="number"
-                step="10"
+                step="any"
                 value={drawerClerkHammerPrice}
                 onChange={(e) => setDrawerClerkHammerPrice(e.target.value)}
                 className="catalog-search-input"
@@ -9303,8 +9815,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         title={deleteConfirm.title}
-        message={`Are you sure you want to delete ${deleteConfirm.label}? This action will permanently remove the record from Supabase.`}
-        confirmLabel={deleteConfirm.isLoading ? 'Deleting...' : 'Delete Permanently'}
+        message={
+          deleteConfirm.entityType === 'lot'
+            ? `Are you sure you want to delete this lot (${deleteConfirm.label})?`
+            : `Are you sure you want to delete ${deleteConfirm.label}? This action will permanently remove the record from Supabase.`
+        }
+        confirmLabel={deleteConfirm.isLoading ? 'Deleting...' : 'Delete'}
         cancelLabel="Cancel"
         variant="danger"
         onConfirm={handleExecuteDelete}

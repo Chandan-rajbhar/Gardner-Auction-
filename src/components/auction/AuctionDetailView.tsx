@@ -209,7 +209,7 @@ const AuctionDetailContent: React.FC<{
     }
   };
 
-  if (isLoading || !auction) {
+  if (isLoading && !auction) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, color: 'var(--text-muted)' }}>
         Loading auction details...

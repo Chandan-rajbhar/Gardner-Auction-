@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, useCallback } from 'react';
 import { AuctionDetail, FeaturedImage, AuctionLink, AuctionExpense } from '../types/auctionDetail';
-import { auctionService } from '../services/auctionService';
+import { auctionService, createEmptyAuctionDetail } from '../services/auctionService';
 
 interface ValidationErrors {
   name?: string;
@@ -214,6 +214,9 @@ interface AuctionDetailContextType {
 
 const AuctionDetailContext = createContext<AuctionDetailContextType | undefined>(undefined);
 
+// Global in-memory cache for instant rendering without loading screens on refresh/re-entry
+const auctionMemoryCache = new Map<string, AuctionDetail>();
+
 export const AuctionDetailProvider: React.FC<{
   auctionId: string;
   children: React.ReactNode;
@@ -221,8 +224,16 @@ export const AuctionDetailProvider: React.FC<{
   onSavedError?: (err: string) => void;
   initialLots?: any[];
 }> = ({ auctionId, children, onSavedSuccess, onSavedError, initialLots }) => {
-  const [state, dispatch] = useReducer(auctionDetailReducer, initialState);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedAuction = auctionId ? auctionMemoryCache.get(auctionId) : null;
+  const initialData = cachedAuction || (auctionId ? createEmptyAuctionDetail({ id: auctionId }) : null);
+
+  const [state, dispatch] = useReducer(auctionDetailReducer, {
+    data: initialData,
+    isDirty: false,
+    errors: {}
+  });
+  // Never start as blocking true - render available layout immediately
+  const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
 
@@ -232,19 +243,23 @@ export const AuctionDetailProvider: React.FC<{
       setLoadError(null);
       return;
     }
-    setIsLoading(true);
+    // Only set loading if there is completely no data at all
+    if (!state.data && !auctionMemoryCache.has(auctionId)) {
+      setIsLoading(true);
+    }
     setLoadError(null);
     try {
       const data = await auctionService.getAuctionById(auctionId);
       if (data) {
+        auctionMemoryCache.set(auctionId, data);
         dispatch({ type: 'SET_AUCTION', payload: data });
-        setLoadError(null);
-      } else {
         setLoadError(null);
       }
     } catch (e: any) {
-      console.error('Failed to load auction detail:', e);
-      setLoadError(e?.message || 'Failed to load auction details.');
+      console.warn('[AuctionDetailContext] Background refresh error:', e);
+      if (!state.data) {
+        setLoadError(e?.message || 'Failed to load auction details.');
+      }
     } finally {
       setIsLoading(false);
     }

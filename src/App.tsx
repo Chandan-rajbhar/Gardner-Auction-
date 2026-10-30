@@ -112,7 +112,9 @@ const AuctionDaySection: React.FC<{
   onSelectAuction,
   onNavigateReports
 }) => {
-  const [currentTab, setCurrentTab] = useState<AuctionDaySubTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<AuctionDaySubTab>(() => {
+    return (typeof window !== 'undefined' && window.location.pathname.includes('live_clerking')) ? 'clerking' : 'dashboard';
+  });
   const [isLiveRostrumActive, setIsLiveRostrumActive] = useState<boolean>(false);
 
   return (

@@ -180,6 +180,7 @@ export const FormModal: React.FC<FormModalProps> = ({
         {onSubmit ? (
           <form 
             onSubmit={onSubmit} 
+            noValidate
             style={{ 
               display: 'flex', 
               flexDirection: 'column', 
