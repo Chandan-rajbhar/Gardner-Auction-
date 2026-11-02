@@ -54,6 +54,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   // Keep reference of external ID to avoid overriding user selection of 'all'
   const prevExternalIdRef = useRef(externalSelectedAuctionId);
 
+  // Sync dbAuctions when availableAuctions prop updates
+  useEffect(() => {
+    if (availableAuctions && availableAuctions.length > 0) {
+      setDbAuctions(availableAuctions);
+    }
+  }, [availableAuctions]);
+
   // Sync internal auction ID ONLY if external prop explicitly changed from the parent
   useEffect(() => {
     if (externalSelectedAuctionId && externalSelectedAuctionId !== prevExternalIdRef.current) {
@@ -119,53 +126,72 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     return availableAuctions;
   }, [dbAuctions, availableAuctions]);
 
-  // Target auction details for currently active filter
-  const currentTargetAuction = activeAuctionId === 'all'
-    ? null
-    : (allAuctionsList.find(a => a.id === activeAuctionId) || (auction?.id === activeAuctionId ? auction : null));
+  const allAuctionsListRef = useRef(allAuctionsList);
+  allAuctionsListRef.current = allAuctionsList;
+
+  const auctionPropRef = useRef(auction);
+  auctionPropRef.current = auction;
+
+  const requestIdRef = useRef<number>(0);
 
   // Fetch report analytics dynamically from Supabase
   const loadAnalytics = useCallback(async (isSilent = false) => {
+    const currentReqId = ++requestIdRef.current;
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
     setError(null);
 
+    const list = allAuctionsListRef.current;
+    const parentAuction = auctionPropRef.current;
+    const targetAuction = activeAuctionId === 'all'
+      ? null
+      : (list.find(a => a.id === activeAuctionId) || (parentAuction?.id === activeAuctionId ? parentAuction : null));
+
     try {
       const data = await reportService.getReportAnalytics(
         activeAuctionId === 'all' ? null : activeAuctionId, 
-        currentTargetAuction
+        targetAuction
       );
-      setAnalytics(data);
+      if (currentReqId === requestIdRef.current) {
+        setAnalytics(data);
+      }
     } catch (err) {
-      console.error('[ReportsView] Error loading analytics from Supabase:', err);
-      setError(err instanceof Error ? err.message : 'Failed to retrieve reports data from database.');
+      if (currentReqId === requestIdRef.current) {
+        console.error('[ReportsView] Error loading analytics from Supabase:', err);
+        setError(err instanceof Error ? err.message : 'Failed to retrieve reports data from database.');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentReqId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [activeAuctionId, currentTargetAuction]);
+  }, [activeAuctionId]);
+
+  const loadAnalyticsRef = useRef(loadAnalytics);
+  loadAnalyticsRef.current = loadAnalytics;
 
   // Initial load and on auction selection change
   useEffect(() => {
     loadAnalytics();
   }, [loadAnalytics]);
 
-  // Subscribe to real-time database updates from Supabase
+  // Subscribe to real-time database updates from Supabase (mounted once)
   useEffect(() => {
     const unsubscribe = reportService.subscribeToReportChanges(() => {
-      loadAnalytics(true);
+      loadAnalyticsRef.current(true);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [loadAnalytics]);
+  }, []);
 
   // Handle Auction Filter Change via shadcn Select
   const handleAuctionChange = (newAuctionId: string) => {
     setActiveAuctionId(newAuctionId);
+    prevExternalIdRef.current = newAuctionId;
     if (onSelectAuction && newAuctionId !== 'all') {
-      prevExternalIdRef.current = newAuctionId;
       onSelectAuction(newAuctionId);
     }
   };

@@ -95,70 +95,59 @@ class ReportService {
       }
     }
 
-    // 1. Fetch Lots from Supabase
+    // 1-7. Construct queries for Supabase tables
     let lotsQuery = this.client
       .from('lots')
       .select('*')
       .order('lot_number', { ascending: true });
 
+    let bidsQuery = this.client.from('bids').select('*');
+    let regQuery = this.client.from('bidder_registrations').select('*');
+    let altQuery = this.client.from('alternate_bids').select('*');
+    let invQuery = this.client.from('invoices').select('*');
+    let sellerQuery = this.client.from('seller_settlements').select('*');
+    let synQuery = this.client.from('hibid_syndication_stats').select('*');
+
     if (!isAllAuctions) {
       lotsQuery = lotsQuery.eq('auction_id', auctionId);
+      bidsQuery = bidsQuery.eq('auction_id', auctionId);
+      regQuery = regQuery.eq('auction_id', auctionId);
+      altQuery = altQuery.eq('auction_id', auctionId);
+      invQuery = invQuery.eq('auction_id', auctionId);
+      sellerQuery = sellerQuery.eq('auction_id', auctionId);
+      synQuery = synQuery.eq('auction_id', auctionId);
     }
 
-    const { data: rawLotsData, error: lotsError } = await lotsQuery;
+    // Execute all queries in parallel for high performance
+    const [
+      { data: rawLotsData, error: lotsError },
+      { data: rawBidsData },
+      { data: rawRegData },
+      { data: rawAltData },
+      { data: rawInvData },
+      { data: rawSellerData },
+      { data: rawSynData }
+    ] = await Promise.all([
+      lotsQuery,
+      bidsQuery,
+      regQuery,
+      altQuery,
+      invQuery,
+      sellerQuery,
+      synQuery
+    ]);
+
     if (lotsError) {
       console.error('[reportService] Error fetching lots:', lotsError.message);
       throw new Error(`Failed to fetch auction lots: ${lotsError.message}`);
     }
 
     const rawLots: LotItem[] = (rawLotsData || []).map((row: DBLotRow) => dbToLotItem(row));
-
-    // 2. Fetch Bids for Channel Engagement
-    let bidsQuery = this.client.from('bids').select('*');
-    if (!isAllAuctions) {
-      bidsQuery = bidsQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawBidsData } = await bidsQuery;
     const bids = rawBidsData || [];
-
-    // 3. Fetch Bidder Registrations for Channel Activity
-    let regQuery = this.client.from('bidder_registrations').select('*');
-    if (!isAllAuctions) {
-      regQuery = regQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawRegData } = await regQuery;
     const registrations = rawRegData || [];
-
-    // 4. Fetch Alternate Bids (Phone / Absentee / Floor)
-    let altQuery = this.client.from('alternate_bids').select('*');
-    if (!isAllAuctions) {
-      altQuery = altQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawAltData } = await altQuery;
     const alternateBids = rawAltData || [];
-
-    // 5. Fetch Invoices for Settlement Readiness
-    let invQuery = this.client.from('invoices').select('*');
-    if (!isAllAuctions) {
-      invQuery = invQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawInvData } = await invQuery;
     const invoices = rawInvData || [];
-
-    // 6. Fetch Seller Settlements
-    let sellerQuery = this.client.from('seller_settlements').select('*');
-    if (!isAllAuctions) {
-      sellerQuery = sellerQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawSellerData } = await sellerQuery;
     const sellerSettlements = rawSellerData || [];
-
-    // 7. Fetch HiBid Syndication Stats for Channel Engagement
-    let synQuery = this.client.from('hibid_syndication_stats').select('*');
-    if (!isAllAuctions) {
-      synQuery = synQuery.eq('auction_id', auctionId);
-    }
-    const { data: rawSynData } = await synQuery;
     const syndicationStats = rawSynData || [];
 
     // =========================================================================
@@ -184,9 +173,9 @@ class ReportService {
       : (totalLotsCount > 0 ? 0 : null);
 
     // Hammer vs Low Estimate Ratio:
-    // "Calculate eligible hammer sales against valid low estimates, excluding invalid or zero estimates."
+    // Calculates eligible hammer sales against valid low estimates (with starting bid fallback when estimate is uncataloged)
     const soldWithValidLowEstimate = soldLots.filter(l => {
-      const lowEst = Number(l.estimateLow) || 0;
+      const lowEst = Number(l.estimateLow) || Number(l.startingBid) || Number(l.reservePrice) || 0;
       const hammer = Number(l.hammerPrice || l.currentBid) || 0;
       return lowEst > 0 && hammer > 0;
     });
@@ -200,7 +189,7 @@ class ReportService {
         0
       );
       const totalLowEstimate = soldWithValidLowEstimate.reduce(
-        (sum, l) => sum + (Number(l.estimateLow) || 0), 
+        (sum, l) => sum + (Number(l.estimateLow) || Number(l.startingBid) || Number(l.reservePrice) || 0), 
         0
       );
       if (totalLowEstimate > 0) {
@@ -363,8 +352,8 @@ class ReportService {
     const isTaxCompliant = taxRate === 0;
 
     // Check Buyer's Premium separation terms
-    const bpCash = auctionData && auctionData.buyersPremiumCash !== undefined ? Number(targetAuction.buyersPremiumCash) : 15;
-    const bpCredit = auctionData && auctionData.buyersPremiumCredit !== undefined ? Number(targetAuction.buyersPremiumCredit) : 18;
+    const bpCash = auctionData && auctionData.buyersPremiumCash !== undefined ? Number(auctionData.buyersPremiumCash) : 15;
+    const bpCredit = auctionData && auctionData.buyersPremiumCredit !== undefined ? Number(auctionData.buyersPremiumCredit) : 18;
     const isBpSeparationValid = bpCash > 0 && bpCredit >= bpCash;
 
     // Check Consignor Reserve integrity: did all sold lots achieve >= reserve_price?

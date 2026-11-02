@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { ShadcnSelect, ShadcnSelectOption, ShadcnSelectProps } from './ShadcnSelect';
 
@@ -73,21 +73,23 @@ export const Select: React.FC<SelectProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
+  const handleValueChange = useCallback((v: string) => {
+    onValueChange(v);
+    setOpen(false);
+  }, [onValueChange]);
+
+  const contextValue = useMemo<SelectContextType>(() => ({
+    value,
+    onValueChange: handleValueChange,
+    open: disabled ? false : open,
+    setOpen: disabled ? () => {} : setOpen,
+    triggerRef,
+    selectedLabel,
+    setSelectedLabel
+  }), [value, handleValueChange, disabled, open, selectedLabel]);
+
   return (
-    <SelectContext.Provider
-      value={{
-        value,
-        onValueChange: (v) => {
-          onValueChange(v);
-          setOpen(false);
-        },
-        open: disabled ? false : open,
-        setOpen: disabled ? () => {} : setOpen,
-        triggerRef,
-        selectedLabel,
-        setSelectedLabel
-      }}
-    >
+    <SelectContext.Provider value={contextValue}>
       <div 
         ref={containerRef} 
         className={`shadcn-select-root ${open ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''}`}
@@ -259,15 +261,17 @@ export const SelectItem: React.FC<SelectItemProps> = ({
 
   const isSelected = ctx.value === value;
 
+  const { setSelectedLabel, selectedLabel } = ctx;
+
   // Sync selected label to context if this item is selected
   useEffect(() => {
     if (isSelected) {
       const text = getNodeText(children);
-      if (text) {
-        ctx.setSelectedLabel(text);
+      if (text && selectedLabel !== text) {
+        setSelectedLabel(text);
       }
     }
-  }, [isSelected, children, ctx]);
+  }, [isSelected, children, selectedLabel, setSelectedLabel]);
 
   return (
     <div
