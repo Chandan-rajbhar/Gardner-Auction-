@@ -34,6 +34,7 @@ import { LogsView } from './components/views/LogsView';
 import { NotificationsView } from './components/views/NotificationsView';
 import { SettingsView } from './components/views/SettingsView';
 import { ProfileView } from './components/views/ProfileView';
+import { EmailListView } from './components/views/EmailListView';
 import { CheckCircle2, RefreshCw, X, Radio, ArrowLeft } from 'lucide-react';
 import { recordBidToSupabase, supabase } from './lib/supabase';
 import { lotsService } from './services/lotsService';
@@ -412,6 +413,8 @@ const AdminConsole: React.FC = () => {
         setCurrentSection('settings');
       } else if (path === '/profile') {
         setCurrentSection('profile');
+      } else if (path === '/email_list' || path === '/email-list') {
+        setCurrentSection('email_list');
       }
     };
 
@@ -1013,6 +1016,10 @@ const AdminConsole: React.FC = () => {
 
           {currentSection === 'profile' && (
             <ProfileView onNavigate={handleNavigateSection} />
+          )}
+
+          {currentSection === 'email_list' && (
+            <EmailListView />
           )}
         </main>
       </div>

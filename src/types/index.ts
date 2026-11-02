@@ -208,7 +208,8 @@ export type NavigationSection =
   | 'logs'
   | 'notifications'
   | 'settings'
-  | 'profile';
+  | 'profile'
+  | 'email_list';
 
 export type NotificationType = 
   | 'auction'

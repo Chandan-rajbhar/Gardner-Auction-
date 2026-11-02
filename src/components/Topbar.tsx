@@ -35,6 +35,7 @@ const getSectionTitle = (section?: NavigationSection): string => {
     case 'notifications': return 'Notifications';
     case 'settings': return 'Settings & Portal Config';
     case 'profile': return 'Administrator Profile';
+    case 'email_list': return 'Email List Management';
     default: return 'Dashboard';
   }
 };

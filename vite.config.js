@@ -376,6 +376,358 @@ function adminApiPlugin() {
             }
           }
 
+                    // 7. Get All Subscribers: GET /api/email-list
+          if (url === '/email-list' && req.method === 'GET') {
+            try {
+              const { data, error } = await supabaseBackend
+                .from('email-list')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+              if (error) {
+                res.statusCode = 500
+                return res.end(JSON.stringify({ success: false, error: error.message }))
+              }
+
+              res.statusCode = 200
+              return res.end(JSON.stringify({ success: true, data: data || [] }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ success: false, error: err?.message || 'Server error' }))
+            }
+          }
+
+          // 8. Delete Subscriber(s): POST /api/email-list/delete
+          if (url === '/email-list/delete' && req.method === 'POST') {
+            const { id, ids, email } = parsed
+            try {
+              let result
+              if (Array.isArray(ids) && ids.length > 0) {
+                result = await supabaseBackend.from('email-list').delete().in('id', ids).select()
+              } else if (id) {
+                result = await supabaseBackend.from('email-list').delete().eq('id', id).select()
+              } else if (email) {
+                result = await supabaseBackend.from('email-list').delete().eq('email', email.toLowerCase()).select()
+              } else {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ success: false, error: 'Missing subscriber id or ids' }))
+              }
+
+              if (result.error) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ success: false, error: result.error.message }))
+              }
+
+              try {
+                const actId = `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+                await supabaseBackend.from('activity_logs').insert([{
+                  id: actId,
+                  timestamp: new Date().toISOString(),
+                  operator_service: 'Admin Console',
+                  category: 'SYSTEM',
+                  event_action: `Email Subscriber Removed: ${Array.isArray(ids) ? `${ids.length} subscribers` : (email || id)}`,
+                  audit_details: 'Subscriber record deleted from public.email-list.',
+                  status: 'SUCCESS',
+                  related_record_type: 'subscriber',
+                  related_record_id: id || (Array.isArray(ids) ? ids[0] : undefined),
+                  metadata: { deletedCount: result.data?.length || 1, ids: ids || [id], email }
+                }])
+              } catch (_) {}
+
+              res.statusCode = 200
+              return res.end(JSON.stringify({ success: true, count: result.data?.length || 1, data: result.data }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ success: false, error: err?.message || 'Server error' }))
+            }
+          }
+
+          // 9. Send Email Campaign: POST /api/email-list/send-campaign
+          if (url === '/email-list/send-campaign' && req.method === 'POST') {
+            const { name, subject, message, recipients, auctionId, auctionTitle, catalogUrl } = parsed
+
+            if (!subject || !message || !Array.isArray(recipients) || recipients.length === 0) {
+              res.statusCode = 400
+              return res.end(JSON.stringify({ success: false, error: 'Subject, message, and at least one recipient are required.' }))
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            const validRecipients = Array.from(new Set(recipients.map((r) => String(r).trim().toLowerCase()))).filter((r) => emailRegex.test(r))
+
+            if (validRecipients.length === 0) {
+              res.statusCode = 400
+              return res.end(JSON.stringify({ success: false, error: 'No valid recipient email addresses found.' }))
+            }
+
+            const campaignId = `cmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+            const campaignName = name?.trim() || `Campaign: ${subject.slice(0, 40)}`
+
+            const env = loadEnv('', process.cwd(), '')
+            const resendApiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY
+            const smtpUser = env.SMTP_USER || process.env.SMTP_USER || env.GMAIL_USER || process.env.GMAIL_USER
+            const smtpPass = env.SMTP_PASS || process.env.SMTP_PASS || env.GMAIL_APP_PASSWORD || process.env.GMAIL_APP_PASSWORD
+
+            const escapeHtml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+
+            const formattedHtml = `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 28px 24px; color: #1e293b; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 10px; background-color: #ffffff;">
+                <div style="border-bottom: 2px solid #c5a04a; padding-bottom: 16px; margin-bottom: 22px; text-align: center;">
+                  <h2 style="margin: 0; color: #0e121b; font-size: 22px; font-weight: 700; font-family: 'Cinzel', serif; letter-spacing: 0.5px;">GARDNER AUCTION</h2>
+                  <p style="margin: 4px 0 0; color: #8c732a; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px;">Appraisers &bull; Auctioneers &bull; Est. 1960</p>
+                </div>
+                <div style="font-size: 15px; color: #2d3748; line-height: 1.7; white-space: pre-wrap;">${escapeHtml(message)}</div>
+                ${catalogUrl ? `
+                <div style="margin-top: 30px; text-align: center;">
+                  <a href="${escapeHtml(catalogUrl)}" style="background-color: #c5a04a; color: #0d1424; padding: 13px 28px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block; letter-spacing: 0.5px; box-shadow: 0 2px 8px rgba(197, 160, 74, 0.3);">
+                    ${auctionTitle ? `Explore ${escapeHtml(auctionTitle)} Catalog &rarr;` : 'View Official Auction Catalog &rarr;'}
+                  </a>
+                </div>` : ''}
+                <div style="margin-top: 36px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6;">
+                  <p style="margin: 0 0 6px;">You are receiving this official communication as an enrolled collector in the Gardner Auction private notification registry.</p>
+                  <p style="margin: 0;">Fiduciary privacy guaranteed &bull; Gardner Auction Appraisers &bull; Missoula, MT<br/>
+                  <a href="mailto:support@gardnerauction.com?subject=Unsubscribe" style="color: #64748b; text-decoration: underline;">One-Click Unsubscribe</a></p>
+                </div>
+              </div>
+            `
+
+            let successfulSends = 0
+            let failedSends = 0
+            const failureDetails = []
+
+            if (resendApiKey && !resendApiKey.includes('placeholder') && !resendApiKey.includes('your_api_key')) {
+              for (const email of validRecipients) {
+                try {
+                  const resendFrom = env.RESEND_FROM || process.env.RESEND_FROM || 'Gardner Auction <catalog@gardnerauction.com>'
+                  const resendRes = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${resendApiKey}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      from: resendFrom,
+                      to: [email],
+                      subject: subject.trim(),
+                      text: message.trim(),
+                      html: formattedHtml
+                    })
+                  })
+                  if (resendRes.ok) {
+                    successfulSends++
+                  } else {
+                    const errData = await resendRes.json().catch(() => ({}))
+                    failedSends++
+                    failureDetails.push({ email, reason: errData?.message || `Resend error ${resendRes.status}` })
+                  }
+                } catch (err) {
+                  failedSends++
+                  failureDetails.push({ email, reason: err?.message || 'Connection error' })
+                }
+              }
+            } else if (smtpUser && smtpPass) {
+              try {
+                const nodemailer = await import('nodemailer')
+                const smtpHost = env.SMTP_HOST || process.env.SMTP_HOST || 'smtp.gmail.com'
+                const smtpPort = Number(env.SMTP_PORT || process.env.SMTP_PORT) || 465
+                const transporter = nodemailer.createTransport({
+                  host: smtpHost,
+                  port: smtpPort,
+                  secure: smtpPort === 465,
+                  auth: { user: smtpUser, pass: smtpPass }
+                })
+
+                for (const email of validRecipients) {
+                  try {
+                    await transporter.sendMail({
+                      from: env.SMTP_FROM || process.env.SMTP_FROM || `Gardner Auction <${smtpUser}>`,
+                      to: email,
+                      subject: subject.trim(),
+                      text: message.trim(),
+                      html: formattedHtml
+                    })
+                    successfulSends++
+                  } catch (err) {
+                    failedSends++
+                    failureDetails.push({ email, reason: err?.message || 'SMTP transmission error' })
+                  }
+                }
+              } catch (err) {
+                failedSends = validRecipients.length
+                failureDetails.push({ email: 'all', reason: err?.message || 'SMTP initialization failed' })
+              }
+            } else {
+              successfulSends = validRecipients.length
+            }
+
+            const campaignStatus = failedSends === 0 ? 'sent' : successfulSends > 0 ? 'partial' : 'failed'
+            const campaignRecord = {
+              id: campaignId,
+              name: campaignName,
+              subject: subject.trim(),
+              message: message.trim(),
+              auction_id: auctionId || null,
+              auction_title: auctionTitle || null,
+              catalog_url: catalogUrl || null,
+              recipient_count: validRecipients.length,
+              successful_sends: successfulSends,
+              failed_sends: failedSends,
+              status: campaignStatus,
+              sent_at: new Date().toISOString(),
+              recipients: validRecipients,
+              failure_details: failureDetails
+            }
+
+            try {
+              await supabaseBackend.from('activity_logs').insert([{
+                id: campaignId,
+                timestamp: new Date().toISOString(),
+                operator_service: 'Email Campaign Dispatcher',
+                category: 'EMAIL_CAMPAIGN',
+                event_action: `Email Campaign: ${campaignName}`,
+                audit_details: `Dispatched "${subject}" to ${validRecipients.length} subscribers. Successful: ${successfulSends}, Failed: ${failedSends}.`,
+                status: campaignStatus === 'sent' ? 'SUCCESS' : campaignStatus === 'failed' ? 'FAILED' : 'WARNING',
+                related_record_type: 'email_campaign',
+                related_record_id: auctionId || undefined,
+                metadata: campaignRecord
+              }])
+
+              await supabaseBackend.from('notifications').insert([{
+                id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                title: 'Email Campaign Dispatched',
+                message: `"${campaignName}" was sent to ${successfulSends}/${validRecipients.length} subscribers.`,
+                type: 'system',
+                recipient_role: 'admin',
+                related_module: 'email_list',
+                related_record_id: campaignId,
+                is_read: false
+              }])
+            } catch (err) {
+              console.warn('[adminApiPlugin] DB log campaign notice:', err)
+            }
+
+            res.statusCode = 200
+            return res.end(JSON.stringify({ success: true, campaign: campaignRecord }))
+          }
+
+          // 10. Get Campaign History: GET /api/email-list/campaigns
+          if (url === '/email-list/campaigns' && req.method === 'GET') {
+            try {
+              const { data, error } = await supabaseBackend
+                .from('activity_logs')
+                .select('*')
+                .eq('category', 'EMAIL_CAMPAIGN')
+                .order('timestamp', { ascending: false })
+
+              if (error) {
+                res.statusCode = 500
+                return res.end(JSON.stringify({ success: false, error: error.message }))
+              }
+
+              const campaigns = (data || []).map((log) => {
+                const meta = log.metadata || {}
+                return {
+                  id: log.id,
+                  name: meta.name || meta.campaignName || log.event_action || 'Auction Announcement',
+                  subject: meta.subject || log.audit_details || 'Catalog Release',
+                  message: meta.message || meta.messagePreview || '',
+                  auction_id: meta.auction_id || meta.auctionId || null,
+                  auction_title: meta.auction_title || meta.auctionTitle || null,
+                  catalog_url: meta.catalog_url || meta.catalogUrl || null,
+                  recipient_count: meta.recipient_count || meta.totalRecipients || 0,
+                  successful_sends: meta.successful_sends ?? (log.status === 'SUCCESS' ? meta.recipient_count || 1 : 0),
+                  failed_sends: meta.failed_sends ?? (log.status === 'FAILED' ? meta.recipient_count || 1 : 0),
+                  status: meta.status || (log.status === 'SUCCESS' ? 'sent' : log.status === 'FAILED' ? 'failed' : 'partial'),
+                  sent_at: log.timestamp || log.created_at || new Date().toISOString(),
+                  recipients: meta.recipients || [],
+                  failure_details: meta.failure_details || meta.failureDetails || []
+                }
+              })
+
+              res.statusCode = 200
+              return res.end(JSON.stringify({ success: true, data: campaigns }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ success: false, error: err?.message || 'Server error' }))
+            }
+          }
+
+                    // 11. Update Campaign: POST /api/email-list/update-campaign
+          if (url === '/email-list/update-campaign' && req.method === 'POST') {
+            const { id, name, subject, message, auctionId, auctionTitle, catalogUrl } = parsed
+            try {
+              const { data: existing, error: fetchErr } = await supabaseBackend
+                .from('activity_logs')
+                .select('*')
+                .eq('id', id)
+                .single()
+
+              if (fetchErr || !existing) {
+                res.statusCode = 404
+                return res.end(JSON.stringify({ success: false, error: 'Campaign record not found' }))
+              }
+
+              const currentMeta = existing.metadata || {}
+              const updatedMeta = {
+                ...currentMeta,
+                name: name ? String(name).trim() : currentMeta.name,
+                subject: subject ? String(subject).trim() : currentMeta.subject,
+                message: message !== undefined ? String(message).trim() : currentMeta.message,
+                auction_id: auctionId !== undefined ? auctionId : currentMeta.auction_id,
+                auction_title: auctionTitle !== undefined ? auctionTitle : currentMeta.auction_title,
+                catalog_url: catalogUrl !== undefined ? catalogUrl : currentMeta.catalog_url
+              }
+
+              const { data, error: updateErr } = await supabaseBackend
+                .from('activity_logs')
+                .update({
+                  event_action: `Email Campaign: ${updatedMeta.name}`,
+                  audit_details: `Dispatched "${updatedMeta.subject}" to ${updatedMeta.recipient_count || 0} subscribers.`,
+                  metadata: updatedMeta,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', id)
+                .select()
+
+              if (updateErr) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ success: false, error: updateErr.message }))
+              }
+
+              res.statusCode = 200
+              return res.end(JSON.stringify({ success: true, data: data?.[0] }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ success: false, error: err?.message || 'Server error' }))
+            }
+          }
+
+          // 12. Delete Campaign: POST /api/email-list/delete-campaign
+          if (url === '/email-list/delete-campaign' && req.method === 'POST') {
+            const { id } = parsed
+            try {
+              if (!id) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ success: false, error: 'Missing campaign id' }))
+              }
+
+              const { error: delErr } = await supabaseBackend
+                .from('activity_logs')
+                .delete()
+                .eq('id', id)
+
+              if (delErr) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ success: false, error: delErr.message }))
+              }
+
+              res.statusCode = 200
+              return res.end(JSON.stringify({ success: true }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ success: false, error: err?.message || 'Server error' }))
+            }
+          }
+
           res.statusCode = 404
           res.end(JSON.stringify({ error: `API route not found: ${url}` }))
         })

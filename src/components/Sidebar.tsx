@@ -19,11 +19,13 @@ import {
   LogOut,
   ChevronDown,
   User,
-  Gavel
+  Gavel,
+  Mail
 } from 'lucide-react';
 import { NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { notificationService } from '../services/notificationService';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   currentSection: NavigationSection;
@@ -50,6 +52,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+
+    const [subscribersCount, setSubscribersCount] = useState<number>(0);
+
+  // Sync email subscribers count from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCount = async () => {
+      try {
+        const { count, error } = await supabase.from('email-list').select('*', { count: 'exact', head: true });
+        if (!error && count !== null && isMounted) {
+          setSubscribersCount(count);
+        }
+      } catch (err) {
+        console.warn('[Sidebar] Error fetching subscribers count:', err);
+      }
+    };
+    fetchCount();
+
+    const handleLocalChange = () => fetchCount();
+    window.addEventListener('gardner_email_list_changed', handleLocalChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('gardner_email_list_changed', handleLocalChange);
+    };
+  }, []);
 
   // Sync unread notifications count from Supabase
   useEffect(() => {
@@ -115,6 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ElementType;
     badge?: string | number;
   }> = [
+      { id: 'email_list', label: 'Email List', icon: Mail, badge: subscribersCount > 0 ? subscribersCount : undefined },
       {
         id: 'notifications',
         label: 'Notifications',
