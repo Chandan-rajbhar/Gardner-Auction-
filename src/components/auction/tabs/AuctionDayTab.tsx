@@ -677,7 +677,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           if (fresh && fresh.length > 0) {
             setDeposits(fresh.filter(d => !isMockDepositItem(d)));
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
   }, [isManageDepositsModalOpen, activeEventId, selectedAuctionId, auction?.id]);
@@ -1006,10 +1006,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     // 1. If we have a paddle or extracted bidder number, look up actual customer in registrations
     if (extractedPaddle) {
       const searchPaddle = extractedPaddle.toLowerCase();
-      const matchedReg = allBiddersList.find(r => 
+      const matchedReg = allBiddersList.find(r =>
         r.bidCardNumber.toLowerCase() === searchPaddle ||
         (r as any).paddleNumber?.toLowerCase() === searchPaddle
-      ) || registrations.find(r => 
+      ) || registrations.find(r =>
         r.bidCardNumber.toLowerCase() === searchPaddle ||
         r.paddleNumber?.toLowerCase() === searchPaddle
       );
@@ -2831,7 +2831,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             const targetEventId = activeEventId || selectedAuctionId || auction?.id;
             const auctionCode = supabaseAuctions.find(a => a.id === targetEventId)?.code || auction?.code || 'AUC-001';
             await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
-          } catch (_) {}
+          } catch (_) { }
           showToast('success', 'Deposit Deleted', `Removed deposit record for ${deleteConfirm.label}.`);
         } else {
           showToast('error', 'Error', 'Could not delete deposit record.');
@@ -2858,7 +2858,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
             await settlementService.syncSettlementsFromSoldLots(targetEventId, auctionCode);
             const refreshedDeps = await auctionDayService.getDeposits(targetEventId);
             if (refreshedDeps) setDeposits(refreshedDeps);
-          } catch (_) {}
+          } catch (_) { }
           showToast('success', 'Lot Deleted', 'Lot deleted successfully.');
         } else {
           showToast('error', 'Error', res.error || 'Failed to delete lot from Supabase.');
@@ -3052,7 +3052,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           if (!depErr && depRows && depRows.length > 0) {
             const pLower = (finalPaddle || '').trim().toLowerCase();
             const bLower = (resolvedBuyerName || clerkSeller || '').trim().toLowerCase();
-            const matched = depRows.filter((d: any) => 
+            const matched = depRows.filter((d: any) =>
               (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
               (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
             );
@@ -3420,7 +3420,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           if (depRows && depRows.length > 0) {
             const pLower = (paddle || '').trim().toLowerCase();
             const bLower = (buyerName || '').trim().toLowerCase();
-            const matched = depRows.filter((d: any) => 
+            const matched = depRows.filter((d: any) =>
               (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
               (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
             );
@@ -3431,7 +3431,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               return sum + rem;
             }, 0);
           }
-        } catch (_) {}
+        } catch (_) { }
 
         if (availableFunds < totalPurchaseAmount) {
           setIsSavingDrawerClerking(false);
@@ -3494,7 +3494,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   };
 
-// Full-page loading screen removed to enable instant rendering on refresh
+  // Full-page loading screen removed to enable instant rendering on refresh
 
   if (loadError && !auction) {
     return (
@@ -5349,8 +5349,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 {selectedClerkLot
                   ? `Active Lot #${selectedClerkLot.lotNumber} — ${selectedClerkLot.title}`
                   : auctionLots.length > 0
-                  ? `Active Lot #${clerkLotNumber || auctionLots[0].lotNumber} — ${auctionLots[0].title}`
-                  : 'No lots found for this auction event'}
+                    ? `Active Lot #${clerkLotNumber || auctionLots[0].lotNumber} — ${auctionLots[0].title}`
+                    : 'No lots found for this auction event'}
               </p>
             </div>
 
@@ -6184,9 +6184,9 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           SUB-TAB 4: ALTERNATE BIDS (Exact Visual Match to AF360 Reference)
           ========================================================================= */}
       {currentTab === 'alternate-bids' && (
-        <div className="card-luxury" style={{ padding: 20, background: '#ffffff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-            <div>
+        <div className="card-luxury alt-bids-card">
+          <div className="alt-bids-header-container">
+            <div className="alt-bids-title-wrap">
               <h3 className="font-serif" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
                 Alternate Bids
               </h3>
@@ -6195,9 +6195,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               </p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div className="catalog-search-wrapper" style={{ width: 220 }}>
-                <Search size={14} className="catalog-search-icon" />
+            <div className="alt-bids-toolbar">
+              {/* Search lot, bidder... */}
+              <div className="alt-bids-search-wrapper">
+                <Search size={14} className="alt-bids-search-icon" />
                 <input
                   type="text"
                   placeholder="Search lot, bidder..."
@@ -6206,81 +6207,78 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                     setAltBidSearch(e.target.value);
                     setAltBidsPage(1);
                   }}
-                  className="catalog-search-input"
-                  style={{ height: 34, fontSize: 12.5 }}
+                  className="catalog-search-input alt-bids-search-input"
                 />
+                {altBidSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAltBidSearch('');
+                      setAltBidsPage(1);
+                    }}
+                    className="alt-bids-search-clear"
+                    title="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
               </div>
 
-              <ShadcnSelect
-                value={altBidTypeFilter}
-                onChange={(val) => {
-                  setAltBidTypeFilter(val);
-                  setAltBidsPage(1);
-                }}
-                size="sm"
-                className="w-32"
-                options={[
-                  { value: 'all', label: 'All Types' },
-                  { value: 'phone', label: 'Phone' },
-                  { value: 'absentee', label: 'Absentee' },
-                  { value: 'floor', label: 'Floor' }
-                ]}
-              />
+              {/* Filters group (Type & Status) */}
+              <div className="alt-bids-filters-group">
+                <div className="alt-bids-select-wrap alt-bids-select-type">
+                  <ShadcnSelect
+                    value={altBidTypeFilter}
+                    onChange={(val) => {
+                      setAltBidTypeFilter(val);
+                      setAltBidsPage(1);
+                    }}
+                    size="sm"
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'all', label: 'All Types' },
+                      { value: 'phone', label: 'Phone' },
+                      { value: 'absentee', label: 'Absentee' },
+                      { value: 'floor', label: 'Floor' }
+                    ]}
+                  />
+                </div>
 
-              <ShadcnSelect
-                value={altBidStatusFilter}
-                onChange={(val) => {
-                  setAltBidStatusFilter(val);
-                  setAltBidsPage(1);
-                }}
-                size="sm"
-                className="w-36"
-                options={[
-                  { value: 'all', label: 'All Statuses' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'executed', label: 'Executed' },
-                  { value: 'rejected', label: 'Rejected' },
-                  { value: 'cancelled', label: 'Cancelled' }
-                ]}
-              />
+                <div className="alt-bids-select-wrap alt-bids-select-status">
+                  <ShadcnSelect
+                    value={altBidStatusFilter}
+                    onChange={(val) => {
+                      setAltBidStatusFilter(val);
+                      setAltBidsPage(1);
+                    }}
+                    size="sm"
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'active', label: 'Active' },
+                      { value: 'executed', label: 'Executed' },
+                      { value: 'rejected', label: 'Rejected' },
+                      { value: 'cancelled', label: 'Cancelled' }
+                    ]}
+                  />
+                </div>
+              </div>
 
-              {/* Import Alternate Bids button */}
-              <button
-                type="button"
-                onClick={() => {
-                  showToast('info', 'Import Alternate Bids', 'Alternate Bids CSV/Excel import template ready.');
-                  setIsAltBidModalOpen(true);
-                }}
-                className="btn btn-secondary"
-                style={{ fontSize: 12.5, fontWeight: 600, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                title="Import alternate bids"
-              >
-                <Download size={14} style={{ transform: 'rotate(180deg)' }} />
-                <span>Import Alternate Bids</span>
-              </button>
+              {/* Actions group (Import & Add buttons) */}
+              <div className="alt-bids-actions-wrap">
 
-              {/* Add Alternate Bids button */}
-              <button
-                type="button"
-                disabled={isAuctionClosed}
-                onClick={() => handleOpenAltBidDrawer('add')}
-                className="btn btn-gold"
-                style={{
-                  padding: '7px 16px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: isAuctionClosed ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-                id="btn-add-alternate-bid"
-                title={isAuctionClosed ? "Auction is closed. Order bids locked." : "Record new alternate order bid"}
-              >
-                <Plus size={15} />
-                <span>Add Alternate Bids</span>
-              </button>
+                <button
+                  type="button"
+                  disabled={isAuctionClosed}
+                  onClick={() => handleOpenAltBidDrawer('add')}
+                  className="btn btn-gold alt-bids-btn alt-bids-btn-add"
+                  id="btn-add-alternate-bid"
+                  title={isAuctionClosed ? "Auction is closed. Order bids locked." : "Record new alternate order bid"}
+                >
+                  <Plus size={15} />
+                  <span>Add Alternate Bids</span>
+                </button>
+              </div>
             </div>
           </div>
 

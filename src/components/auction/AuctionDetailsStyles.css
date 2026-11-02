@@ -1828,3 +1828,228 @@
   cursor: pointer;
 }
 
+
+
+/* =========================================================================
+   ALTERNATE BIDS MODULE: RESPONSIVE HEADER & SINGLE-LINE FILTERS TOOLBAR
+   ========================================================================= */
+
+.alt-bids-card {
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+.alt-bids-header-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 1440px) {
+  .alt-bids-header-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+}
+
+.alt-bids-title-wrap {
+  flex-shrink: 0;
+}
+
+.alt-bids-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 1025px) {
+  .alt-bids-toolbar {
+    flex-wrap: nowrap;
+  }
+}
+
+.alt-bids-search-wrapper {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 170px;
+  display: flex;
+  align-items: center;
+}
+
+.alt-bids-search-icon {
+  position: absolute;
+  left: 11px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.alt-bids-search-input {
+  width: 100%;
+  height: 34px !important;
+  padding: 0 28px 0 32px !important;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12.5px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.alt-bids-search-input:focus {
+  border-color: var(--ecomm-primary-gold, #c59b27);
+  box-shadow: 0 0 0 2px rgba(197, 155, 39, 0.18);
+}
+
+.alt-bids-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.alt-bids-search-clear:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+.alt-bids-filters-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.alt-bids-select-wrap {
+  flex-shrink: 0;
+}
+
+.alt-bids-select-wrap.alt-bids-select-type {
+  width: 130px;
+}
+
+.alt-bids-select-wrap.alt-bids-select-status {
+  width: 145px;
+}
+
+.alt-bids-select-wrap .shadcn-select-root {
+  width: 100%;
+}
+
+.alt-bids-select-wrap .shadcn-select-trigger {
+  height: 34px !important;
+  min-height: 34px !important;
+  font-size: 12.5px;
+  padding: 0 10px;
+  border-color: #cbd5e1;
+  border-radius: 6px;
+}
+
+.alt-bids-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.alt-bids-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 14px !important;
+  font-size: 12.5px !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.alt-bids-btn-add {
+  font-weight: 700;
+}
+
+/* Tablet Breakpoint (769px to 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .alt-bids-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .alt-bids-search-wrapper {
+    flex: 1 1 200px;
+  }
+  .alt-bids-actions-wrap {
+    margin-left: auto;
+  }
+}
+
+/* Mobile & Small Tablet (<= 768px) */
+@media (max-width: 768px) {
+  .alt-bids-card {
+    padding: 14px;
+  }
+  .alt-bids-header-container {
+    gap: 12px;
+  }
+  .alt-bids-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .alt-bids-search-wrapper {
+    width: 100%;
+    min-width: 100%;
+  }
+  .alt-bids-filters-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .alt-bids-select-wrap.alt-bids-select-type,
+  .alt-bids-select-wrap.alt-bids-select-status {
+    width: 100%;
+  }
+  .alt-bids-actions-wrap {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .alt-bids-actions-wrap > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Small Mobile (<= 480px) */
+@media (max-width: 480px) {
+  .alt-bids-actions-wrap {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
