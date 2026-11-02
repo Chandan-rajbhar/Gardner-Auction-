@@ -1157,7 +1157,8 @@ export const EmailListView: React.FC = () => {
               />
             </div>
 
-            {/* Optional Auction Selection via ShadcnSelect */}
+            {/* Optional Auction Selection via ShadcnSelect (Commented out as requested) */}
+            {/*
             <div className="elv-form-group">
               <label className="elv-form-label">
                 <span>Featured Auction (Optional)</span>
@@ -1172,6 +1173,7 @@ export const EmailListView: React.FC = () => {
                 fullWidth
               />
             </div>
+            */}
 
             {/* Optional Catalog URL */}
             <div className="elv-form-group">
