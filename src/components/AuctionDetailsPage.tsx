@@ -649,99 +649,81 @@ export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
             {/* Left Column (65%): Chronological Timeline & Terms of Sale */}
             <div className="g-dossier-stage-column">
 
-              {/* Block A: Visual Event Milestones & Schedule Timeline */}
+              {/* Block A: Complete Auction Schedule & Event Details */}
               {hasSchedule && (
-                <section className="g-dossier-block-card" aria-label="Auction Schedule and Event Timeline">
+                <section className="g-dossier-block-card" aria-label="Auction Schedule and Event Details">
                   <div className="g-block-header">
                     <div className="g-block-icon-wrap">
                       <Calendar size={18} />
                     </div>
                     <div>
                       <h2 className="g-block-title">Schedule &amp; Event Milestones</h2>
-                      <p className="g-block-subtitle">Chronological progression of auction inspection, bidding, and checkout</p>
+                      <p className="g-block-subtitle">Complete schedule for auction run, inspection preview, live bidding, and post-sale settlement</p>
                     </div>
                   </div>
 
-                  {/* Interactive Milestone Timeline */}
-                  <div className="g-timeline-flow">
-                    {/* Milestone 1: Run Period */}
+                  {/* Unified Event Schedule Grid */}
+                  <div className="g-schedule-grid">
+                    {/* 1. Auction Window */}
                     {dateRange && (
-                      <div className="g-timeline-node">
-                        <div className="g-timeline-marker">
-                          <span className="g-marker-dot active" />
-                          <div className="g-marker-line" />
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Auction Window</span>
+                          <h3 className="g-schedule-title">Official Auction Run</h3>
                         </div>
-                        <div className="g-timeline-content">
-                          <div className="g-node-header">
-                            <span className="g-node-phase">STAGE 1</span>
-                            <span className="g-node-title">Official Auction Run</span>
-                          </div>
-                          <div className="g-node-body">
-                            <span className="g-node-highlight">{dateRange}</span>
-                            {timezone && <span className="g-node-detail">Timezone: {timezone}</span>}
-                          </div>
+                        <div className="g-schedule-card-body">
+                          <div className="g-schedule-date-highlight">{dateRange}</div>
+                          {timezone && (
+                            <div className="g-schedule-meta-badge">
+                              <Globe size={12} />
+                              <span>Timezone: {timezone}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {/* Milestone 2: Inspection */}
+                    {/* 2. Exhibition & Preview */}
                     {previewTimes && (
-                      <div className="g-timeline-node">
-                        <div className="g-timeline-marker">
-                          <span className="g-marker-dot" />
-                          <div className="g-marker-line" />
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Exhibition &amp; Preview</span>
+                          <h3 className="g-schedule-title">Preview &amp; In-Person Inspection</h3>
                         </div>
-                        <div className="g-timeline-content">
-                          <div className="g-node-header">
-                            <span className="g-node-phase">STAGE 2</span>
-                            <span className="g-node-title">Preview &amp; In-Person Inspection</span>
-                          </div>
-                          <div className="g-node-body">
-                            <span className="g-node-text">{previewTimes}</span>
-                          </div>
+                        <div className="g-schedule-card-body">
+                          <p className="g-schedule-desc">{previewTimes}</p>
                         </div>
                       </div>
                     )}
 
-                    {/* Milestone 3: Bidding & Soft Close */}
+                    {/* 3. Simulcast Bidding & Closing Session */}
                     {(sessionTimes || Boolean(softCloseSeconds)) && (
-                      <div className="g-timeline-node">
-                        <div className="g-timeline-marker">
-                          <span className="g-marker-dot pulse" />
-                          <div className="g-marker-line" />
+                      <div className="g-schedule-card is-bidding">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Simulcast Bidding &amp; Closing</span>
+                          <h3 className="g-schedule-title">Simulcast Bidding &amp; Closing Session</h3>
                         </div>
-                        <div className="g-timeline-content">
-                          <div className="g-node-header">
-                            <span className="g-node-phase">STAGE 3</span>
-                            <span className="g-node-title">Simulcast Bidding &amp; Closing Session</span>
-                          </div>
-                          <div className="g-node-body">
-                            {sessionTimes && <span className="g-node-text">{sessionTimes}</span>}
-                            {Boolean(softCloseSeconds) && (
-                              <div className="g-softclose-tag">
-                                <Clock size={13} />
-                                <span>Soft-Close Protection: {softCloseSeconds} Seconds Extended Bidding Window</span>
-                              </div>
-                            )}
-                          </div>
+                        <div className="g-schedule-card-body">
+                          {sessionTimes && <p className="g-schedule-desc">{sessionTimes}</p>}
+                          {Boolean(softCloseSeconds) && (
+                            <div className="g-schedule-softclose-pill">
+                              <Clock size={12} />
+                              <span>Soft-Close Protection: {softCloseSeconds} Seconds Extended Window</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {/* Milestone 4: Checkout & Removal */}
+                    {/* 4. Post-Auction Settlement & Removal */}
                     {checkoutTimes && (
-                      <div className="g-timeline-node">
-                        <div className="g-timeline-marker">
-                          <span className="g-marker-dot" />
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Post-Auction Settlement</span>
+                          <h3 className="g-schedule-title">Checkout, Settlement &amp; Removal</h3>
                         </div>
-                        <div className="g-timeline-content">
-                          <div className="g-node-header">
-                            <span className="g-node-phase">STAGE 4</span>
-                            <span className="g-node-title">Checkout, Settlement &amp; Removal</span>
-                          </div>
-                          <div className="g-node-body">
-                            <span className="g-node-text">{checkoutTimes}</span>
-                          </div>
+                        <div className="g-schedule-card-body">
+                          <p className="g-schedule-desc">{checkoutTimes}</p>
                         </div>
                       </div>
                     )}
