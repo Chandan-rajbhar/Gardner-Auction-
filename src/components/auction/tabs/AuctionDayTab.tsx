@@ -4717,7 +4717,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               </button>
 
               {/* 5. + Register Bidder Button (Opens Right-Side Sheet) */}
-              <button
+              {/* <button
                 type="button"
                 disabled={isAuctionClosed}
                 className="af360-btn-teal"
@@ -4728,7 +4728,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               >
                 <Plus size={14} />
                 <span>REGISTER BIDDER</span>
-              </button>
+              </button> */}
             </div>
 
             {/* Row 2: No Bidders Selected / Batch Actions Shadcn Dropdown */}

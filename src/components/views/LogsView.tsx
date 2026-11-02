@@ -4,7 +4,7 @@ import {
   Search, 
   ShieldCheck, 
   RefreshCw, 
-  MoreHorizontal, 
+  MoreVertical, 
   Eye, 
   Copy, 
   ExternalLink, 
@@ -24,6 +24,7 @@ import {
   Layers,
   Receipt
 } from 'lucide-react';
+import './LogsView.css';
 import { activityLogService, AuditLogRecord } from '../../services/activityLogService';
 import { 
   Select, 
@@ -255,21 +256,11 @@ export const LogsView: React.FC<LogsViewProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
+    <div className="audit-view-root">
       {/* Header */}
-      <div 
-        className="card-header-flex"
-        style={{ 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          borderBottom: '1px solid var(--border-subtle)',
-          paddingBottom: 14,
-          marginBottom: 0,
-          gap: 12
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="audit-header-container">
+        <div className="audit-title-block">
+          <div className="audit-title-heading-wrap">
             <h2 className="font-serif" style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
               Administrative Audit & Activity Log
             </h2>
@@ -284,7 +275,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="audit-header-actions">
           {/* Refresh Action */}
           <button
             type="button"
@@ -320,22 +311,10 @@ export const LogsView: React.FC<LogsViewProps> = ({
       </div>
 
       {/* Filter & Search Bar */}
-      <div 
-        style={{ 
-          display: 'flex', 
-          gap: 12, 
-          flexWrap: 'wrap', 
-          alignItems: 'center', 
-          background: 'var(--bg-card, #ffffff)', 
-          padding: '12px 16px', 
-          borderRadius: 'var(--radius-md, 8px)', 
-          border: '1px solid var(--border-subtle, #e2e8f0)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-        }}
-      >
+      <div className="audit-filters-bar">
         {/* Search Input */}
-        <div className="input-search-wrapper" style={{ flex: 1, minWidth: 260, position: 'relative' }}>
-          <Search size={15} className="search-icon" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+        <div className="audit-search-wrapper">
+          <Search size={15} className="search-icon" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           <input 
             type="text" 
             placeholder="Search action, clerk, event details..."
@@ -351,7 +330,8 @@ export const LogsView: React.FC<LogsViewProps> = ({
               background: '#ffffff',
               fontSize: 12.5,
               outline: 'none',
-              color: 'var(--text-main, #0f172a)'
+              color: 'var(--text-main, #0f172a)',
+              boxSizing: 'border-box'
             }}
           />
           {searchTerm && (
@@ -366,40 +346,43 @@ export const LogsView: React.FC<LogsViewProps> = ({
           )}
         </div>
 
-        {/* Category Filter using shadcn/ui Select */}
-        <div style={{ width: 175 }}>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger style={{ height: 36, fontSize: 12.5, width: '100%' }}>
-              <Filter size={13} style={{ color: '#64748b', marginRight: 4 }} />
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="Clerking">Clerking</SelectItem>
-              <SelectItem value="HiBid Sync">HiBid Sync</SelectItem>
-              <SelectItem value="Bidder">Bidder</SelectItem>
-              <SelectItem value="Settlement">Settlement</SelectItem>
-              <SelectItem value="Lot">Lot Catalog</SelectItem>
-              <SelectItem value="Auction">Auction</SelectItem>
-              <SelectItem value="System">System Admin</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Filter Selects Group */}
+        <div className="audit-filter-selects">
+          {/* Category Filter using shadcn/ui Select */}
+          <div className="audit-category-select-wrap">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger style={{ height: 36, fontSize: 12.5, width: '100%' }}>
+                <Filter size={13} style={{ color: '#64748b', marginRight: 4 }} />
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="Clerking">Clerking</SelectItem>
+                <SelectItem value="HiBid Sync">HiBid Sync</SelectItem>
+                <SelectItem value="Bidder">Bidder</SelectItem>
+                <SelectItem value="Settlement">Settlement</SelectItem>
+                <SelectItem value="Lot">Lot Catalog</SelectItem>
+                <SelectItem value="Auction">Auction</SelectItem>
+                <SelectItem value="System">System Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Status Filter using shadcn/ui Select */}
-        <div style={{ width: 155 }}>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger style={{ height: 36, fontSize: 12.5, width: '100%' }}>
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="SUCCESS">Success</SelectItem>
-              <SelectItem value="INFO">Info</SelectItem>
-              <SelectItem value="WARNING">Warning</SelectItem>
-              <SelectItem value="ALERT">Alert / Error</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Status Filter using shadcn/ui Select */}
+          <div className="audit-status-select-wrap">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger style={{ height: 36, fontSize: 12.5, width: '100%' }}>
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="SUCCESS">Success</SelectItem>
+                <SelectItem value="INFO">Info</SelectItem>
+                <SelectItem value="WARNING">Warning</SelectItem>
+                <SelectItem value="ALERT">Alert / Error</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Active Filters Clear Button */}
@@ -436,136 +419,237 @@ export const LogsView: React.FC<LogsViewProps> = ({
         </div>
       )}
 
-      {/* Log Table Container */}
-      <div className="table-wrapper" style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, background: '#ffffff', overflowX: 'auto' }}>
-        <table className="luxury-table" style={{ fontSize: 12.5, width: '100%', minWidth: 920 }}>
-          <thead>
-            <tr>
-              <th style={{ width: '11%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timestamp</th>
-              <th style={{ width: '16%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Operator / Service</th>
-              <th style={{ width: '11%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category</th>
-              <th style={{ width: '25%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Event Action</th>
-              <th style={{ width: '23%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Audit Details</th>
-              <th style={{ width: '8%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Status</th>
-              <th style={{ width: '6%', fontSize: 11, padding: '11px 14px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              // Loading Skeleton Rows
-              [1, 2, 3, 4, 5].map(i => (
-                <tr key={i} style={{ opacity: 0.6 }}>
-                  <td style={{ padding: '12px 14px' }}><div style={{ height: 14, width: 70, background: '#f1f5f9', borderRadius: 4 }}></div></td>
-                  <td style={{ padding: '12px 14px' }}><div style={{ height: 14, width: 120, background: '#f1f5f9', borderRadius: 4 }}></div></td>
-                  <td style={{ padding: '12px 14px' }}><div style={{ height: 18, width: 60, background: '#f1f5f9', borderRadius: 8 }}></div></td>
-                  <td style={{ padding: '12px 14px' }}><div style={{ height: 14, width: 180, background: '#f1f5f9', borderRadius: 4 }}></div></td>
-                  <td style={{ padding: '12px 14px' }}><div style={{ height: 14, width: 220, background: '#f1f5f9', borderRadius: 4 }}></div></td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center' }}><div style={{ height: 18, width: 55, background: '#f1f5f9', borderRadius: 8, margin: '0 auto' }}></div></td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center' }}><div style={{ height: 18, width: 20, background: '#f1f5f9', borderRadius: 4, margin: '0 auto' }}></div></td>
-                </tr>
-              ))
-            ) : paginatedLogs.length === 0 ? (
-              // Empty State
+      {/* Log Table Container (Desktop / Tablet View with Fixed Layout & Zero Horizontal Scroll) */}
+      <div className="audit-desktop-table-view">
+        <div className="audit-table-container">
+          <table className="audit-fixed-table">
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                  <FileText size={26} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 13.5 }}>No administrative audit events found</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 12 }}>Try adjusting your search query or category filters.</p>
-                </td>
+                <th style={{ width: '10%' }}>Timestamp</th>
+                <th style={{ width: '15%' }}>Operator / Service</th>
+                <th style={{ width: '9%' }}>Category</th>
+                <th style={{ width: '21%' }}>Event Action</th>
+                <th style={{ width: '28%' }}>Audit Details</th>
+                <th style={{ width: '9%', textAlign: 'center' }}>Status</th>
+                <th style={{ width: '8%', textAlign: 'center' }}>Actions</th>
               </tr>
-            ) : (
-              // Live Data Rows
-              paginatedLogs.map(log => (
-                <tr key={log.id} style={{ transition: 'background-color 0.15s ease' }}>
-                  {/* 1. Timestamp */}
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)', padding: '11px 14px', whiteSpace: 'nowrap' }}>
-                    {log.timestamp}
-                  </td>
-
-                  {/* 2. Operator / Service */}
-                  <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 12.5, padding: '11px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{log.operator_service}</span>
-                      {log.is_annotated && (
-                        <span title={`Auditor Note: ${log.auditor_notes}`} style={{ cursor: 'help' }}>
-                          <Edit3 size={11} style={{ color: '#d97706' }} />
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* 3. Category */}
-                  <td style={{ padding: '11px 14px' }}>
-                    {renderCategoryBadge(log.category)}
-                  </td>
-
-                  {/* 4. Event Action */}
-                  <td style={{ fontWeight: 600, color: 'var(--gold-light, #b45309)', fontSize: 12.5, padding: '11px 14px' }}>
-                    {log.event_action}
-                  </td>
-
-                  {/* 5. Audit Details */}
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 360, whiteSpace: 'normal', lineHeight: 1.4, padding: '11px 14px' }}>
-                    {log.audit_details}
-                  </td>
-
-                  {/* 6. Status */}
-                  <td style={{ textAlign: 'center', padding: '11px 14px' }}>
-                    {renderStatusBadge(log.status)}
-                  </td>
-
-                  {/* 7. Actions (shadcn/ui DropdownMenu with Lucide MoreHorizontal) */}
-                  <td style={{ textAlign: 'center', padding: '11px 14px' }}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          padding: '4px 6px',
-                          borderRadius: 4,
-                          cursor: 'pointer',
-                          color: '#64748b',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s ease'
-                        }}
-                        title="Audit record actions"
-                        aria-label="Actions menu"
-                      >
-                        <MoreHorizontal size={16} />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="right" style={{ minWidth: 175, zIndex: 1050 }}>
-                        {/* View Details */}
-                        <DropdownMenuItem onClick={() => handleOpenDetails(log)}>
-                          <Eye size={13} style={{ marginRight: 6 }} />
-                          <span>View Details</span>
-                        </DropdownMenuItem>
-
-                        {/* Navigate to Related Record */}
-                        <DropdownMenuItem onClick={() => handleNavigateRelated(log)}>
-                          <ExternalLink size={13} style={{ marginRight: 6 }} />
-                          <span>Open Related Record</span>
-                        </DropdownMenuItem>
-
-                        <DropdownMenuSeparator />
-
-                        {/* Delete Record (Restricted with confirmation) */}
-                        <DropdownMenuItem 
-                          onClick={() => setSelectedLogForDelete(log)}
-                          variant="danger"
-                        >
-                          <Trash2 size={13} style={{ marginRight: 6 }} />
-                          <span>Delete Record</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            </thead>
+            <tbody>
+              {loading ? (
+                // Loading Skeleton Rows
+                [1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} style={{ opacity: 0.6 }}>
+                    <td><div style={{ height: 14, width: '80%', background: '#f1f5f9', borderRadius: 4 }}></div></td>
+                    <td><div style={{ height: 14, width: '85%', background: '#f1f5f9', borderRadius: 4 }}></div></td>
+                    <td><div style={{ height: 18, width: 60, background: '#f1f5f9', borderRadius: 8 }}></div></td>
+                    <td><div style={{ height: 14, width: '90%', background: '#f1f5f9', borderRadius: 4 }}></div></td>
+                    <td><div style={{ height: 14, width: '95%', background: '#f1f5f9', borderRadius: 4 }}></div></td>
+                    <td style={{ textAlign: 'center' }}><div style={{ height: 18, width: 55, background: '#f1f5f9', borderRadius: 8, margin: '0 auto' }}></div></td>
+                    <td style={{ textAlign: 'center' }}><div style={{ height: 18, width: 16, background: '#f1f5f9', borderRadius: 4, margin: '0 auto' }}></div></td>
+                  </tr>
+                ))
+              ) : paginatedLogs.length === 0 ? (
+                // Empty State
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                    <FileText size={26} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 13.5 }}>No administrative audit events found</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12 }}>Try adjusting your search query or category filters.</p>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                // Live Data Rows
+                paginatedLogs.map(log => (
+                  <tr key={log.id} style={{ transition: 'background-color 0.15s ease' }}>
+                    {/* 1. Timestamp */}
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>
+                      <span className="audit-cell-truncate" title={log.timestamp}>
+                        {log.timestamp}
+                      </span>
+                    </td>
+
+                    {/* 2. Operator / Service */}
+                    <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 12.5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span className="audit-cell-truncate" title={log.operator_service}>
+                          {log.operator_service}
+                        </span>
+                        {log.is_annotated && (
+                          <span title={`Auditor Note: ${log.auditor_notes}`} style={{ cursor: 'help', flexShrink: 0 }}>
+                            <Edit3 size={11} style={{ color: '#d97706' }} />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 3. Category */}
+                    <td>
+                      {renderCategoryBadge(log.category)}
+                    </td>
+
+                    {/* 4. Event Action (Truncated with three dots) */}
+                    <td style={{ fontWeight: 600, color: 'var(--gold-light, #b45309)', fontSize: 12.5 }}>
+                      <span className="audit-cell-truncate" title={log.event_action}>
+                        {log.event_action}
+                      </span>
+                    </td>
+
+                    {/* 5. Audit Details (Large content truncated with three dots, clickable to open drawer) */}
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      <span 
+                        className="audit-cell-truncate audit-cell-clickable" 
+                        title={`Click to view full details:\n${log.audit_details}`}
+                        onClick={() => handleOpenDetails(log)}
+                      >
+                        {log.audit_details}
+                      </span>
+                    </td>
+
+                    {/* 6. Status */}
+                    <td style={{ textAlign: 'center' }}>
+                      {renderStatusBadge(log.status)}
+                    </td>
+
+                    {/* 7. Actions (Vertical Three Dots MoreVertical Trigger) */}
+                    <td style={{ textAlign: 'center' }}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="audit-action-trigger"
+                          title="Audit record actions"
+                          aria-label="Actions menu"
+                        >
+                          <MoreVertical size={16} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="right" style={{ minWidth: 175, zIndex: 1050 }}>
+                          {/* View Details */}
+                          <DropdownMenuItem onClick={() => handleOpenDetails(log)}>
+                            <Eye size={13} style={{ marginRight: 6 }} />
+                            <span>View Details</span>
+                          </DropdownMenuItem>
+
+                          {/* Navigate to Related Record */}
+                          <DropdownMenuItem onClick={() => handleNavigateRelated(log)}>
+                            <ExternalLink size={13} style={{ marginRight: 6 }} />
+                            <span>Open Related Record</span>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+
+                          {/* Delete Record (Restricted with confirmation) */}
+                          <DropdownMenuItem 
+                            onClick={() => setSelectedLogForDelete(log)}
+                            variant="danger"
+                          >
+                            <Trash2 size={13} style={{ marginRight: 6 }} />
+                            <span>Delete Record</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile Card List (Rendered on mobile <= 768px with Zero Horizontal Scrolling) */}
+      <div className="audit-mobile-cards-view">
+        {loading ? (
+          [1, 2, 3].map(i => (
+            <div key={i} className="audit-card-item" style={{ opacity: 0.6 }}>
+              <div style={{ height: 16, width: '40%', background: '#f1f5f9', borderRadius: 4 }} />
+              <div style={{ height: 18, width: '80%', background: '#f1f5f9', borderRadius: 4 }} />
+              <div style={{ height: 14, width: '90%', background: '#f1f5f9', borderRadius: 4 }} />
+            </div>
+          ))
+        ) : paginatedLogs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '36px 16px', background: '#ffffff', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+            <FileText size={24} style={{ margin: '0 auto 8px', opacity: 0.5, color: '#64748b' }} />
+            <p style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>No administrative audit events found</p>
+          </div>
+        ) : (
+          paginatedLogs.map(log => (
+            <div key={log.id} className="audit-card-item">
+              <div className="audit-card-header">
+                <div className="audit-card-badges">
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
+                    {log.timestamp}
+                  </span>
+                  {renderCategoryBadge(log.category)}
+                  {renderStatusBadge(log.status)}
+                </div>
+
+                {/* Vertical Three Dots Action Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="audit-action-trigger"
+                    title="Audit record actions"
+                    aria-label="Actions menu"
+                  >
+                    <MoreVertical size={16} />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="right" style={{ minWidth: 175, zIndex: 1050 }}>
+                    <DropdownMenuItem onClick={() => handleOpenDetails(log)}>
+                      <Eye size={13} style={{ marginRight: 6 }} />
+                      <span>View Details</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleNavigateRelated(log)}>
+                      <ExternalLink size={13} style={{ marginRight: 6 }} />
+                      <span>Open Related Record</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => setSelectedLogForDelete(log)}
+                      variant="danger"
+                    >
+                      <Trash2 size={13} style={{ marginRight: 6 }} />
+                      <span>Delete Record</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Event Action */}
+              <div 
+                className="audit-card-action-title"
+                title={log.event_action}
+              >
+                {log.event_action}
+              </div>
+
+              {/* Audit Details (Truncated with three dots, clickable to view full details) */}
+              <div 
+                className="audit-card-details-text"
+                title={log.audit_details}
+                onClick={() => handleOpenDetails(log)}
+              >
+                {log.audit_details}
+              </div>
+
+              {/* Card Footer: Operator & Note */}
+              <div className="audit-card-footer">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <User size={12} />
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{log.operator_service}</span>
+                  {log.is_annotated && (
+                    <span title={`Auditor Note: ${log.auditor_notes}`}>
+                      <Edit3 size={11} style={{ color: '#d97706' }} />
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenDetails(log)}
+                  style={{ background: 'none', border: 'none', color: 'var(--gold-dark)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                >
+                  View Details &rarr;
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Pagination Controls */}
