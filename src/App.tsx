@@ -37,6 +37,7 @@ import {
 } from './data/currentAuctionData';
 import type { CurrentAuction } from './data/currentAuctionData';
 import { supabase } from './lib/supabase';
+import { isCurrentAuction, isEligibleBiddingLot } from './lib/auctionHelpers';
 import { playBidSuccessSound } from './utils/sound';
 import {
   Bookmark,
@@ -311,9 +312,12 @@ export const App: React.FC = () => {
         const rawLots = (!errL && Array.isArray(allLots)) ? allLots : [];
 
         if (!errA && dbAuctions && Array.isArray(dbAuctions)) {
-          const mappedFromDb: CurrentAuction[] = dbAuctions.map((row: any) => {
-            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id);
-            const lotsCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0);
+          const activeDbAuctions = dbAuctions.filter((row: any) => isCurrentAuction(row.status));
+
+          const mappedFromDb: CurrentAuction[] = activeDbAuctions.map((row: any) => {
+            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id || l.auction_id === row.code);
+            const eligibleLots = matchingLots.filter((l: any) => isEligibleBiddingLot(l.status));
+            const lotsCount = eligibleLots.length;
             const st = (row.status || '').toLowerCase();
             let isLive = false;
             let statusText = row.status || 'Active Session';
@@ -399,7 +403,8 @@ export const App: React.FC = () => {
 
         // Also dynamically map live lots for the Lots view
         if (rawLots.length > 0) {
-          const mappedLiveLots: LotItem[] = rawLots.map((l: any) => {
+          const eligibleRawLots = rawLots.filter((l: any) => isEligibleBiddingLot(l.status));
+          const mappedLiveLots: LotItem[] = eligibleRawLots.map((l: any) => {
             const curBid = Number(l.current_bid) || Number(l.starting_bid) || 100;
             const startBid = Number(l.starting_bid) || 100;
             return {

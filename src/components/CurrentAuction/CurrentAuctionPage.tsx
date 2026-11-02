@@ -27,6 +27,11 @@ import {
   LayoutGrid
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import {
+  isCurrentAuction,
+
+  isEligibleBiddingLot
+} from '../../lib/auctionHelpers';
 import { ShadcnSelect } from '../ui/ShadcnSelect';
 import type { ShadcnSelectOption } from '../ui/ShadcnSelect';
 import type { EnrichedLotItem } from './types';
@@ -328,9 +333,17 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
         const rawLots = (!errL && Array.isArray(lotsData)) ? lotsData : [];
 
         if (auctionsData && Array.isArray(auctionsData)) {
-          const mappedAuctions: ActiveAuctionCardItem[] = auctionsData.map((row: any) => {
-            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id);
-            const lotCount = matchingLots.length || row.day_stats?.lotCount || (Array.isArray(row.day_stats?.lotStats) ? row.day_stats.lotStats.length : 0);
+          // Filter: only active, upcoming, and currently live auctions
+          const activeAuctionsRaw = auctionsData.filter((row: any) => isCurrentAuction(row.status));
+
+          const activeAuctionIds = new Set(
+            activeAuctionsRaw.map((a: any) => a.id).concat(activeAuctionsRaw.map((a: any) => a.code).filter(Boolean))
+          );
+
+          const mappedAuctions: ActiveAuctionCardItem[] = activeAuctionsRaw.map((row: any) => {
+            const matchingLots = rawLots.filter((l: any) => l.auction_id === row.id || l.auction_id === row.code);
+            const eligibleLots = matchingLots.filter((l: any) => isEligibleBiddingLot(l.status));
+            const lotCount = eligibleLots.length;
 
             let statusText = row.status || 'Active Session';
             let badge = (row.status || 'ACTIVE').toUpperCase();
@@ -341,7 +354,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
               statusText = 'Live Webcast Auction';
               badge = 'LIVE WEBCAST';
               badgeType = 'red';
-            } else if (st.includes('open')) {
+            } else if (st.includes('open') || st.includes('active')) {
               statusText = 'Open for Bidding';
               badge = 'CATALOG OPEN';
               badgeType = 'green';
@@ -349,16 +362,29 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
               statusText = 'Closing Today';
               badge = 'CLOSING TODAY';
               badgeType = 'gold';
-            } else if (st.includes('concluded') || st.includes('closed') || st.includes('ended')) {
-              statusText = 'Closed';
-              badge = 'CLOSED';
-              badgeType = 'gold';
+
+            } else {
+              statusText = row.status || 'Active Session';
+              badge = (row.status || 'ACTIVE').toUpperCase();
+              badgeType = 'green';
             }
 
             // Image strictly from database: featured_images or first matching lot's image
-            const img = (Array.isArray(row.featured_images) && row.featured_images[0]?.url)
-              ? row.featured_images[0].url
-              : (matchingLots[0]?.image || '');
+            let img = '';
+            if (Array.isArray(row.featured_images) && row.featured_images.length > 0) {
+              const first = row.featured_images[0];
+              img = typeof first === 'string' ? first : (first?.url || '');
+            }
+            if (!img) {
+              const lotWithImg = matchingLots.find((l: any) => l.image);
+              if (lotWithImg) img = lotWithImg.image;
+            }
+            if (!img) {
+              img = '/assets/gold-coin.jpg';
+            }
+            // img assigned above
+
+
 
             const dateRangeFormatted = formatAuctionDates(row.start_date, row.end_date);
 
@@ -375,7 +401,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
             // Dynamic aggregate estimate calculated from actual lots in this auction
             let totalEstLow = 0;
             let totalEstHigh = 0;
-            matchingLots.forEach((l: any) => {
+            eligibleLots.forEach((l: any) => {
               totalEstLow += Number(l.estimate_low) || 0;
               totalEstHigh += Number(l.estimate_high) || 0;
             });
@@ -430,15 +456,18 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
               shipping,
               biddingNotice,
               auctionNotice,
-              lots: matchingLots
+              lots: eligibleLots
             };
           });
 
           setAuctions(mappedAuctions);
 
           // Map lots for the lots tab strictly from dynamic database rows
-          const mappedLots: DynamicLotItem[] = rawLots.map((l: any) => {
-            const parentAuc = auctionsData.find((a: any) => a.id === l.auction_id);
+          const eligibleRawLots = rawLots.filter(
+            (l: any) => isEligibleBiddingLot(l.status) && (activeAuctionIds.has(l.auction_id) || activeAuctionIds.has((l as any).auction_code))
+          );
+          const mappedLots: DynamicLotItem[] = eligibleRawLots.map((l: any) => {
+            const parentAuc = activeAuctionsRaw.find((a: any) => a.id === l.auction_id || a.code === l.auction_id);
             const estLow = Number(l.estimate_low) || 0;
             const estHigh = Number(l.estimate_high) || 0;
             const estimateStr = (estLow > 0 || estHigh > 0)

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Search,
@@ -24,7 +24,13 @@ import {
   Info
 } from 'lucide-react';
 import { getPastAuctionById } from '../data/pastCatalogsData';
-import type { PastLotItem } from '../data/pastCatalogsData';
+import type { PastLotItem, PastAuction } from './PastCatalogsPage';
+import { supabase } from '../lib/supabase';
+import {
+  formatAuctionDates,
+  formatCurrency,
+  calculateAuctionTotalRealized
+} from '../lib/auctionHelpers';
 import { PastLotDetailModal } from './PastLotDetailModal';
 import { ShadcnSelect } from './ui/ShadcnSelect';
 import type { ShadcnSelectOption } from './ui/ShadcnSelect';
@@ -51,7 +57,104 @@ export const CatalogLotsPage: React.FC<CatalogLotsPageProps> = ({
   auctionId,
   onShowToast
 }) => {
-  const auction = getPastAuctionById(auctionId);
+  const [dynamicAuction, setDynamicAuction] = useState<PastAuction | null>(() => (getPastAuctionById(auctionId) as any) || null);
+  const auction = dynamicAuction;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const { data: aucData } = await supabase
+          .from('auctions')
+          .select('*')
+          .or(`id.eq.${auctionId},code.eq.${auctionId}`)
+          .maybeSingle();
+
+        if (aucData && isMounted) {
+          const { data: lotsData } = await supabase
+            .from('lots')
+            .select('*')
+            .or(`auction_id.eq.${aucData.id},auction_id.eq.${aucData.code}`)
+            .order('lot_number', { ascending: true });
+
+          const { data: invData } = await supabase
+            .from('invoices')
+            .select('*')
+            .or(`auction_id.eq.${aucData.id},auction_id.eq.${aucData.code}`);
+
+          const rawLots = Array.isArray(lotsData) ? lotsData : [];
+          const totalRealizedStr = calculateAuctionTotalRealized(aucData.id, rawLots, invData || []);
+
+          const street = [aucData.address1, aucData.address2].filter(Boolean).join(', ') || '4200 Commercial Boulevard, Suite 100';
+          const cityStateZip = [aucData.city, aucData.state, aucData.zip].filter(Boolean).join(' ') || 'Pittsburgh, PA 15201';
+          const fullLocation = [street, cityStateZip, aucData.country].filter(Boolean).join(', ');
+
+          let img = '/images/hero_coin.jpg';
+          if (Array.isArray(aucData.featured_images) && aucData.featured_images.length > 0) {
+            const first = aucData.featured_images[0];
+            img = typeof first === 'string' ? first : (first?.url || img);
+          } else if (rawLots[0]?.image) {
+            img = rawLots[0].image;
+          }
+
+          const mappedLots: PastLotItem[] = rawLots.map((l) => ({
+            id: l.id,
+            auctionId: aucData.id,
+            auctionTitle: aucData.name || 'Catalog Auction',
+            lotNumber: l.lot_number ? (String(l.lot_number).toLowerCase().startsWith('lot') ? String(l.lot_number) : `Lot ${l.lot_number}`) : 'Lot',
+            categoryTag: (l.category || 'RARE COLLECTIBLE').toUpperCase(),
+            department: l.category || 'Coins & Currency',
+            title: l.title || `Lot ${l.lot_number || ''}`,
+            description: (l.condition_report || l.description || l.title || '').trim(),
+            details: (l.description || '').trim(),
+            image: l.image || '/images/hero_coin.jpg',
+            priceRealized: formatCurrency(Number(l.hammer_price) || Number(l.sold_price) || Number(l.current_bid) || 0),
+            startingBid: Number(l.starting_bid) || 0,
+            estimateLow: Number(l.estimate_low) || 0,
+            estimateHigh: Number(l.estimate_high) || 0,
+            bidsCount: Number(l.bids_count) || 0,
+            dateSold: aucData.end_date || 'Concluded',
+            auctionHouse: aucData.name || 'Gardner Auction Appraisers',
+            location: [aucData.city, aucData.state].filter(Boolean).join(', ') || 'Pittsburgh, PA',
+            shipping: aucData.shipping_availability || 'Shipping Available',
+            provenance: l.provenance || 'Private Collection; Gardner Verified.',
+            conditionReport: l.condition_report || 'Verified condition inspection completed.',
+            specialistNote: l.grade ? `Grade: ${l.grade}` : '',
+            certification: l.certification || '',
+            grade: l.grade || '',
+            certNumber: l.cert_number || ''
+          }));
+
+          setDynamicAuction({
+            id: aucData.id,
+            code: aucData.code,
+            title: aucData.name || 'Auction Catalog',
+            auctionType: aucData.auction_type || 'Online Only Auction',
+            status: 'Concluded',
+            companyName: aucData.company_name || 'Gardner Auction Appraisers',
+            address: street,
+            cityStateZip,
+            mapQuery: encodeURIComponent(fullLocation || 'Pittsburgh PA'),
+            dateRange: formatAuctionDates(aucData.start_date, aucData.end_date),
+            scheduleText: aucData.upload_settings?.auctionDateTimes || (aucData.end_date ? `Session concluded ${aucData.end_date}` : 'All lots completed'),
+            description: aucData.description || 'Verified authentic curated collectibles.',
+            biddingNotice: aucData.upload_settings?.biddingNotice || aucData.bidding_notice || aucData.terms || 'All lots in this catalog have concluded and closed for live bidding.',
+            auctionNotice: aucData.upload_settings?.auctionNotice || aucData.auction_notice || aucData.payment_info || 'PA Auctioneer Lic. # AY-002004.',
+            image: img,
+            category: aucData.category || 'Coins & Currency',
+            lotsCount: mappedLots.length,
+            totalRealized: totalRealizedStr,
+            shipping: aucData.shipping_availability || 'Shipping Available',
+            lots: mappedLots
+          });
+        }
+      } catch (e) {
+        console.error('[CatalogLotsPage] Error fetching Supabase catalog:', e);
+      }
+    }
+    loadCatalog();
+    return () => { isMounted = false; };
+  }, [auctionId]);
   const [activeLotModal, setActiveLotModal] = useState<PastLotItem | null>(null);
 
   // Notice expand toggles (matching Highlander Show More / Show Less pattern)
