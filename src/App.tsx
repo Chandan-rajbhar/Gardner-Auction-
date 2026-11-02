@@ -43,6 +43,7 @@ import { notificationService } from './services/notificationService';
 import { activityLogService } from './services/activityLogService';
 import { StageType, AuctionDaySubTab } from './types/auctionDetail';
 import { AuctionDayTab } from './components/auction/tabs/AuctionDayTab';
+import { AuctioneerScreen } from './components/auction/AuctioneerScreen';
 import { AuctionDetailProvider } from './context/AuctionDetailContext';
 
 function mapDetailToAuction(d: any): Auction {
@@ -116,10 +117,26 @@ const AuctionDaySection: React.FC<{
     return (typeof window !== 'undefined' && window.location.pathname.includes('live_clerking')) ? 'clerking' : 'dashboard';
   });
   const [isLiveRostrumActive, setIsLiveRostrumActive] = useState<boolean>(false);
+  const [isAuctioneerScreenActive, setIsAuctioneerScreenActive] = useState<boolean>(() => {
+    return (typeof window !== 'undefined' && window.location.pathname.includes('auctioneer'));
+  });
 
   return (
     <AuctionDetailProvider key={auctionId} auctionId={auctionId} initialLots={lots}>
-      {isLiveRostrumActive ? (
+      {isAuctioneerScreenActive ? (
+        <AuctioneerScreen
+          auctionId={auctionId}
+          initialLots={lots}
+          availableAuctions={availableAuctions}
+          onReturn={() => {
+            setIsAuctioneerScreenActive(false);
+            if (typeof window !== 'undefined' && window.location.pathname.includes('auctioneer')) {
+              try { window.history.pushState({}, '', '/live_clerking'); } catch (_) {}
+            }
+          }}
+          isStandalone={false}
+        />
+      ) : isLiveRostrumActive ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
@@ -167,6 +184,7 @@ const AuctionDaySection: React.FC<{
             currentTab={currentTab}
             onSelectTab={setCurrentTab}
             onNavigateClerking={() => setIsLiveRostrumActive(true)}
+            onOpenAuctioneerScreen={() => setIsAuctioneerScreenActive(true)}
             lots={lots}
             bidders={bidders}
             bids={bids}
@@ -378,6 +396,8 @@ const AdminConsole: React.FC = () => {
         setCurrentSection('lots');
       } else if (path === '/live_clerking') {
         setCurrentSection('live_clerking');
+      } else if (path === '/auctioneer' || path.startsWith('/auctioneer')) {
+        setCurrentSection('auctioneer');
       } else if (path === '/users') {
         setCurrentSection('users');
       } else if (path === '/payments') {
@@ -912,6 +932,16 @@ const AdminConsole: React.FC = () => {
                 }
                 return res;
               }}
+            />
+          )}
+
+          {currentSection === 'auctioneer' && (
+            <AuctioneerScreen
+              auctionId={selectedAuctionId || 'auc-001'}
+              initialLots={lots}
+              availableAuctions={auctions}
+              onReturn={() => handleNavigateSection('live_clerking')}
+              isStandalone={true}
             />
           )}
 

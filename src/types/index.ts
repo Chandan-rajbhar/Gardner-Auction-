@@ -202,6 +202,7 @@ export type NavigationSection =
   | 'auctions'
   | 'lots'
   | 'live_clerking'
+  | 'auctioneer'
   | 'payments'
   | 'reports'
   | 'logs'

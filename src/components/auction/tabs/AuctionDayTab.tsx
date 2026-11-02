@@ -136,6 +136,7 @@ interface AuctionDayTabProps {
   selectedAuctionId?: string;
   onSelectAuction?: (id: string) => void;
   onNavigateReports?: () => void;
+  onOpenAuctioneerScreen?: () => void;
 }
 
 const isMockRegItem = (r: any) =>
@@ -209,7 +210,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   availableAuctions = [],
   selectedAuctionId,
   onSelectAuction,
-  onNavigateReports
+  onNavigateReports,
+  onOpenAuctioneerScreen
 }) => {
   const { state, dispatch, isLoading, loadError, reloadAuction } = useAuctionDetail();
   const { showToast } = useToast();
@@ -3551,30 +3553,19 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 Select Auction:
               </span>
               {availableAuctions && availableAuctions.length > 0 && onSelectAuction ? (
-                <select
-                  value={selectedAuctionId || ''}
-                  onChange={(e) => onSelectAuction(e.target.value)}
-                  style={{
-                    height: 36,
-                    padding: '0 12px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border-medium, #cbd5e1)',
-                    fontSize: 13,
-                    color: 'var(--text-main, #0f172a)',
-                    background: '#ffffff',
-                    outline: 'none',
-                    minWidth: 260,
-                    cursor: 'pointer'
-                  }}
-                  id="select-auction-empty-state"
-                >
-                  <option value="" disabled>Choose an auction…</option>
-                  {availableAuctions.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.title || a.code} ({a.code})
-                    </option>
-                  ))}
-                </select>
+                <div style={{ minWidth: 260 }}>
+                  <ShadcnSelect
+                    value={selectedAuctionId || ''}
+                    onChange={(val) => onSelectAuction(val)}
+                    placeholder="Choose an auction…"
+                    options={availableAuctions.map(a => ({
+                      value: a.id,
+                      label: `${a.title || a.code} (${a.code})`
+                    }))}
+                    id="select-auction-empty-state"
+                    size="md"
+                  />
+                </div>
               ) : null}
               <button
                 type="button"
@@ -3676,18 +3667,31 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           </div>
 
           <div className="auction-day-header-actions">
-            {/* Auctioneer Screen button matching Executive Theme (commented per request) */}
-            {/* <button
+            {/* Auctioneer Screen button matching AF360 Reference */}
+            <button
               type="button"
-              onClick={onNavigateClerking}
-              className="btn btn-gold"
+              onClick={onOpenAuctioneerScreen ? onOpenAuctioneerScreen : onNavigateClerking}
+              className="btn btn-auctioneer-header"
               id="btn-auctioneer-screen"
-              title="Open live rostrum clerking screen"
-              style={{ fontSize: 12.5, fontWeight: 700, padding: '7px 16px', borderRadius: 6 }}
+              title="Open Auctioneer Screen"
+              style={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                padding: '7px 16px',
+                borderRadius: 6,
+                backgroundColor: 'black',
+                color: '#ffffff',
+                border: '1px solid #093b3f',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
             >
-              <ExternalLink size={14} color="#dfb74a" />
+              <ExternalLink size={14} color="#ffffff" />
               <span>Auctioneer Screen</span>
-            </button> */}
+            </button>
 
             {/* Export Bidders button */}
             <button
