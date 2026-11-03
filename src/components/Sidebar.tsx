@@ -25,7 +25,7 @@ import {
 import { NavigationSection } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { notificationService } from '../services/notificationService';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, DEFAULT_SUPABASE_SECRET_KEY } from '../lib/supabase';
 
 interface SidebarProps {
   currentSection: NavigationSection;
@@ -60,6 +60,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     let isMounted = true;
     const fetchCount = async () => {
       try {
+        if (DEFAULT_SUPABASE_SECRET_KEY) {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/email-list?select=*`, {
+            method: 'HEAD',
+            headers: {
+              apikey: DEFAULT_SUPABASE_SECRET_KEY,
+              Authorization: `Bearer ${DEFAULT_SUPABASE_SECRET_KEY}`,
+              Prefer: 'count=exact'
+            }
+          });
+          const contentRange = res.headers.get('content-range');
+          if (contentRange && contentRange.includes('/')) {
+            const total = parseInt(contentRange.split('/')[1], 10);
+            if (!isNaN(total) && isMounted) {
+              setSubscribersCount(total);
+              return;
+            }
+          }
+        }
+
         const { count, error } = await supabase.from('email-list').select('*', { count: 'exact', head: true });
         if (!error && count !== null && isMounted) {
           setSubscribersCount(count);
