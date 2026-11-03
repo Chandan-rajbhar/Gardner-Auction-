@@ -763,6 +763,8 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
       setIsPlacingBid(false);
     }
   };
+  void isPlacingBid;
+  void handleQuickBid;
 
   const startItemIndex = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endItemIndex = Math.min(safePage * pageSize, totalItems);
@@ -1604,7 +1606,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
 
                     {/* Quick Bid Action */}
                     <div className="g-widget-actions-row">
-                      <button
+                      {/* <button
                         type="button"
                         disabled={isPlacingBid}
                         onClick={() => handleQuickBid(activeLotDetail)}
@@ -1616,7 +1618,7 @@ export const CurrentAuctionPage: React.FC<CurrentAuctionPageProps> = ({
                             ? 'Submitting Bid...'
                             : `Place Bid ($${((activeLotDetail.currentBid || activeLotDetail.startingBid || 0) + 100).toLocaleString()})`}
                         </span>
-                      </button>
+                      </button> */}
 
                       <button
                         type="button"
