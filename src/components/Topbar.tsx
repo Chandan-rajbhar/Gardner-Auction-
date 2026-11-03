@@ -18,6 +18,7 @@ interface TopbarProps {
   unreadLogsCount?: number;
   onOpenNotifications?: () => void;
   onNavigateSection?: (section: NavigationSection) => void;
+  onNavigateUrl?: (url: string) => void;
   onNavigateProfile?: () => void;
 }
 
@@ -48,6 +49,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   unreadLogsCount: _fallbackLogsCount,
   onOpenNotifications: _legacyOnOpen,
   onNavigateSection,
+  onNavigateUrl,
   onNavigateProfile
 }) => {
   const { user } = useAuth();
@@ -134,6 +136,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             isOpen={isDropdownOpen}
             onClose={() => setIsDropdownOpen(false)}
             onNavigateSection={onNavigateSection}
+            onNavigateUrl={onNavigateUrl}
           />
         </div>
 

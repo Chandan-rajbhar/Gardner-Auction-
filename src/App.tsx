@@ -379,7 +379,9 @@ const AdminConsole: React.FC = () => {
   // URL Routing Sync
   useEffect(() => {
     const syncFromPath = () => {
-      const path = window.location.pathname;
+      const rawPath = window.location.pathname;
+      const path = rawPath.replace(/\/+$/, '') || '/';
+
       if (path.startsWith('/auctions/')) {
         const parts = path.replace('/auctions/', '').split('/');
         const id = parts[0];
@@ -401,6 +403,8 @@ const AdminConsole: React.FC = () => {
         setCurrentSection('auctioneer');
       } else if (path === '/users') {
         setCurrentSection('users');
+      } else if (path === '/admins') {
+        setCurrentSection('admins');
       } else if (path === '/payments') {
         setCurrentSection('payments');
       } else if (path === '/reports') {
@@ -415,6 +419,8 @@ const AdminConsole: React.FC = () => {
         setCurrentSection('profile');
       } else if (path === '/email_list' || path === '/email-list') {
         setCurrentSection('email_list');
+      } else if (path === '' || path === '/' || path === '/overview') {
+        setCurrentSection('overview');
       }
     };
 
@@ -428,8 +434,21 @@ const AdminConsole: React.FC = () => {
     if (section === 'auctions') {
       setActiveAuctionDetailId(null);
       try { window.history.pushState({}, '', '/auctions'); } catch (e) { }
+    } else if (section === 'overview') {
+      setActiveAuctionDetailId(null);
+      try { window.history.pushState({}, '', '/'); } catch (e) { }
     } else {
       try { window.history.pushState({}, '', `/${section}`); } catch (e) { }
+    }
+  };
+
+  const handleNavigateUrl = (url: string) => {
+    if (!url) return;
+    try {
+      window.history.pushState({}, '', url);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    } catch {
+      window.location.href = url;
     }
   };
 
@@ -850,6 +869,7 @@ const AdminConsole: React.FC = () => {
           unreadLogsCount={logs.filter(l => l.severity === 'warning' || l.severity === 'alert').length}
           onOpenNotifications={() => handleNavigateSection('notifications')}
           onNavigateSection={handleNavigateSection}
+          onNavigateUrl={handleNavigateUrl}
           onNavigateProfile={() => handleNavigateSection('profile')}
         />
 
@@ -1007,6 +1027,7 @@ const AdminConsole: React.FC = () => {
           {currentSection === 'notifications' && (
             <NotificationsView
               onNavigateSection={handleNavigateSection}
+              onNavigateUrl={handleNavigateUrl}
             />
           )}
 
