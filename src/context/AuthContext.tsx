@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, supabaseAdmin, isSupabaseConfigured } from '../lib/supabase';
 import type { SupabaseAuthUser } from '../lib/supabase';
+import { notificationService } from '../services/notificationService';
 
 export interface AuthUser {
   id: string;
@@ -603,6 +604,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: 'super_admin',
         title: getRoleTitle('super_admin')
       });
+
+      // Automatically insert registration notification into existing Supabase notifications table
+      try {
+        await notificationService.createNewUserRegistrationNotification({
+          id: userId,
+          name: cleanName,
+          email: cleanEmail
+        });
+      } catch (notifErr) {
+        console.warn('[AuthContext] Registration notification notice:', notifErr);
+      }
 
       // Check whether Supabase requires email confirmation before login
       const requiresEmailConfirmation = Boolean(

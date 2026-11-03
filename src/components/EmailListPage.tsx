@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useSiteContent } from '../hooks/useSiteContent';
 import type { EmailListPageContent } from '../types/siteContent';
+import { notificationService } from '../services/notificationService';
 
 interface EmailListPageProps {
   onSubscribe?: (email: string) => void;
@@ -137,6 +138,17 @@ export const EmailListPage: React.FC<EmailListPageProps> = ({ onSubscribe, onOpe
         setIsSuccess(true);
         if (onSubscribe) {
           onSubscribe(normalized);
+        }
+
+        // Automatically insert notification into existing Supabase notifications table
+        try {
+          const subscriptionRecordId = data[0]?.id;
+          await notificationService.createEmailSubscriptionNotification(
+            normalized,
+            subscriptionRecordId
+          );
+        } catch (notifErr) {
+          console.warn('[EmailListPage] Notification creation notice:', notifErr);
         }
       } else {
         setError('Subscription was not recorded. Please try again.');
