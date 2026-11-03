@@ -2,6 +2,7 @@ import { supabase, supabaseAdmin } from '../lib/supabase';
 import { NotificationRecord, NotificationType } from '../types';
 
 export const NOTIFICATIONS_CHANGED_EVENT = 'gardner_notifications_changed';
+export const NOTIFICATIONS_REALTIME_CHANNEL = 'gardner_notifications_realtime';
 
 class NotificationService {
   private get client() {
@@ -253,13 +254,29 @@ class NotificationService {
   }
 
   /**
+   * Broadcast notification event across Supabase Realtime channel
+   */
+  private broadcastRealtimeNotification(record: NotificationRecord) {
+    try {
+      const channel = supabase.channel(NOTIFICATIONS_REALTIME_CHANNEL);
+      channel.send({
+        type: 'broadcast',
+        event: 'notification_created',
+        payload: record
+      });
+    } catch (err) {
+      console.warn('[NotificationService] Broadcast notice:', err);
+    }
+  }
+
+  /**
    * Create a new notification directly in Supabase
    */
   public async createNotification(
-    data: Omit<NotificationRecord, 'id' | 'created_at'>
+    data: Omit<NotificationRecord, 'id' | 'created_at'> & { id?: string }
   ): Promise<NotificationRecord> {
     const newRecord: NotificationRecord = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: data.id || `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: data.title,
       message: data.message,
       type: data.type || 'system',
@@ -294,11 +311,16 @@ class NotificationService {
       ]);
 
       if (error) {
+        if (error.code === '23505') {
+          console.log('[NotificationService] Duplicate notification suppressed by key:', newRecord.id);
+          return newRecord;
+        }
         console.error('[NotificationService] Insert error:', error);
         throw error;
       }
 
       this.notifyChange();
+      this.broadcastRealtimeNotification(newRecord);
       return newRecord;
     } catch (err) {
       console.error('[NotificationService] Supabase insert notification failed:', err);
@@ -307,27 +329,160 @@ class NotificationService {
   }
 
   /**
-   * Realtime subscription on public.notifications
+   * Automatically generate Email List Subscription Notification
+   */
+  public async createEmailSubscriptionNotification(
+    email: string,
+    subscriptionId?: string
+  ): Promise<NotificationRecord | null> {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return null;
+
+    const notifId = `notif-email-${subscriptionId || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    try {
+      const { data: existing } = await this.client
+        .from('notifications')
+        .select('id')
+        .or(`id.eq.${notifId},related_record_id.eq.${subscriptionId || cleanEmail}`)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        console.log('[NotificationService] Notification already exists for subscription:', cleanEmail);
+        return null;
+      }
+
+      return await this.createNotification({
+        id: notifId,
+        title: 'New Email List Subscriber',
+        message: `${cleanEmail} has subscribed to the Gardner Auction email list.`,
+        type: 'system',
+        recipient_id: 'admin',
+        recipient_role: 'admin',
+        related_module: 'email_list',
+        related_record_id: subscriptionId || cleanEmail,
+        action_url: '/email_list',
+        is_read: false,
+        metadata: {
+          email: cleanEmail,
+          subscriptionId,
+          source: 'website_email_list'
+        }
+      });
+    } catch (err) {
+      console.warn('[NotificationService] createEmailSubscriptionNotification error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Automatically generate New User Registration Notification
+   */
+  public async createNewUserRegistrationNotification(userData: {
+    id: string;
+    name: string;
+    email: string;
+  }): Promise<NotificationRecord | null> {
+    const cleanId = userData.id;
+    const cleanName = userData.name.trim() || 'New Bidder';
+    const cleanEmail = userData.email.trim().toLowerCase();
+
+    if (!cleanId || !cleanEmail) return null;
+
+    const notifId = `notif-user-${cleanId}`;
+
+    try {
+      const { data: existing } = await this.client
+        .from('notifications')
+        .select('id')
+        .or(`id.eq.${notifId},related_record_id.eq.${cleanId}`)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        console.log('[NotificationService] Notification already exists for registration:', cleanEmail);
+        return null;
+      }
+
+      return await this.createNotification({
+        id: notifId,
+        title: 'New User Registration',
+        message: `${cleanName} (${cleanEmail}) has successfully created a new bidder account.`,
+        type: 'system',
+        recipient_id: 'admin',
+        recipient_role: 'admin',
+        related_module: 'users',
+        related_record_id: cleanId,
+        action_url: '/users',
+        is_read: false,
+        metadata: {
+          userId: cleanId,
+          name: cleanName,
+          email: cleanEmail,
+          source: 'bidder_registration'
+        }
+      });
+    } catch (err) {
+      console.warn('[NotificationService] createNewUserRegistrationNotification error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Realtime subscription on public.notifications (Postgres CDC + Realtime Broadcast + Polling Heartbeat)
    */
   public subscribeToNotifications(callback: () => void): () => void {
     const channelName = `realtime_notifs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const channel = supabase
+
+    // 1. Supabase Postgres CDC changes
+    const cdcChannel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
         callback();
       })
       .subscribe();
 
+    // 2. Shared Broadcast channel for instant cross-tab updates
+    const broadcastChannel = supabase
+      .channel(NOTIFICATIONS_REALTIME_CHANNEL)
+      .on('broadcast', { event: 'notification_created' }, () => {
+        callback();
+      })
+      .subscribe();
+
+    // 3. Local window event listener
     const handleLocal = () => callback();
     if (typeof window !== 'undefined') {
       window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleLocal);
     }
 
-    return () => {
-      supabase.removeChannel(channel);
-      if (typeof window !== 'undefined') {
+    // 4. Fallback interval for background sync (every 6 seconds while tab is active)
+    let pollInterval: any = null;
+    if (typeof window !== 'undefined') {
+      pollInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          callback();
+        }
+      }, 6000);
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          callback();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        supabase.removeChannel(cdcChannel);
+        supabase.removeChannel(broadcastChannel);
         window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleLocal);
-      }
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        if (pollInterval) clearInterval(pollInterval);
+      };
+    }
+
+    return () => {
+      supabase.removeChannel(cdcChannel);
+      supabase.removeChannel(broadcastChannel);
     };
   }
 }

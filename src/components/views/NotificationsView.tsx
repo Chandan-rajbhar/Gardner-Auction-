@@ -63,7 +63,8 @@ const RELATED_MODULE_OPTIONS: ShadcnSelectOption[] = [
   { value: 'payments', label: 'Settlement & Invoices' },
   { value: 'reports', label: 'Reports & Analytics' },
   { value: 'logs', label: 'Activity & Audit Log' },
-  { value: 'settings', label: 'Settings & Portal Config' }
+  { value: 'settings', label: 'Settings & Portal Config' },
+  { value: 'email_list', label: 'Email List / Subscribers' }
 ];
 
 interface NotificationsViewProps {
