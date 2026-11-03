@@ -155,6 +155,15 @@ export interface SettlementCharge {
   date: string;
 }
 
+export interface SettlementPayment {
+  id: string;
+  amount: number;
+  method: string;
+  date: string;
+  notes?: string;
+  status: 'Successful' | 'Pending' | 'Failed' | 'Refunded';
+}
+
 export interface SettlementCustomer {
   id: string;
   auctionId: string;
@@ -173,6 +182,8 @@ export interface SettlementCustomer {
   totalDue?: number;
   depositApplied?: number;
   depositRemaining?: number;
+  paymentsReceived?: number;
+  payments?: SettlementPayment[];
   notes?: string;
   lots: SettlementLotItem[];
   charges: SettlementCharge[];

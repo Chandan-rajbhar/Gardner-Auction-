@@ -1189,19 +1189,33 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5 }}>
                                   {formatCurrency(b.balance)}
                                 </span>
-                                {b.depositApplied && b.depositApplied > 0 && b.balance === 0 ? (
-                                  <span style={{
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    padding: '1px 5px',
-                                    borderRadius: 4,
-                                    background: '#ecfdf5',
-                                    color: '#059669',
-                                    letterSpacing: '0.02em'
-                                  }}>
-                                    PAID (DEPOSIT)
-                                  </span>
-                                ) : b.balance > 0 ? (
+                                {b.balance === 0 ? (
+                                  b.depositApplied && b.depositApplied > 0 && (!b.paymentsReceived || b.paymentsReceived === 0) ? (
+                                    <span style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      background: '#ecfdf5',
+                                      color: '#059669',
+                                      letterSpacing: '0.02em'
+                                    }}>
+                                      PAID (DEPOSIT)
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      background: '#ecfdf5',
+                                      color: '#059669',
+                                      letterSpacing: '0.02em'
+                                    }}>
+                                      PAID
+                                    </span>
+                                  )
+                                ) : (
                                   <span style={{
                                     fontSize: 10,
                                     fontWeight: 700,
@@ -1213,7 +1227,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                                   }}>
                                     DUE
                                   </span>
-                                ) : null}
+                                )}
                               </div>
                             </td>
                           )}

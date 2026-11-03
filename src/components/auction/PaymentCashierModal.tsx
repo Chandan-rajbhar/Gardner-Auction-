@@ -28,8 +28,13 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
   // Initialize values when opened
   useEffect(() => {
     if (isOpen && customer) {
-      setPaymentType('Select Account');
       const due = customer.balance !== undefined ? customer.balance : 0;
+      const hasCredit = customer.depositRemaining !== undefined && customer.depositRemaining > 0;
+      if (hasCredit && (customer.depositRemaining || 0) >= due && due > 0) {
+        setPaymentType('Apply Deposit Credit');
+      } else {
+        setPaymentType('Select Account');
+      }
       setPaymentAmount(due > 0 ? due.toFixed(2) : '0.00');
       setRounding('N/A');
       setNotes('');
@@ -67,22 +72,44 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
       return;
     }
 
+    if (paymentType === 'Apply Deposit Credit') {
+      const avail = customer.depositRemaining || 0;
+      if (amt > avail) {
+        setErrorMsg(`Payment amount (${amt.toFixed(2)}) exceeds available deposit credit (${avail.toFixed(2)}).`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const remainingBalance = Math.max(0, (customer.balance || 0) - amt);
-      const isFullyPaid = remainingBalance <= 0;
-
-      await settlementService.updateInvoice(auctionId, customer.id, {
-        paymentStatus: isFullyPaid ? 'Paid' : (customer.invoiceStatus as any || 'Pending'),
-        paymentMethod: paymentType === 'check written' ? 'Check Written' : (paymentType === 'cash' ? 'Cash' : paymentType),
-        balance: remainingBalance,
-        notes: `[Payment Cashier] ${paymentType}: $${amt.toFixed(2)}${notes ? ' - ' + notes : ''}`.trim()
+      const resolvedPaymentType = paymentType === 'check written' ? 'Check Written' : (paymentType === 'cash' ? 'Cash' : paymentType);
+      const res = await settlementService.recordCustomerPayment(auctionId, customer.id, {
+        amount: amt,
+        paymentType: resolvedPaymentType,
+        notes: notes || ''
       });
 
-      // Update in memory customer balance
-      customer.balance = remainingBalance;
-      if (isFullyPaid) {
-        customer.invoiceStatus = 'Paid';
+      if (res && res.balance !== undefined) {
+        customer.balance = res.balance;
+        customer.invoiceStatus = res.invoiceStatus as any;
+        if (res.depositApplied !== undefined) {
+          customer.depositApplied = res.depositApplied;
+        }
+        if (res.depositRemaining !== undefined) {
+          customer.depositRemaining = res.depositRemaining;
+        }
+        if (res.paymentsReceived !== undefined) {
+          customer.paymentsReceived = res.paymentsReceived;
+        }
+        if (res.payment) {
+          customer.payments = [...(customer.payments || []), res.payment];
+        }
+      } else {
+        const remainingBalance = Math.max(0, (customer.balance || 0) - amt);
+        customer.balance = remainingBalance;
+        if (remainingBalance <= 0) {
+          customer.invoiceStatus = 'Paid';
+        }
       }
 
       onPaymentSuccess?.();
@@ -223,6 +250,11 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
                 }}
               >
                 <option value="Select Account">Select Account</option>
+                {Boolean(customer.depositRemaining && customer.depositRemaining > 0) && (
+                  <option value="Apply Deposit Credit" style={{ fontWeight: 600, color: '#15803d' }}>
+                    Apply Deposit Credit (${customer.depositRemaining?.toFixed(2)} Available)
+                  </option>
+                )}
                 <option value="check written">check written</option>
                 <option value="cash">cash</option>
                 <option value="credit card">credit card</option>

@@ -35,6 +35,12 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
   onBack,
   onRefresh
 }) => {
+  const [localCustomer, setLocalCustomer] = useState<SettlementCustomer>(customer);
+
+  useEffect(() => {
+    setLocalCustomer(customer);
+  }, [customer]);
+
   const [activeTab, setActiveTab] = useState<'invoice' | 'shipments'>('invoice');
   const [isAddChargeModalOpen, setIsAddChargeModalOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -53,14 +59,14 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
   const loadShipments = useCallback(async () => {
     setIsLoadingShipments(true);
     try {
-      const records = await settlementService.getShipmentRecords(customer.id);
+      const records = await settlementService.getShipmentRecords(localCustomer.id);
       setShipmentRecords(records);
     } catch {
       setShipmentRecords([]);
     } finally {
       setIsLoadingShipments(false);
     }
-  }, [customer.id]);
+  }, [localCustomer.id]);
 
   useEffect(() => {
     if (activeTab === 'shipments') {
@@ -87,11 +93,11 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
 
     setIsProcessing(true);
     try {
-      const result = await settlementService.addCustomerCharge(auctionId, customer.id, {
+      const result = await settlementService.addCustomerCharge(auctionId, localCustomer.id, {
         account: chargeAccount,
-        description: chargeDesc || `${customer.isSeller ? 'Seller' : 'Buyer'} Auction Charge`,
+        description: chargeDesc || `${localCustomer.isSeller ? 'Seller' : 'Buyer'} Auction Charge`,
         amount: parseFloat(chargeAmount),
-        type: customer.isSeller ? 'seller' : 'buyer'
+        type: localCustomer.isSeller ? 'seller' : 'buyer'
       });
 
       if (!result) {
@@ -114,7 +120,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
   const handleMarkAllShipped = async () => {
     setIsProcessing(true);
     try {
-      const ok = await settlementService.markAllShipped(auctionId, customer.id);
+      const ok = await settlementService.markAllShipped(auctionId, localCustomer.id);
       if (!ok) {
         setErrorMsg('Failed to mark items as shipped.');
         return;
@@ -130,8 +136,17 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
 
   // Pay customer / Record payment — via PaymentCashierModal
   const handlePaymentSuccess = () => {
-    setPaySuccessMsg(`Payment and cashier settlement confirmed for ${customer.name}.`);
+    setPaySuccessMsg(`Payment and cashier settlement confirmed for ${localCustomer.name}.`);
     setTimeout(() => setPaySuccessMsg(null), 4000);
+    setLocalCustomer(prev => ({
+      ...prev,
+      balance: customer.balance !== undefined ? customer.balance : prev.balance,
+      depositApplied: customer.depositApplied !== undefined ? customer.depositApplied : prev.depositApplied,
+      depositRemaining: customer.depositRemaining !== undefined ? customer.depositRemaining : prev.depositRemaining,
+      paymentsReceived: customer.paymentsReceived !== undefined ? customer.paymentsReceived : prev.paymentsReceived,
+      payments: customer.payments || prev.payments,
+      invoiceStatus: customer.invoiceStatus || prev.invoiceStatus
+    }));
     onRefresh();
   };
 
@@ -141,7 +156,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      const ok = await settlementService.refundLotEntry(auctionId, customer.id, lotId, entryId);
+      const ok = await settlementService.refundLotEntry(auctionId, localCustomer.id, lotId, entryId);
       if (!ok) {
         setErrorMsg('Failed to refund entry.');
         return;
@@ -160,7 +175,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      const ok = await settlementService.deleteCustomerCharge(auctionId, customer.id, chargeId);
+      const ok = await settlementService.deleteCustomerCharge(auctionId, localCustomer.id, chargeId);
       if (!ok) {
         setErrorMsg('Failed to delete charge.');
         return;
@@ -178,7 +193,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      const ok = await settlementService.updateLotShipping(auctionId, customer.id, lotId, checked);
+      const ok = await settlementService.updateLotShipping(auctionId, localCustomer.id, lotId, checked);
       if (!ok) {
         setErrorMsg('Failed to update shipping status.');
         return;
@@ -192,7 +207,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
     }
   };
 
-  const isSeller = customer.isSeller;
+  const isSeller = localCustomer.isSeller;
   const resolvedAuctionTitle = auctionName || `Auction ${auctionId}`;
 
   return (
@@ -233,7 +248,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
               type="button"
               className="btn btn-gold"
               onClick={() => setIsPaymentModalOpen(true)}
-              disabled={isProcessing || customer.balance <= 0}
+              disabled={isProcessing || localCustomer.balance <= 0}
               id="btn-pay-customer"
               style={{
                 display: 'inline-flex',
@@ -245,8 +260,8 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 fontWeight: 700,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
-                cursor: customer.balance <= 0 ? 'not-allowed' : 'pointer',
-                opacity: customer.balance <= 0 ? 0.6 : 1
+                cursor: localCustomer.balance <= 0 ? 'not-allowed' : 'pointer',
+                opacity: localCustomer.balance <= 0 ? 0.6 : 1
               }}
             >
               <CreditCard size={15} />
@@ -294,7 +309,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             }}
           >
             <Mail size={14} color="var(--gold-primary, #a37a3b)" />
-            <span>EMAIL SETTLEMENT{customer.email ? ` TO: ${customer.email}` : ' STATEMENT'}</span>
+            <span>EMAIL SETTLEMENT{localCustomer.email ? ` TO: ${localCustomer.email}` : ' STATEMENT'}</span>
           </button>
         </div>
       </div>
@@ -368,27 +383,27 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             Settlement Details — {resolvedAuctionTitle}
           </div>
           <h2 className="font-serif" style={{ fontSize: 20, color: 'var(--text-main, #0f172a)', margin: '4px 0 0', fontWeight: 700 }}>
-            Customer: {isSeller ? 'SELLER' : 'BUYER'} — {customer.name} (#{customer.bidderNumber})
+            Customer: {isSeller ? 'SELLER' : 'BUYER'} — {localCustomer.name} (#{localCustomer.bidderNumber})
           </h2>
           <div style={{ fontSize: 12.5, color: 'var(--text-dim, #64748b)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span>
-              Invoice: <strong style={{ fontFamily: 'var(--font-mono, monospace)', color: '#0f172a' }}>{customer.invoiceNumber || 'INV-Pending'}</strong>
+              Invoice: <strong style={{ fontFamily: 'var(--font-mono, monospace)', color: '#0f172a' }}>{localCustomer.invoiceNumber || 'INV-Pending'}</strong>
             </span>
             <span>•</span>
             <span>
-              Status: <strong style={{ color: customer.invoiceStatus === 'Paid' ? '#059669' : '#d97706' }}>{customer.invoiceStatus}</strong>
+              Status: <strong style={{ color: localCustomer.invoiceStatus === 'Paid' ? '#059669' : '#d97706' }}>{localCustomer.invoiceStatus}</strong>
             </span>
-            {customer.email && (
+            {localCustomer.email && (
               <>
                 <span>•</span>
                 <span>
-                  Email: <strong style={{ color: 'var(--gold-dark, #8c6428)' }}>{customer.email}</strong>
+                  Email: <strong style={{ color: 'var(--gold-dark, #8c6428)' }}>{localCustomer.email}</strong>
                 </span>
               </>
             )}
             <span>•</span>
             <span>
-              Shipping Requested: <strong>{customer.shippingRequested ? 'Yes' : 'No'}</strong>
+              Shipping Requested: <strong>{localCustomer.shippingRequested ? 'Yes' : 'No'}</strong>
             </span>
           </div>
         </div>
@@ -401,10 +416,10 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             fontFamily: 'var(--font-mono, monospace)',
             fontSize: 26,
             fontWeight: 700,
-            color: customer.balance > 0 ? '#dc2626' : '#059669',
+            color: localCustomer.balance > 0 ? '#dc2626' : '#059669',
             marginTop: 2
           }}>
-            {formatCurrency(customer.balance)}
+            {formatCurrency(localCustomer.balance)}
           </div>
         </div>
       </div>
@@ -453,7 +468,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             transition: 'all 0.15s ease'
           }}
         >
-          Shipments ({customer.shippedCount} of {customer.totalLotsCount || customer.lots.length || 0})
+          Shipments ({localCustomer.shippedCount} of {localCustomer.totalLotsCount || localCustomer.lots.length || 0})
         </button>
       </div>
 
@@ -470,7 +485,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 type="button"
                 className="btn btn-secondary"
                 onClick={handleMarkAllShipped}
-                disabled={isProcessing || customer.lots.length === 0}
+                disabled={isProcessing || localCustomer.lots.length === 0}
                 id="btn-mark-all-shipped"
                 style={{ fontSize: 12.5, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
@@ -506,7 +521,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 </tr>
               </thead>
               <tbody>
-                {customer.lots.map(lot => (
+                {localCustomer.lots.map(lot => (
                   <tr key={lot.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ textAlign: 'center', padding: '10px 12px' }}>
                       <input
@@ -593,7 +608,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 ))}
 
                 {/* Additional Customer Direct Charges */}
-                {customer.charges && customer.charges.map(chg => (
+                {localCustomer.charges && localCustomer.charges.map(chg => (
                   <tr key={chg.id} style={{ background: '#fcfbf9', borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ textAlign: 'center', padding: '10px 12px' }}>—</td>
                     <td style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-dim, #64748b)', padding: '10px 12px' }}>CHG</td>
@@ -637,7 +652,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 ))}
 
                 {/* Empty State */}
-                {customer.lots.length === 0 && (!customer.charges || customer.charges.length === 0) && (
+                {localCustomer.lots.length === 0 && (!localCustomer.charges || localCustomer.charges.length === 0) && (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '40px 16px', color: '#64748b' }}>
                       <FileText size={32} style={{ marginBottom: 8, opacity: 0.4 }} />
@@ -654,42 +669,50 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           </div>
 
           {/* Totals Summary */}
-          {(customer.lots.length > 0 || (customer.charges && customer.charges.length > 0)) && (
+          {(localCustomer.lots.length > 0 || (localCustomer.charges && localCustomer.charges.length > 0)) && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
               <div style={{ minWidth: 260, background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0', padding: '12px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
                   <span>Lot Subtotal:</span>
                   <strong style={{ fontFamily: 'var(--font-mono, monospace)', color: '#0f172a' }}>
-                    {formatCurrency(customer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}
+                    {formatCurrency(localCustomer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}
                   </strong>
                 </div>
-                {customer.charges && customer.charges.length > 0 && (
+                {localCustomer.charges && localCustomer.charges.length > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
                     <span>Additional Charges:</span>
                     <strong style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--gold-dark, #9a741e)' }}>
-                      {formatCurrency(customer.charges.reduce((sum, c) => sum + c.amount, 0))}
+                      {formatCurrency(localCustomer.charges.reduce((sum, c) => sum + c.amount, 0))}
                     </strong>
                   </div>
                 )}
-                {Boolean(customer.depositApplied && customer.depositApplied > 0) && (
+                {Boolean(localCustomer.depositApplied && localCustomer.depositApplied > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#15803d', marginBottom: 4 }}>
                     <span style={{ fontWeight: 600 }}>Deposit Applied:</span>
                     <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-                      -{formatCurrency(customer.depositApplied || 0)}
+                      -{formatCurrency(localCustomer.depositApplied || 0)}
+                    </strong>
+                  </div>
+                )}
+                {Boolean(localCustomer.paymentsReceived && localCustomer.paymentsReceived > 0) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#15803d', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>Payments Received:</span>
+                    <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                      -{formatCurrency(localCustomer.paymentsReceived || 0)}
                     </strong>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 4 }}>
                   <span>Balance Due:</span>
-                  <span style={{ fontFamily: 'var(--font-mono, monospace)', color: customer.balance > 0 ? '#dc2626' : '#059669' }}>
-                    {formatCurrency(customer.balance)}
+                  <span style={{ fontFamily: 'var(--font-mono, monospace)', color: localCustomer.balance > 0 ? '#dc2626' : '#059669' }}>
+                    {formatCurrency(localCustomer.balance)}
                   </span>
                 </div>
-                {Boolean(customer.depositRemaining && customer.depositRemaining > 0) && (
+                {Boolean(localCustomer.depositRemaining && localCustomer.depositRemaining > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#854d0e', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #cbd5e1' }}>
                     <span>Remaining Deposit Credit:</span>
                     <strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-                      {formatCurrency(customer.depositRemaining || 0)}
+                      {formatCurrency(localCustomer.depositRemaining || 0)}
                     </strong>
                   </div>
                 )}
@@ -712,14 +735,14 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Fulfilment Progress</span>
                 <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: 'var(--gold-primary, #a37a3b)' }}>
-                  {customer.shippedCount} of {customer.totalLotsCount || customer.lots.length || 0} Items Shipped
+                  {localCustomer.shippedCount} of {localCustomer.totalLotsCount || localCustomer.lots.length || 0} Items Shipped
                 </span>
               </div>
               <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
                   background: 'var(--gold-primary, #a37a3b)',
-                  width: `${(customer.shippedCount / Math.max(1, customer.totalLotsCount || customer.lots.length || 1)) * 100}%`,
+                  width: `${(localCustomer.shippedCount / Math.max(1, localCustomer.totalLotsCount || localCustomer.lots.length || 1)) * 100}%`,
                   transition: 'width 0.3s ease'
                 }} />
               </div>
@@ -744,7 +767,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                   </tr>
                 </thead>
                 <tbody>
-                  {customer.lots.map(lot => {
+                  {localCustomer.lots.map(lot => {
                     const shpRecord = shipmentByLotId[lot.id];
                     return (
                       <tr key={lot.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -777,7 +800,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                       </tr>
                     );
                   })}
-                  {customer.lots.length === 0 && (
+                  {localCustomer.lots.length === 0 && (
                     <tr>
                       <td colSpan={5} style={{ textAlign: 'center', padding: '30px 16px', color: '#64748b' }}>
                         No shipment tracking records found for this account.
@@ -859,7 +882,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
       <EmailSettlementModal
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}
-        customer={customer}
+        customer={localCustomer}
         auctionTitle={resolvedAuctionTitle}
         auctionCode={auctionId}
         onSuccess={() => onRefresh()}
@@ -869,7 +892,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
       <PaymentCashierModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        customer={customer}
+        customer={localCustomer}
         auctionId={auctionId}
         onPaymentSuccess={handlePaymentSuccess}
       />
@@ -901,10 +924,10 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             <div style={{ fontSize: 12, color: '#666' }}>1960 Heritage Way, Suite 400 • Missoula, MT 59801 • Tel: (406) 541-4400</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>INVOICE: {customer.invoiceNumber || 'INV-Pending'}</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>INVOICE: {localCustomer.invoiceNumber || 'INV-Pending'}</div>
             <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Date: {new Date().toLocaleDateString()}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color: customer.invoiceStatus === 'Paid' ? '#059669' : '#d97706' }}>
-              Status: {customer.invoiceStatus}
+            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2, color: localCustomer.invoiceStatus === 'Paid' ? '#059669' : '#d97706' }}>
+              Status: {localCustomer.invoiceStatus}
             </div>
           </div>
         </div>
@@ -912,17 +935,17 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24, fontSize: 13 }}>
           <div style={{ border: '1px solid #ddd', padding: 14, borderRadius: 4 }}>
             <strong style={{ textTransform: 'uppercase', fontSize: 11, color: '#666' }}>Billed Customer:</strong>
-            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{customer.name}</div>
-            <div style={{ marginTop: 2 }}>Paddle / Account #: <strong>#{customer.bidderNumber}</strong></div>
-            {customer.email && <div style={{ marginTop: 2 }}>Email: {customer.email}</div>}
-            <div style={{ marginTop: 2 }}>Shipping Requested: {customer.shippingRequested ? 'Yes' : 'No'}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{localCustomer.name}</div>
+            <div style={{ marginTop: 2 }}>Paddle / Account #: <strong>#{localCustomer.bidderNumber}</strong></div>
+            {localCustomer.email && <div style={{ marginTop: 2 }}>Email: {localCustomer.email}</div>}
+            <div style={{ marginTop: 2 }}>Shipping Requested: {localCustomer.shippingRequested ? 'Yes' : 'No'}</div>
           </div>
 
           <div style={{ border: '1px solid #ddd', padding: 14, borderRadius: 4 }}>
             <strong style={{ textTransform: 'uppercase', fontSize: 11, color: '#666' }}>Auction Information:</strong>
             <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>{resolvedAuctionTitle}</div>
-            <div style={{ marginTop: 2 }}>Total Lots Won: {customer.lotCount || customer.lots.length}</div>
-            <div style={{ marginTop: 2 }}>Fulfillment: {customer.shippedCount} of {customer.totalLotsCount || customer.lots.length || 0} Shipped</div>
+            <div style={{ marginTop: 2 }}>Total Lots Won: {localCustomer.lotCount || localCustomer.lots.length}</div>
+            <div style={{ marginTop: 2 }}>Fulfillment: {localCustomer.shippedCount} of {localCustomer.totalLotsCount || localCustomer.lots.length || 0} Shipped</div>
           </div>
         </div>
 
@@ -936,7 +959,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
             </tr>
           </thead>
           <tbody>
-            {customer.lots.map(l => (
+            {localCustomer.lots.map(l => (
               <tr key={l.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '8px', fontWeight: 700 }}>#{l.lotNumber}</td>
                 <td style={{ padding: '8px' }}>{l.title}</td>
@@ -946,7 +969,7 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
                 </td>
               </tr>
             ))}
-            {customer.charges && customer.charges.map(ch => (
+            {localCustomer.charges && localCustomer.charges.map(ch => (
               <tr key={ch.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '8px', color: '#666' }}>CHG</td>
                 <td style={{ padding: '8px' }}>{ch.description} ({ch.account})</td>
@@ -961,22 +984,28 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
           <div style={{ width: 280, border: '1px solid #000', padding: 14, borderRadius: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
               <span>Subtotal:</span>
-              <strong>{formatCurrency(customer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}</strong>
+              <strong>{formatCurrency(localCustomer.lots.reduce((acc, l) => acc + l.entries.reduce((s, e) => s + e.amount, 0), 0))}</strong>
             </div>
-            {Boolean(customer.depositApplied && customer.depositApplied > 0) && (
+            {Boolean(localCustomer.depositApplied && localCustomer.depositApplied > 0) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: '#15803d' }}>
                 <span>Deposit Applied:</span>
-                <strong>-{formatCurrency(customer.depositApplied || 0)}</strong>
+                <strong>-{formatCurrency(localCustomer.depositApplied || 0)}</strong>
+              </div>
+            )}
+            {Boolean(localCustomer.paymentsReceived && localCustomer.paymentsReceived > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: '#15803d' }}>
+                <span>Payments Received:</span>
+                <strong>-{formatCurrency(localCustomer.paymentsReceived || 0)}</strong>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, borderTop: '1px solid #ccc', paddingTop: 8 }}>
               <span>Balance Due:</span>
-              <span style={{ color: customer.balance > 0 ? '#b91c1c' : '#15803d' }}>{formatCurrency(customer.balance)}</span>
+              <span style={{ color: localCustomer.balance > 0 ? '#b91c1c' : '#15803d' }}>{formatCurrency(localCustomer.balance)}</span>
             </div>
-            {Boolean(customer.depositRemaining && customer.depositRemaining > 0) && (
+            {Boolean(localCustomer.depositRemaining && localCustomer.depositRemaining > 0) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, paddingTop: 6, borderTop: '1px dashed #ccc', color: '#854d0e' }}>
                 <span>Remaining Deposit Credit:</span>
-                <strong>{formatCurrency(customer.depositRemaining || 0)}</strong>
+                <strong>{formatCurrency(localCustomer.depositRemaining || 0)}</strong>
               </div>
             )}
           </div>

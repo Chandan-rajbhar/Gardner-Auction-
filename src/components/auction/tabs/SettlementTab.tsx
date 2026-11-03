@@ -464,19 +464,33 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                           <span style={{ fontSize: 13.5 }}>
                             {formatCurrency(customer.balance)}
                           </span>
-                          {customer.depositApplied && customer.depositApplied > 0 && customer.balance === 0 ? (
-                            <span style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              padding: '1px 5px',
-                              borderRadius: 4,
-                              background: '#ecfdf5',
-                              color: '#059669',
-                              letterSpacing: '0.02em'
-                            }}>
-                              PAID (DEPOSIT)
-                            </span>
-                          ) : customer.balance > 0 ? (
+                          {customer.balance === 0 ? (
+                            customer.depositApplied && customer.depositApplied > 0 && (!customer.paymentsReceived || customer.paymentsReceived === 0) ? (
+                              <span style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                background: '#ecfdf5',
+                                color: '#059669',
+                                letterSpacing: '0.02em'
+                              }}>
+                                PAID (DEPOSIT)
+                              </span>
+                            ) : (
+                              <span style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                background: '#ecfdf5',
+                                color: '#059669',
+                                letterSpacing: '0.02em'
+                              }}>
+                                PAID
+                              </span>
+                            )
+                          ) : (
                             <span style={{
                               fontSize: 10,
                               fontWeight: 700,
@@ -488,7 +502,7 @@ export const SettlementTab: React.FC<SettlementTabProps> = ({
                             }}>
                               DUE
                             </span>
-                          ) : null}
+                          )}
                         </div>
                       </td>
                     )}

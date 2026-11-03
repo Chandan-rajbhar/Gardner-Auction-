@@ -231,6 +231,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   const [deposits, setDeposits] = useState<BidderDeposit[]>(
     () => (auction?.dayStats?.deposits || []).filter(d => !isMockDepositItem(d))
   );
+  const [allDynamicBidders, setAllDynamicBidders] = useState<BidderRegistration[]>([]);
 
   // Dashboard Detail Subtabs: Details | Registrations | Lot Stats
   const [dashboardBottomTab, setDashboardBottomTab] = useState<'details' | 'registrations' | 'lot-stats'>('details');
@@ -617,8 +618,48 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
   }, [auction?.id, auction?.dayStats]);
 
+  // Load all dynamic registered bidders from Supabase so Record Bidder Deposit & Deposit Filters show all real bidders
+  const loadAllDynamicBidders = useCallback(async () => {
+    try {
+      const client = supabaseAdmin || supabase;
+      const { data, error } = await client
+        .from('bidder_registrations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mapped: BidderRegistration[] = data.map((row: any) => ({
+          id: row.id,
+          bidCardNumber: row.bid_card_number,
+          bidderName: row.bidder_name,
+          companyName: row.company_name || '',
+          email: row.email || '',
+          phone: row.phone || '',
+          hearAboutUs: row.hear_about_us || '',
+          username: row.username || '',
+          hibidReputation: row.hibid_reputation || '5.0 ★',
+          bidCount: Number(row.bid_count) || 0,
+          permissionText: row.permission_text || 'Approved - Standard',
+          dateTime: row.date_time || new Date(row.created_at).toLocaleDateString(),
+          site: row.site || 'hibid.com',
+          notes: row.notes || '',
+          shippingRequested: Boolean(row.shipping_requested),
+          bidderNotes: row.bidder_notes || '',
+          isCheckedIn: Boolean(row.is_checked_in),
+          depositAmount: Number(row.deposit_amount) || 0,
+          depositStatus: row.deposit_status || 'Pending',
+          createdAt: row.created_at
+        }));
+        setAllDynamicBidders(mapped);
+      }
+    } catch (err) {
+      console.warn('[AuctionDayTab] loadAllDynamicBidders error:', err);
+    }
+  }, []);
+
   // Initial mount load: pull fresh data directly from Supabase / auctionDayService
   useEffect(() => {
+    loadAllDynamicBidders();
     if (!auction?.id) return;
     let isMounted = true;
     auctionDayService.getAuctionDayData(auction.id, lots).then(payload => {
@@ -670,9 +711,10 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     };
   }, [auction?.id, lots, dispatch]);
 
-  // Dynamically load fresh deposits when opening Manage Deposits modal
+  // Dynamically load fresh deposits and bidders when opening Manage Deposits modal
   useEffect(() => {
     if (isManageDepositsModalOpen) {
+      loadAllDynamicBidders();
       const targetEventId = activeEventId || selectedAuctionId || auction?.id;
       if (targetEventId) {
         auctionDayService.getDeposits(targetEventId).then(fresh => {
@@ -682,7 +724,13 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
         }).catch(() => { });
       }
     }
-  }, [isManageDepositsModalOpen, activeEventId, selectedAuctionId, auction?.id]);
+  }, [isManageDepositsModalOpen, activeEventId, selectedAuctionId, auction?.id, loadAllDynamicBidders]);
+
+  useEffect(() => {
+    if (depositDrawer.isOpen || isNewDepositDialogOpen) {
+      loadAllDynamicBidders();
+    }
+  }, [depositDrawer.isOpen, isNewDepositDialogOpen, loadAllDynamicBidders]);
 
   // Sync custom lots if lots prop changes externally
   useEffect(() => {
@@ -948,7 +996,8 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
   // Deduplicated list of registered bidders by paddle / name so duplicate options never appear in Select Bidder
   const uniqueRegisteredBidders = useMemo(() => {
     const seen = new Set<string>();
-    return (registrations || []).filter(r => {
+    const combined = [...(registrations || []), ...(allDynamicBidders || [])];
+    return combined.filter(r => {
       if (!r) return false;
       const paddle = (r.bidCardNumber || '').toString().trim().toLowerCase();
       const name = (r.bidderName || '').toString().trim().toLowerCase();
@@ -956,8 +1005,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
+    }).sort((a, b) => {
+      const pA = parseInt(String(a.bidCardNumber).replace(/\D/g, ''), 10) || 0;
+      const pB = parseInt(String(b.bidCardNumber).replace(/\D/g, ''), 10) || 0;
+      return pA - pB;
     });
-  }, [registrations]);
+  }, [registrations, allDynamicBidders]);
 
   // Map any registration id to its canonical id in uniqueRegisteredBidders
   const canonicalRegIdMap = useMemo(() => {
@@ -2144,7 +2197,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     }
 
     const targetRegId = canonicalRegIdMap.get(newDepBidderRegId) || newDepBidderRegId;
-    const matchedReg = registrations.find(r => r.id === targetRegId) || registrations.find(r => r.id === newDepBidderRegId);
+    const matchedReg = uniqueRegisteredBidders.find(r => r.id === targetRegId) || uniqueRegisteredBidders.find(r => r.id === newDepBidderRegId) || registrations.find(r => r.id === targetRegId);
     if (!matchedReg && newDepBidderRegId !== 'walk_in') {
       showToast('error', 'Bidder Required', 'Please select a registered bidder.');
       return;
@@ -2663,7 +2716,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     try {
       if (depositDrawer.mode === 'add') {
         const targetRegId = canonicalRegIdMap.get(drawerDepBidderId) || drawerDepBidderId;
-        const matchedReg = registrations.find(r => r.id === targetRegId) || registrations.find(r => r.id === drawerDepBidderId);
+        const matchedReg = uniqueRegisteredBidders.find(r => r.id === targetRegId) || uniqueRegisteredBidders.find(r => r.id === drawerDepBidderId) || registrations.find(r => r.id === targetRegId);
         const res = await auctionDayService.recordDeposit(auction.id, {
           registrationId: matchedReg?.id,
           bidCardNumber: matchedReg?.bidCardNumber || 'WALK-IN',

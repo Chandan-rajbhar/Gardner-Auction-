@@ -1,5 +1,5 @@
 import { supabaseAdmin, supabase } from '../lib/supabase';
-import { SettlementCustomer, SettlementLotItem, SettlementCharge } from '../types/auctionDetail';
+import { SettlementCustomer, SettlementLotItem, SettlementCharge, SettlementPayment } from '../types/auctionDetail';
 import { InvoiceSettlement, ConsignorSettlement } from '../types';
 
 export interface BatchShipmentData {
@@ -33,6 +33,79 @@ export interface ShipmentRecord {
   shippedBy?: string;
   notes?: string;
   status: 'Pending' | 'Shipped' | 'Picked Up' | 'Returned';
+}
+
+/**
+ * Helper: Parse recorded customer payments from invoice notes.
+ * Supports structured JSON [PAYMENTS_DATA]:[...] and legacy [Payment Cashier] tags.
+ */
+export function parsePaymentsFromNotes(notes?: string): SettlementPayment[] {
+  if (!notes) return [];
+
+  const marker = '[PAYMENTS_DATA]:';
+  const markerIdx = notes.indexOf(marker);
+  if (markerIdx !== -1) {
+    try {
+      const rest = notes.slice(markerIdx + marker.length);
+      const endIdx = rest.indexOf('\n');
+      const jsonStr = endIdx === -1 ? rest.trim() : rest.slice(0, endIdx).trim();
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) {
+        return parsed.map((p: any) => ({
+          id: String(p.id || 'pay-' + Math.random().toString(36).slice(2, 6)),
+          amount: Number(p.amount) || 0,
+          method: String(p.method || 'Credit Card'),
+          date: String(p.date || new Date().toISOString().split('T')[0]),
+          notes: String(p.notes || ''),
+          status: (p.status as any) || 'Successful'
+        }));
+      }
+    } catch (_) {}
+  }
+
+  // Fallback: parse legacy tags: [Payment Cashier] Check Written: $100.00
+  const legacyRegex = /\[Payment Cashier\]\s*([^:\n]+):\s*\$([0-9,.]+)(?:\s*-\s*([^\n]*))?/gi;
+  const legacyPayments: SettlementPayment[] = [];
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  while ((match = legacyRegex.exec(notes)) !== null) {
+    const method = match[1]?.trim() || 'Cashier';
+    const amount = parseFloat(match[2].replace(/,/g, '')) || 0;
+    const noteText = match[3]?.trim() || '';
+    if (amount > 0) {
+      legacyPayments.push({
+        id: 'legacy-pay-' + (idx++),
+        amount,
+        method,
+        date: new Date().toISOString().split('T')[0],
+        notes: noteText,
+        status: 'Successful'
+      });
+    }
+  }
+
+  return legacyPayments;
+}
+
+/**
+ * Helper: Serialize payments array cleanly into invoice notes.
+ */
+export function serializePaymentsToNotes(payments: SettlementPayment[], originalNotes?: string): string {
+  const marker = '[PAYMENTS_DATA]:';
+  let cleanedNotes = originalNotes || '';
+  if (cleanedNotes.includes(marker)) {
+    cleanedNotes = cleanedNotes
+      .split('\n')
+      .filter(line => !line.startsWith(marker))
+      .join('\n')
+      .trim();
+  }
+
+  const jsonLine = marker + JSON.stringify(payments);
+  if (!cleanedNotes) {
+    return jsonLine;
+  }
+  return jsonLine + '\n' + cleanedNotes;
 }
 
 export class SettlementService {
@@ -100,6 +173,237 @@ export class SettlementService {
   /**
    * Map a raw invoices DB row to SettlementCustomer, resolving lots and charges.
    */
+    /**
+   * Recalculate dynamic financials for a specific invoice using live records from Supabase:
+   * - invoice_lots entries (hammer, buyer's premium, taxes, fees)
+   * - invoice_charges (shipping & handling, storage, custom charges)
+   * - bidder_deposits (matching paddle/bidder, active only)
+   * - recorded payments from invoice notes
+   * 
+   * Outstanding Balance = Total Charges - Deposits Applied - Successful Payments
+   * Updates Supabase invoices table with the calculated total_due, balance, and payment_status.
+   */
+  public async recalculateInvoiceFinancials(invoiceId: string): Promise<{
+    lotSubtotal: number;
+    additionalCharges: number;
+    shippingFee: number;
+    taxAmount: number;
+    totalDue: number;
+    depositApplied: number;
+    depositRemaining: number;
+    paymentsReceived: number;
+    payments: SettlementPayment[];
+    balance: number;
+    invoiceStatus: 'Paid' | 'Pending';
+  } | null> {
+    const client = this.client;
+    try {
+      const { data: inv, error: invErr } = await client
+        .from('invoices')
+        .select('*')
+        .eq('id', invoiceId)
+        .maybeSingle();
+
+      if (invErr || !inv) {
+        console.error('[SettlementService] recalculateInvoiceFinancials: Invoice not found', invoiceId);
+        return null;
+      }
+
+      const lots = await this.fetchLotsForInvoice(invoiceId);
+      const lotSubtotal = Math.round(
+        lots.reduce((sum, l) => sum + (l.entries || []).reduce((eSum, e) => eSum + (Number(e.amount) || 0), 0), 0) * 100
+      ) / 100;
+
+      const charges = await this.fetchChargesForInvoice(invoiceId);
+      const additionalCharges = Math.round(
+        charges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) * 100
+      ) / 100;
+
+      const shippingFee = Number(inv.shipping_fee) || 0;
+      const taxAmount = Number(inv.tax_amount) || 0;
+      const totalDue = Math.round((lotSubtotal + additionalCharges + shippingFee + taxAmount) * 100) / 100;
+
+      let totalDepositAvailable = 0;
+      let matchedDepRows: any[] = [];
+      try {
+        const { data: depRows } = await client
+          .from('bidder_deposits')
+          .select('id, amount, amount_applied, amount_remaining, status, bid_card_number, bidder_name')
+          .eq('auction_id', inv.auction_id)
+          .neq('status', 'Refunded');
+
+        if (depRows && depRows.length > 0) {
+          const pLower = (inv.paddle_number || '').trim().toLowerCase();
+          const bLower = (inv.buyer_name || '').trim().toLowerCase();
+          matchedDepRows = depRows.filter((d: any) =>
+            (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+            (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+          );
+          totalDepositAvailable = matchedDepRows.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
+        }
+      } catch (_) {}
+
+      const payments = parsePaymentsFromNotes(inv.notes);
+      const isDepositPayment = (p: SettlementPayment) => {
+        const m = (p.method || '').toLowerCase();
+        return m.includes('deposit') || m.includes('credit');
+      };
+
+      const depositPayments = Math.round(
+        payments
+          .filter(p => (!p.status || p.status === 'Successful' || (p.status as any) === 'Paid') && isDepositPayment(p))
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+      ) / 100;
+
+      const externalPayments = Math.round(
+        payments
+          .filter(p => (!p.status || p.status === 'Successful' || (p.status as any) === 'Paid') && !isDepositPayment(p))
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+      ) / 100;
+
+      const initialLotDeposit = Math.round(Math.min(lotSubtotal, totalDepositAvailable) * 100) / 100;
+      const depositApplied = Math.round(Math.min(totalDepositAvailable, initialLotDeposit + depositPayments) * 100) / 100;
+      const depositRemaining = Math.max(0, Math.round((totalDepositAvailable - depositApplied) * 100) / 100);
+
+      // Sync bidder_deposits table so Bidder Deposits modal & receipts reflect updated amount_applied and amount_remaining
+      if (matchedDepRows.length > 0) {
+        let remainingToApply = depositApplied;
+        for (const depRow of matchedDepRows) {
+          const depAmt = Number(depRow.amount) || 0;
+          const appliedForThis = Math.round(Math.min(depAmt, Math.max(0, remainingToApply)) * 100) / 100;
+          const remainingForThis = Math.round((depAmt - appliedForThis) * 100) / 100;
+          const newDepStatus = remainingForThis === 0 ? 'Applied' : 'Collected';
+
+          if (depRow.amount_applied !== appliedForThis || depRow.amount_remaining !== remainingForThis || depRow.status !== newDepStatus) {
+            try {
+              await client.from('bidder_deposits').update({
+                amount_applied: appliedForThis,
+                amount_remaining: remainingForThis,
+                status: newDepStatus,
+                updated_at: new Date().toISOString()
+              }).eq('id', depRow.id);
+            } catch (_) {}
+          }
+          remainingToApply = Math.round((remainingToApply - appliedForThis) * 100) / 100;
+        }
+      }
+
+      const paymentsReceived = externalPayments;
+      const rawBal = Math.round((totalDue - depositApplied - paymentsReceived) * 100) / 100;
+      const balance = Math.max(0, rawBal);
+      const invoiceStatus: 'Paid' | 'Pending' = balance === 0 ? 'Paid' : 'Pending';
+
+      await client.from('invoices').update({
+        total_due: totalDue,
+        balance,
+        payment_status: invoiceStatus,
+        updated_at: new Date().toISOString()
+      }).eq('id', invoiceId);
+
+      return {
+        lotSubtotal,
+        additionalCharges,
+        shippingFee,
+        taxAmount,
+        totalDue,
+        depositApplied,
+        depositRemaining,
+        paymentsReceived,
+        payments,
+        balance,
+        invoiceStatus
+      };
+    } catch (err) {
+      console.error('[SettlementService] recalculateInvoiceFinancials error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Record a customer payment in Supabase, saving to invoices.notes and updating balance dynamically.
+   */
+  public async recordCustomerPayment(
+    auctionId: string,
+    customerId: string,
+    paymentData: {
+      amount: number;
+      paymentType: string;
+      notes?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    balance: number;
+    invoiceStatus: 'Paid' | 'Pending';
+    depositApplied?: number;
+    depositRemaining?: number;
+    paymentsReceived?: number;
+    payment?: SettlementPayment;
+  }> {
+    const client = this.client;
+    try {
+      const { data: inv, error: fetchErr } = await client
+        .from('invoices')
+        .select('*')
+        .eq('id', customerId)
+        .maybeSingle();
+
+      if (fetchErr || !inv) {
+        throw new Error('Invoice ' + customerId + ' not found');
+      }
+
+      const existingPayments = parsePaymentsFromNotes(inv.notes);
+      const newPayment: SettlementPayment = {
+        id: 'pay-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        amount: Math.round(Number(paymentData.amount) * 100) / 100,
+        method: paymentData.paymentType || 'Credit Card',
+        date: new Date().toISOString().split('T')[0],
+        notes: paymentData.notes || '',
+        status: 'Successful'
+      };
+
+      const updatedPayments = [...existingPayments, newPayment];
+      const serializedNotes = serializePaymentsToNotes(
+        updatedPayments,
+        '[Payment Cashier] ' + paymentData.paymentType + ': $' + newPayment.amount.toFixed(2) + (paymentData.notes ? ' - ' + paymentData.notes : '')
+      );
+
+      await client.from('invoices').update({
+        notes: serializedNotes,
+        payment_method: paymentData.paymentType,
+        payment_date: newPayment.date,
+        updated_at: new Date().toISOString()
+      }).eq('id', customerId);
+
+      const financials = await this.recalculateInvoiceFinancials(customerId);
+
+      try {
+        await client.from('activity_logs').insert([{
+          category: 'FINANCE',
+          event_action: 'Payment Recorded: $' + newPayment.amount.toFixed(2),
+          operator_service: 'AF360 Cashier Desk',
+          audit_details: 'Recorded ' + paymentData.paymentType + ' payment of $' + newPayment.amount.toFixed(2) + ' on invoice ' + customerId + '. Remaining balance: $' + (financials?.balance ?? 0).toFixed(2) + '.',
+          status: 'SUCCESS'
+        }]);
+      } catch (_) {}
+
+      return {
+        success: true,
+        balance: financials?.balance ?? 0,
+        invoiceStatus: financials?.invoiceStatus ?? 'Pending',
+        depositApplied: financials?.depositApplied,
+        depositRemaining: financials?.depositRemaining,
+        paymentsReceived: financials?.paymentsReceived,
+        payment: newPayment
+      };
+    } catch (err: any) {
+      console.error('[SettlementService] recordCustomerPayment error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Map a raw invoices DB row to SettlementCustomer, resolving lots and charges.
+   */
   private async mapInvoiceRowToCustomer(row: any, userEmailMap?: Map<string, string>): Promise<SettlementCustomer> {
     const lots = await this.fetchLotsForInvoice(row.id);
     const charges = await this.fetchChargesForInvoice(row.id);
@@ -112,9 +416,19 @@ export class SettlementService {
       resolvedEmail = userEmailMap.get(paddleKey) || userEmailMap.get(numKey) || userEmailMap.get(nameKey) || resolvedEmail;
     }
 
-    // Query deposits matching this invoice's auction_id and paddle_number/buyer_name
-    let depositApplied = 0;
-    let depositRemaining = 0;
+    const lotSubtotal = Math.round(
+      lots.reduce((sum, l) => sum + (l.entries || []).reduce((eSum, e) => eSum + (Number(e.amount) || 0), 0), 0) * 100
+    ) / 100;
+
+    const additionalCharges = Math.round(
+      charges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) * 100
+    ) / 100;
+
+    const shippingFee = Number(row.shipping_fee) || 0;
+    const taxAmount = Number(row.tax_amount) || 0;
+    const totalDue = Math.round((lotSubtotal + additionalCharges + shippingFee + taxAmount) * 100) / 100;
+
+    let totalDepositAvailable = 0;
     try {
       const { data: depRows } = await this.client
         .from('bidder_deposits')
@@ -129,15 +443,47 @@ export class SettlementService {
           (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
           (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
         );
-        depositApplied = matched.reduce((sum: number, d: any) => sum + (Number(d.amount_applied) || 0), 0);
-        depositRemaining = matched.reduce((sum: number, d: any) => sum + (Number(d.amount_remaining) || 0), 0);
+        totalDepositAvailable = matched.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
       }
     } catch (_) {}
 
-    const totalDue = Number(row.total_due) || 0;
-    const rawBalance = row.balance !== undefined ? Number(row.balance) : (row.payment_status === 'Paid' ? 0 : totalDue);
+    const payments = parsePaymentsFromNotes(row.notes);
+    const isDepositPayment = (p: SettlementPayment) => {
+      const m = (p.method || '').toLowerCase();
+      return m.includes('deposit') || m.includes('credit');
+    };
+
+    const depositPayments = Math.round(
+      payments
+        .filter(p => (!p.status || p.status === 'Successful' || (p.status as string) === 'Paid') && isDepositPayment(p))
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+    ) / 100;
+
+    const externalPayments = Math.round(
+      payments
+        .filter(p => (!p.status || p.status === 'Successful' || (p.status as string) === 'Paid') && !isDepositPayment(p))
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+    ) / 100;
+
+    const initialLotDeposit = Math.round(Math.min(lotSubtotal, totalDepositAvailable) * 100) / 100;
+    const depositApplied = Math.round(Math.min(totalDepositAvailable, initialLotDeposit + depositPayments) * 100) / 100;
+    const depositRemaining = Math.max(0, Math.round((totalDepositAvailable - depositApplied) * 100) / 100);
+
+    const paymentsReceived = externalPayments;
+    const rawBalance = Math.round((totalDue - depositApplied - paymentsReceived) * 100) / 100;
     const calculatedBalance = Math.max(0, rawBalance);
-    const invoiceStatus = calculatedBalance === 0 ? 'Paid' : (row.payment_status || 'Pending');
+    const invoiceStatus = calculatedBalance === 0 ? 'Paid' : 'Pending';
+
+    if (Number(row.balance) !== calculatedBalance || Number(row.total_due) !== totalDue || row.payment_status !== invoiceStatus) {
+      try {
+        await this.client.from('invoices').update({
+          balance: calculatedBalance,
+          total_due: totalDue,
+          payment_status: invoiceStatus,
+          updated_at: new Date().toISOString()
+        }).eq('id', row.id);
+      } catch (_) {}
+    }
 
     return {
       id: row.id,
@@ -153,6 +499,8 @@ export class SettlementService {
       totalDue,
       depositApplied,
       depositRemaining,
+      paymentsReceived,
+      payments,
       balance: calculatedBalance,
       invoiceNumber: row.invoice_number,
       invoiceStatus,
@@ -317,33 +665,70 @@ export class SettlementService {
         const matchedUser = userByPaddle.get(paddleLower);
         const matchedReg = registrations.find((r: any) => String(r.bid_card_number).toLowerCase() === paddleLower);
 
-        const buyerName = firstLot.high_bidder_name?.trim() || matchedReg?.bidder_name?.trim() || matchedUser?.full_name?.trim() || `${matchedUser?.first_name || ''} ${matchedUser?.last_name || ''}`.trim() || `Bidder #${paddleRaw}`;
-        const buyerEmail = matchedReg?.email || matchedUser?.email || `paddle${paddleRaw}@gardner-auction.com`;
+        const buyerName = firstLot.high_bidder_name?.trim() || matchedReg?.bidder_name?.trim() || matchedUser?.full_name?.trim() || ((matchedUser?.first_name || '') + ' ' + (matchedUser?.last_name || '')).trim() || ('Bidder #' + paddleRaw);
+        const buyerEmail = matchedReg?.email || matchedUser?.email || ('paddle' + paddleRaw + '@gardner-auction.com');
+
+        let invoice = invoiceByPaddle.get(paddleLower);
+        let invoiceId = invoice?.id;
+
+        if (!invoice) {
+          const invoiceNumber = 'INV-GA-' + new Date().getFullYear() + '-' + paddleRaw.replace(/[^a-zA-Z0-9]/g, '');
+          invoiceId = 'inv-' + auctionId + '-' + paddleRaw.replace(/[^a-zA-Z0-9_-]/g, '');
+        }
+
+        // Upsert lot rows in invoice_lots only if not already existing (preserve refunds/modifications)
+        if (invoiceId) {
+          for (const lot of paddleLots) {
+            const ilotId = 'ilot-' + invoiceId + '-' + lot.id;
+            const hammer = Number(lot.hammer_price) || 0;
+            const bp = Math.round(hammer * 0.15 * 100) / 100;
+
+            const { data: exLot } = await client
+              .from('invoice_lots')
+              .select('id')
+              .eq('id', ilotId)
+              .maybeSingle();
+
+            if (!exLot) {
+              await client.from('invoice_lots').insert([{
+                id: ilotId,
+                invoice_id: invoiceId,
+                auction_id: auctionId,
+                lot_id: lot.id,
+                lot_number: lot.lot_number,
+                title: lot.title || ('Lot #' + lot.lot_number),
+                status: 'Sold',
+                qty_sold: 1,
+                is_shipped: false,
+                entries: [
+                  { id: 'entry-hammer-' + lot.id, type: 'sold_lot', label: 'Sold Lot #' + lot.lot_number, amount: hammer },
+                  { id: 'entry-bp-' + lot.id, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: bp }
+                ],
+                updated_at: new Date().toISOString()
+              }]);
+            }
+          }
+        }
+
+        // Fetch actual lots and charges to calculate accurate subtotal
+        const currentLots = invoiceId ? await this.fetchLotsForInvoice(invoiceId) : [];
+        const lotSubtotal = Math.round(
+          currentLots.reduce((sum, l) => sum + (l.entries || []).reduce((eSum, e) => eSum + (Number(e.amount) || 0), 0), 0) * 100
+        ) / 100;
+
+        const currentCharges = invoiceId ? await this.fetchChargesForInvoice(invoiceId) : [];
+        const existingChargesTotal = Math.round(
+          currentCharges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) * 100
+        ) / 100;
 
         const hammerSubtotal = paddleLots.reduce((sum: number, l: any) => sum + (Number(l.hammer_price) || 0), 0);
         const buyersPremium = Math.round(hammerSubtotal * 0.15 * 100) / 100;
         const taxAmount = 0;
         const shippingFee = 0;
         const itemsCount = paddleLots.length;
+        const totalPurchaseAmount = Math.round((lotSubtotal + existingChargesTotal + taxAmount + shippingFee) * 100) / 100;
 
-        let invoice = invoiceByPaddle.get(paddleLower);
-        let invoiceId = invoice?.id;
-
-        // Fetch existing charges if invoice exists
-        let existingChargesTotal = 0;
-        if (invoiceId) {
-          const { data: chgRows } = await client
-            .from('invoice_charges')
-            .select('amount')
-            .eq('invoice_id', invoiceId);
-          if (chgRows && chgRows.length > 0) {
-            existingChargesTotal = chgRows.reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
-          }
-        }
-
-        const totalPurchaseAmount = Math.round((hammerSubtotal + buyersPremium + taxAmount + shippingFee + existingChargesTotal) * 100) / 100;
-
-        // Find available deposits for this paddle (sorted FIFO by created_at)
+        // Find available deposits for this paddle
         const bidderDeposits = allDeposits.filter((d: any) => {
           if (d.status === 'Refunded') return false;
           const depPaddle = String(d.bid_card_number || '').trim().toLowerCase();
@@ -351,13 +736,27 @@ export class SettlementService {
           return depPaddle === paddleLower || (depName && depName === buyerName.toLowerCase());
         });
 
-        let amountToCover = totalPurchaseAmount;
+        const totalDepositAvailable = bidderDeposits.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
+        const payments = invoice ? parsePaymentsFromNotes(invoice.notes) : [];
+        const isDepPay = (p: SettlementPayment) => {
+          const m = (p.method || '').toLowerCase();
+          return m.includes('deposit') || m.includes('credit');
+        };
+        const depositPayments = Math.round(
+          payments
+            .filter(p => (!p.status || p.status === 'Successful' || (p.status as any) === 'Paid') && isDepPay(p))
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+        ) / 100;
+
+        const depositAppliedLimit = Math.round(Math.min(totalDepositAvailable, lotSubtotal + depositPayments) * 100) / 100;
+
+        let depositToApply = depositAppliedLimit;
         let totalDepositApplied = 0;
 
         for (const dep of bidderDeposits) {
           appliedDepositIds.add(dep.id);
           const depAmount = Number(dep.amount) || 0;
-          const canApply = Math.round(Math.min(depAmount, Math.max(0, amountToCover)) * 100) / 100;
+          const canApply = Math.round(Math.min(depAmount, Math.max(0, depositToApply)) * 100) / 100;
           const newRemaining = Math.round((depAmount - canApply) * 100) / 100;
           const newStatus = newRemaining === 0 ? 'Applied' : 'Collected';
 
@@ -375,16 +774,22 @@ export class SettlementService {
           }
 
           totalDepositApplied = Math.round((totalDepositApplied + canApply) * 100) / 100;
-          amountToCover = Math.round((amountToCover - canApply) * 100) / 100;
+          depositToApply = Math.round((depositToApply - canApply) * 100) / 100;
         }
 
-        const finalBalance = Math.round(Math.max(0, amountToCover) * 100) / 100;
-        const paymentStatus = finalBalance === 0 ? 'Paid' : 'Pending';
-        const depositNote = totalDepositApplied > 0 ? `Deposit Applied: $${totalDepositApplied.toFixed(2)}` : '';
+        const paymentsReceived = Math.round(
+          payments
+            .filter(p => (!p.status || p.status === 'Successful' || (p.status as any) === 'Paid') && !isDepPay(p))
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) * 100
+        ) / 100;
+
+        const finalBalance = Math.max(0, Math.round((totalPurchaseAmount - totalDepositApplied - paymentsReceived) * 100) / 100);
+        const paymentStatus = finalBalance === 0 ? 'Paid' : (invoice?.payment_status === 'Paid' && finalBalance > 0 ? 'Pending' : (invoice?.payment_status || 'Pending'));
+        const depositNote = totalDepositApplied > 0 ? ('Deposit Applied: $' + totalDepositApplied.toFixed(2)) : '';
+        const preservedNotes = invoice?.notes ? invoice.notes : depositNote;
 
         if (!invoice) {
-          const invoiceNumber = `INV-GA-${new Date().getFullYear()}-${paddleRaw.replace(/[^a-zA-Z0-9]/g, '')}`;
-          invoiceId = `inv-${auctionId}-${paddleRaw.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+          const invoiceNumber = 'INV-GA-' + new Date().getFullYear() + '-' + paddleRaw.replace(/[^a-zA-Z0-9]/g, '');
           const { data: inserted, error: invErr } = await client.from('invoices').upsert([{
             id: invoiceId,
             invoice_number: invoiceNumber,
@@ -401,7 +806,7 @@ export class SettlementService {
             total_due: totalPurchaseAmount,
             balance: finalBalance,
             payment_status: paymentStatus,
-            notes: depositNote,
+            notes: preservedNotes,
             is_cash_buyer: false,
             is_shipped: false,
             shipped_count: 0,
@@ -427,37 +832,10 @@ export class SettlementService {
             total_due: totalPurchaseAmount,
             balance: finalBalance,
             payment_status: paymentStatus,
-            notes: depositNote,
             buyer_name: buyerName,
             buyer_email: buyerEmail,
             updated_at: new Date().toISOString()
           }).eq('id', invoiceId);
-        }
-
-        // Upsert lot rows in invoice_lots
-        if (invoiceId) {
-          for (const lot of paddleLots) {
-            const ilotId = `ilot-${invoiceId}-${lot.id}`;
-            const hammer = Number(lot.hammer_price) || 0;
-            const bp = Math.round(hammer * 0.15 * 100) / 100;
-
-            await client.from('invoice_lots').upsert([{
-              id: ilotId,
-              invoice_id: invoiceId,
-              auction_id: auctionId,
-              lot_id: lot.id,
-              lot_number: lot.lot_number,
-              title: lot.title || `Lot #${lot.lot_number}`,
-              status: 'Sold',
-              qty_sold: 1,
-              is_shipped: false,
-              entries: [
-                { id: `entry-hammer-${lot.id}`, type: 'sold_lot', label: `Sold Lot #${lot.lot_number}`, amount: hammer },
-                { id: `entry-bp-${lot.id}`, type: 'buyers_premium', label: "Buyer's Premium (15%)", amount: bp }
-              ],
-              updated_at: new Date().toISOString()
-            }], { onConflict: 'id' });
-          }
         }
       }
 
@@ -1030,7 +1408,7 @@ export class SettlementService {
   ): Promise<SettlementCharge | null> {
     const client = this.client;
     const chargeAmt = Math.max(0, chargeData.amount);
-    const chargeId = `chg-${customerId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const chargeId = 'chg-' + customerId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5);
     const chargeDate = new Date().toLocaleDateString('en-US');
 
     try {
@@ -1051,33 +1429,16 @@ export class SettlementService {
         return null;
       }
 
-      // 2. Recalculate invoice balance + total_due
-      const { data: inv } = await client
-        .from('invoices')
-        .select('balance, total_due')
-        .eq('id', customerId)
-        .single();
-
-      if (inv) {
-        const newBal = (Number(inv.balance) || 0) + chargeAmt;
-        const newTotal = (Number(inv.total_due) || 0) + chargeAmt;
-        await client.from('invoices').update({
-          balance: newBal,
-          total_due: newTotal,
-          updated_at: new Date().toISOString()
-        }).eq('id', customerId);
-
-        // Sync deposits and balances
-        await this.syncSettlementsFromSoldLots(auctionId);
-      }
+      // 2. Recalculate invoice financials dynamically
+      await this.recalculateInvoiceFinancials(customerId);
 
       // 3. Audit log
       try {
         await client.from('activity_logs').insert([{
           category: 'FINANCE',
-          event_action: `Charge Added: $${chargeAmt.toFixed(2)}`,
+          event_action: 'Charge Added: $' + chargeAmt.toFixed(2),
           operator_service: 'AF360 Ledger Service',
-          audit_details: `Added ${chargeData.account} charge of $${chargeAmt.toFixed(2)} (${chargeData.description}) to invoice ${customerId}.`,
+          audit_details: 'Added ' + chargeData.account + ' charge of $' + chargeAmt.toFixed(2) + ' (' + chargeData.description + ') to invoice ' + customerId + '.',
           status: 'SUCCESS'
         }]);
       } catch (_) {}
@@ -1096,9 +1457,6 @@ export class SettlementService {
     }
   }
 
-  /**
-   * Delete a charge by its invoice_charges.id and recalculate invoice balance.
-   */
   public async deleteCustomerCharge(
     auctionId: string,
     customerId: string,
@@ -1127,33 +1485,16 @@ export class SettlementService {
         return false;
       }
 
-      // 3. Recalculate invoice balance + total_due
-      const { data: inv } = await client
-        .from('invoices')
-        .select('balance, total_due')
-        .eq('id', customerId)
-        .single();
-
-      if (inv) {
-        const newBal = Math.max(0, (Number(inv.balance) || 0) - chargeAmt);
-        const newTotal = Math.max(0, (Number(inv.total_due) || 0) - chargeAmt);
-        await client.from('invoices').update({
-          balance: newBal,
-          total_due: newTotal,
-          updated_at: new Date().toISOString()
-        }).eq('id', customerId);
-
-        // Sync deposits and balances
-        await this.syncSettlementsFromSoldLots(auctionId);
-      }
+      // 3. Recalculate invoice financials dynamically
+      await this.recalculateInvoiceFinancials(customerId);
 
       // 4. Audit log
       try {
         await client.from('activity_logs').insert([{
           category: 'FINANCE',
-          event_action: `Charge Removed: $${chargeAmt.toFixed(2)}`,
+          event_action: 'Charge Removed: $' + chargeAmt.toFixed(2),
           operator_service: 'AF360 Ledger Service',
-          audit_details: `Removed charge ${chargeId} (${chargeAmt.toFixed(2)}) from invoice ${customerId} (auction ${auctionId}).`,
+          audit_details: 'Removed charge ' + chargeId + ' ($' + chargeAmt.toFixed(2) + ') from invoice ' + customerId + ' (auction ' + auctionId + ').',
           status: 'SUCCESS'
         }]);
       } catch (_) {}
@@ -1165,9 +1506,6 @@ export class SettlementService {
     }
   }
 
-  /**
-   * Refund (remove) a specific entry from an invoice_lots row and recalculate balance.
-   */
   public async refundLotEntry(
     auctionId: string,
     customerId: string,
@@ -1202,33 +1540,16 @@ export class SettlementService {
         .update({ entries: newEntries, updated_at: new Date().toISOString() })
         .eq('id', lotId);
 
-      // 3. Recalculate invoice balance
-      const { data: inv } = await client
-        .from('invoices')
-        .select('balance, total_due')
-        .eq('id', customerId)
-        .single();
-
-      if (inv) {
-        const newBal = Math.max(0, (Number(inv.balance) || 0) - refundAmt);
-        const newTotal = Math.max(0, (Number(inv.total_due) || 0) - refundAmt);
-        await client.from('invoices').update({
-          balance: newBal,
-          total_due: newTotal,
-          updated_at: new Date().toISOString()
-        }).eq('id', customerId);
-
-        // Sync deposits and balances
-        await this.syncSettlementsFromSoldLots(auctionId);
-      }
+      // 3. Recalculate invoice financials dynamically
+      await this.recalculateInvoiceFinancials(customerId);
 
       // 4. Audit log
       try {
         await client.from('activity_logs').insert([{
           category: 'REFUND',
-          event_action: `Lot Entry Refunded: $${refundAmt.toFixed(2)}`,
+          event_action: 'Lot Entry Refunded: $' + refundAmt.toFixed(2),
           operator_service: 'AF360 Ledger Service',
-          audit_details: `Refunded entry ${entryId} (${entryToRemove.label || ''}) on lot ${lotId} for invoice ${customerId} (auction ${auctionId}).`,
+          audit_details: 'Refunded entry ' + entryId + ' (' + (entryToRemove.label || '') + ') on lot ' + lotId + ' for invoice ' + customerId + ' (auction ' + auctionId + ').',
           status: 'SUCCESS'
         }]);
       } catch (_) {}
@@ -1240,9 +1561,6 @@ export class SettlementService {
     }
   }
 
-  /**
-   * Update Consignor/Seller Settlement payout status.
-   */
   public async updateSellerSettlementStatus(
     _auctionId: string,
     settlementId: string,
