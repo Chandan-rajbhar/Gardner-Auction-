@@ -371,10 +371,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      let authResponse = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: rawPass
       });
+
+      // If failed and password has leading or trailing whitespace, retry with trimmed password
+      if (authResponse.error && rawPass.trim() !== rawPass) {
+        const retry = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: rawPass.trim()
+        });
+        if (!retry.error) {
+          authResponse = retry;
+        }
+      }
+
+      const { data, error } = authResponse;
 
       if (error) {
         setIsLoading(false);

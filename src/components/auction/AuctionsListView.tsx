@@ -22,8 +22,10 @@ import {
   RefreshCw,
   X,
   AlertCircle,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { formatDate } from '../../utils/formatters';
 
 interface AuctionsListViewProps {
@@ -65,6 +67,8 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
   const [newType, setNewType] = useState<'HiBid' | 'Other Auctions'>('HiBid');
   const [newDesc, setNewDesc] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const loadAuctions = async () => {
     setIsLoading(true);
@@ -93,28 +97,74 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
     };
   }, []);
 
+  const handleAutoGenerateCode = async () => {
+    setIsGeneratingCode(true);
+    setCodeError(null);
+    try {
+      const code = await auctionService.generateUniqueAuctionCode(newName, newStartDate);
+      setNewCode(code);
+      toast.success(`Generated unique auction code: ${code}`);
+    } catch (err: any) {
+      console.error('Failed to auto-generate auction code:', err);
+      const fallback = `GA-${newStartDate || new Date().toISOString().split('T')[0]}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setNewCode(fallback);
+      toast.success(`Generated auction code: ${fallback}`);
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
   const handleCreateAuction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || isCreating) return;
 
     setIsCreating(true);
+    setCodeError(null);
+
     try {
+      // 1. If code was left blank, auto-generate a unique code
+      let finalCode = newCode.trim().toUpperCase();
+      if (!finalCode) {
+        finalCode = await auctionService.generateUniqueAuctionCode(newName, newStartDate);
+        setNewCode(finalCode);
+      }
+
+      // 2. Validate code uniqueness against database before creation
+      const isUnique = await auctionService.isAuctionCodeUnique(finalCode);
+      if (!isUnique) {
+        const errorMsg = `Auction code "${finalCode}" already exists in the database. Please choose or auto-generate a unique code.`;
+        setCodeError(errorMsg);
+        toast.error(errorMsg);
+        setIsCreating(false);
+        return;
+      }
+
       const created = await auctionService.createAuction({
-        name: newName,
-        code: newCode || `AUC-${Date.now().toString().slice(-4)}`,
+        name: newName.trim(),
+        code: finalCode,
         startDate: newStartDate,
         endDate: newEndDate,
         auctionType: newType,
         description: newDesc
       });
+
+      toast.success(`Auction "${created.name}" (${created.code}) created successfully!`);
       setIsNewModalOpen(false);
       setNewName('');
       setNewCode('');
       setNewDesc('');
+      setCodeError(null);
       await loadAuctions();
       onOpenAuction(created.id);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create auction:', err);
+      const errMsg = err?.message || 'Failed to create auction.';
+      if (errMsg.toLowerCase().includes('unique') || errMsg.toLowerCase().includes('duplicate') || errMsg.toLowerCase().includes('already in use')) {
+        setCodeError(`Auction code "${newCode.trim().toUpperCase()}" already exists in the database.`);
+        toast.error(`Duplicate Code: "${newCode.trim().toUpperCase()}" already exists.`);
+      } else {
+        toast.error(errMsg);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -751,15 +801,57 @@ export const AuctionsListView: React.FC<AuctionsListViewProps> = ({
           </FormField>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FormField label="Auction Code">
-              <input
-                type="text"
-                placeholder="e.g. HGS-2026-10-22"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                className="catalog-search-input"
-                style={{ width: '100%', height: 38 }}
-              />
+            <FormField 
+              label="Auction Code"
+              error={codeError || undefined}
+            >
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. HGS-2026-10-22"
+                  value={newCode}
+                  onChange={(e) => {
+                    setNewCode(e.target.value.toUpperCase());
+                    if (codeError) setCodeError(null);
+                  }}
+                  className="catalog-search-input"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    height: 38,
+                    borderColor: codeError ? '#dc2626' : undefined,
+                    textTransform: 'uppercase',
+                    fontWeight: newCode ? 600 : 400
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoGenerateCode}
+                  disabled={isGeneratingCode || isCreating}
+                  className="btn btn-secondary"
+                  style={{
+                    height: 38,
+                    padding: '0 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    color: 'var(--gold-primary, #b38e46)',
+                    cursor: (isGeneratingCode || isCreating) ? 'wait' : 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Auto Generate Unique Code"
+                >
+                  <Sparkles size={13} className={isGeneratingCode ? 'animate-spin' : ''} />
+                  <span>{isGeneratingCode ? 'Generating...' : 'Auto Generate'}</span>
+                </button>
+              </div>
             </FormField>
 
             <FormField label="Auction Platform Type">

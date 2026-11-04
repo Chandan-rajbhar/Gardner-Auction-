@@ -8,6 +8,7 @@ interface FormFieldProps {
   children: React.ReactNode;
   inline?: boolean;
   style?: React.CSSProperties;
+  action?: React.ReactNode;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
@@ -17,7 +18,8 @@ export const FormField: React.FC<FormFieldProps> = ({
   hint,
   children,
   inline = false,
-  style
+  style,
+  action
 }) => {
   // Strip any trailing asterisk from label string to avoid double asterisks "* *"
   const hasAsteriskInLabel = label.trim().endsWith('*');
@@ -35,18 +37,26 @@ export const FormField: React.FC<FormFieldProps> = ({
         ...style 
       }}
     >
-      <label style={{ 
-        display: 'block', 
-        fontSize: 11.5, 
-        fontWeight: 700, 
-        color: '#475569', 
-        textTransform: 'uppercase',
-        letterSpacing: '0.03em',
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: inline ? 0 : 5,
         minWidth: inline ? 140 : undefined
       }}>
-        {cleanLabel} {showRequired && <span style={{ color: '#dc2626', marginLeft: 2 }}>*</span>}
-      </label>
+        <label style={{ 
+          display: 'block', 
+          fontSize: 11.5, 
+          fontWeight: 700, 
+          color: '#475569', 
+          textTransform: 'uppercase',
+          letterSpacing: '0.03em',
+          margin: 0
+        }}>
+          {cleanLabel} {showRequired && <span style={{ color: '#dc2626', marginLeft: 2 }}>*</span>}
+        </label>
+        {action}
+      </div>
       <div style={{ flex: 1, width: '100%' }}>
         {children}
         {hint && !error && (
@@ -56,6 +66,6 @@ export const FormField: React.FC<FormFieldProps> = ({
           <p style={{ fontSize: 11.5, color: '#dc2626', margin: '4px 0 0', fontWeight: 600 }}>{error}</p>
         )}
       </div>
-    </div>
+    </div >
   );
 };
