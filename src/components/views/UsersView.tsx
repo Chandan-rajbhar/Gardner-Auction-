@@ -2,7 +2,9 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { UserBidder } from '../../types';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
-import { deleteCustomerFromDb, updateCustomerInDb, deactivateCustomerInDb } from '../../services/adminActionService';
+import { deleteCustomerFromDb, updateCustomerInDb, deactivateCustomerInDb, changeCustomerRoleInDb } from '../../services/adminActionService';
+import { useAuth } from '../../context/AuthContext';
+import { ChangeRoleModal } from '../ui/ChangeRoleModal';
 import {
   SlidersHorizontal,
   Search,

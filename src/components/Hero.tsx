@@ -151,6 +151,9 @@ export const Hero: React.FC<HeroProps> = () => {
                 alt={heroImage.alt || 'Gardner Auction Still Life'}
                 className="hero-cinematic-img"
                 loading="eager"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/images/hero_auction_coins.jpg';
+                }}
               />
             </div>
           </div>

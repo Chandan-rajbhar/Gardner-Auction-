@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Lock,
   Mail,
@@ -19,14 +19,20 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToSignup }) => {
-  const { login, savedEmail } = useAuth();
+  const { login, savedEmail, accessDeniedNotice } = useAuth();
 
   const [email, setEmail] = useState<string>(savedEmail || '');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(Boolean(savedEmail));
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(accessDeniedNotice || null);
+
+  useEffect(() => {
+    if (accessDeniedNotice) {
+      setErrorMessage(accessDeniedNotice);
+    }
+  }, [accessDeniedNotice]);
   const [successNotice, setSuccessNotice] = useState<boolean>(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState<boolean>(false);
 

@@ -21,12 +21,13 @@ interface AuthContextType {
   savedEmail: string;
   isSupabaseConnected: boolean;
   isRecoverySession: boolean;
+  accessDeniedNotice: string | null;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
   signup: (userData: {
     name: string;
     email: string;
     password: string;
-  }) => Promise<{ success: boolean; requiresEmailConfirmation?: boolean; message?: string; error?: string }>;
+  }) => Promise<{ success: boolean; requiresEmailConfirmation?: boolean; message?: string; error?: string; role?: string }>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
@@ -37,6 +38,8 @@ interface AuthContextType {
     avatarUrl?: string;
   }) => Promise<{ success: boolean; message?: string; error?: string }>;
   clearRecoverySession: () => void;
+  clearAccessDeniedNotice: () => void;
+  refreshUserRole: () => Promise<AuthUser['role'] | null>;
 }
 
 const REMEMBER_EMAIL_KEY = 'gardner_af360_saved_email_v1';
@@ -61,7 +64,7 @@ const getRoleTitle = (role: AuthUser['role']): string => {
       return 'Consignor Relations Coordinator';
     case 'user':
     default:
-      return 'Authorized Saleroom Operator';
+      return 'Registered Customer & Saleroom Bidder';
   }
 };
 
@@ -72,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [savedEmail, setSavedEmail] = useState<string>('');
   const [isRecoverySession, setIsRecoverySession] = useState<boolean>(false);
+  const [accessDeniedNotice, setAccessDeniedNotice] = useState<string | null>(null);
 
   // Helper to resolve storage paths to public URLs
   const resolveAvatarUrl = (rawUrl?: string): string | undefined => {
@@ -87,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Helper to map Supabase Auth User & Database Profile to AuthUser
   const mapSupabaseUser = (sbUser: SupabaseAuthUser, profile?: any): AuthUser => {
     const fullName = profile?.full_name || sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'Operator';
-    const assignedRole: AuthUser['role'] = (profile?.role as AuthUser['role']) || (sbUser.user_metadata?.role as AuthUser['role']) || 'super_admin';
+    const assignedRole: AuthUser['role'] = (profile?.role as AuthUser['role']) || (sbUser.user_metadata?.role as AuthUser['role']) || 'user';
     const cachedAvatar = typeof window !== 'undefined' ? localStorage.getItem(`gardner_avatar_cache_${sbUser.id}`) : null;
     const rawAvatarUrl = profile?.avatar_url || sbUser.user_metadata?.avatar_url || cachedAvatar || undefined;
     const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
@@ -110,43 +114,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Fetch trusted user profile from Supabase: checks 'admin_users' first, then 'users'
+  // Fetch trusted user profile directly from Supabase public.users
   const fetchUserProfile = async (sbUser: SupabaseAuthUser): Promise<AuthUser> => {
     try {
       const cleanEmail = sbUser.email ? sbUser.email.trim().toLowerCase() : '';
-
-      // 1. Check public.admin_users table first for dashboard admin registrations
-      try {
-        const { data: adminRecord } = await supabase
-          .from('admin_users')
-          .select('*')
-          .or(`auth_id.eq.${sbUser.id},email.eq.${cleanEmail}`)
-          .maybeSingle();
-
-        if (adminRecord) {
-          const assignedRole = (adminRecord.role as AuthUser['role']) || 'admin';
-          const fullName = adminRecord.full_name || sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'Administrator';
-          return {
-            id: sbUser.id,
-            dbId: adminRecord.id,
-            name: fullName,
-            email: adminRecord.email || sbUser.email || '',
-            role: assignedRole,
-            title: adminRecord.title || getRoleTitle(assignedRole),
-            avatarText: getInitials(fullName),
-            avatarUrl: resolveAvatarUrl(adminRecord.avatar_url),
-            phone: adminRecord.phone || '',
-            createdAt: adminRecord.created_at || sbUser.created_at || new Date().toISOString(),
-            lastLoginAt: sbUser.last_sign_in_at || new Date().toISOString()
-          };
-        }
-      } catch {
-        // Fall through to public.users or metadata
-      }
-
       let profileData: any = null;
 
-      // 2. Try matching in public.users by auth ID
+      // 1. Primary lookup: public.users table directly by auth id
       const { data: byId } = await supabase
         .from('users')
         .select('*')
@@ -167,12 +141,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      // 2. Secondary lookup: admin_users table if not in public.users
+      if (!profileData) {
+        try {
+          const { data: adminRecord } = await supabase
+            .from('admin_users')
+            .select('*')
+            .or(`auth_id.eq.${sbUser.id},email.eq.${cleanEmail}`)
+            .maybeSingle();
+
+          if (adminRecord) {
+            profileData = adminRecord;
+          }
+        } catch (_) {}
+      }
+
       if (profileData) {
         return mapSupabaseUser(sbUser, profileData);
       }
-      
-      // Fallback: check metadata or default to super_admin for this console
-      const fallbackRole: AuthUser['role'] = (sbUser.user_metadata?.role as AuthUser['role']) || 'super_admin';
+
+      // Fallback: check auth metadata or default to 'user'
+      const fallbackRole: AuthUser['role'] = (sbUser.user_metadata?.role as AuthUser['role']) || 'user';
       return mapSupabaseUser(sbUser, {
         full_name: sbUser.user_metadata?.full_name,
         role: fallbackRole
@@ -182,89 +171,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper to safely sync or create user profile in public.admin_users or public.users
-  const syncProfileToSupabase = async (profileData: {
-    id: string;
-    fullName: string;
-    email: string;
-    role: AuthUser['role'];
-  }) => {
-    if (!isSupabaseConfigured) return;
-    try {
-      const cleanEmail = profileData.email.trim().toLowerCase();
+  // Real-time synchronization of active user's role from Supabase public.users
+  useEffect(() => {
+    if (!user?.id) return;
 
-      // If user has an administrative role, sync directly to public.admin_users
-      if (profileData.role !== 'user') {
-        try {
-          const { data: existingAdmin } = await supabase
-            .from('admin_users')
-            .select('id, email')
-            .or(`auth_id.eq.${profileData.id},email.eq.${cleanEmail}`)
-            .maybeSingle();
-
-          if (existingAdmin) {
-            await supabase
-              .from('admin_users')
-              .update({
-                auth_id: profileData.id,
-                full_name: profileData.fullName,
-                role: profileData.role
-              })
-              .eq('id', existingAdmin.id);
-          } else {
-            await supabase
-              .from('admin_users')
-              .insert({
-                auth_id: profileData.id,
-                full_name: profileData.fullName,
-                email: cleanEmail,
-                role: profileData.role,
-                status: 'active'
-              });
+    const channel = supabase
+      .channel(`realtime:active_user_role:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`
+        },
+        async (payload: any) => {
+          const updatedRow = payload.new;
+          if (updatedRow) {
+            const newRole = (updatedRow.role || 'user').toLowerCase().trim();
+            if (newRole !== 'super_admin') {
+              console.warn('[AuthContext] Active user role demoted from super_admin. Terminating session.');
+              await supabase.auth.signOut();
+              setUser(null);
+              setAccessDeniedNotice('Access denied. Only Super Admin accounts are authorized to access the Admin Dashboard.');
+            } else {
+              setUser(prev => prev ? {
+                ...prev,
+                role: 'super_admin',
+                name: updatedRow.full_name || prev.name,
+                title: updatedRow.title || prev.title,
+                phone: updatedRow.phone || prev.phone,
+                avatarUrl: resolveAvatarUrl(updatedRow.avatar_url) || prev.avatarUrl
+              } : null);
+            }
           }
-          return;
-        } catch (adminErr) {
-          console.warn('[AuthContext] admin_users sync notice:', adminErr);
         }
-      }
+      )
+      .subscribe();
 
-      // Otherwise sync standard customers to public.users
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id, email')
-        .or(`id.eq.${profileData.id},email.eq.${cleanEmail}`)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
-          .from('users')
-          .update({
-            full_name: profileData.fullName,
-            role: profileData.role
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('users')
-          .insert({
-            id: profileData.id,
-            full_name: profileData.fullName,
-            email: cleanEmail,
-            role: profileData.role,
-            created_at: new Date().toISOString()
-          });
-      }
-    } catch (e) {
-      console.warn('Supabase profile sync notice:', e);
-    }
-  };
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // Initialize session and auth listeners
   useEffect(() => {
     let isMounted = true;
 
     const initAuth = async () => {
-      // 1. Load remembered email for login convenience (non-sensitive preference)
+      // 1. Load remembered email for login convenience
       try {
         const remembered = localStorage.getItem(REMEMBER_EMAIL_KEY);
         if (remembered) {
@@ -288,7 +243,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data: { session }, error } = await supabase.auth.getSession();
           if (!error && session?.user && isMounted) {
             const profile = await fetchUserProfile(session.user);
-            setUser(profile);
+            if (profile.role !== 'super_admin') {
+              console.warn(`[AuthContext] Restored user has non-super_admin role (${profile.role}). Terminating session.`);
+              await supabase.auth.signOut();
+              if (isMounted) {
+                setUser(null);
+                setAccessDeniedNotice('Access denied. Only Super Admin accounts are authorized to access the Admin Dashboard.');
+              }
+            } else {
+              if (isMounted) {
+                setUser(profile);
+                setAccessDeniedNotice(null);
+              }
+            }
           }
         } catch (e) {
           console.error('Supabase getSession error:', e);
@@ -304,9 +271,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (event === 'SIGNED_IN' && session?.user) {
             const profile = await fetchUserProfile(session.user);
-            setUser(profile);
+            if (profile.role !== 'super_admin') {
+              await supabase.auth.signOut();
+              if (isMounted) {
+                setUser(null);
+                setAccessDeniedNotice('Access denied. Only Super Admin accounts are authorized to access the Admin Dashboard.');
+              }
+            } else {
+              if (isMounted) {
+                setUser(profile);
+                setAccessDeniedNotice(null);
+              }
+            }
           } else if (event === 'SIGNED_OUT') {
-            setUser(null);
+            if (isMounted) {
+              setUser(null);
+            }
           }
         });
 
@@ -331,6 +311,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // --- REFRESH USER ROLE ---
+  const refreshUserRole = async (): Promise<AuthUser['role'] | null> => {
+    if (!user) return null;
+    try {
+      const { data: freshRecord } = await supabase
+        .from('users')
+        .select('*')
+        .or(`id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle();
+
+      if (freshRecord) {
+        const freshRole = (freshRecord.role as AuthUser['role']) || 'user';
+        if (freshRole !== 'super_admin') {
+          await supabase.auth.signOut();
+          setUser(null);
+          setAccessDeniedNotice('Access denied. Only Super Admin accounts are authorized to access the Admin Dashboard.');
+          return freshRole;
+        }
+
+        setUser(prev => prev ? {
+          ...prev,
+          role: freshRole,
+          name: freshRecord.full_name || prev.name,
+          title: freshRecord.title || prev.title,
+          phone: freshRecord.phone || prev.phone,
+          avatarUrl: resolveAvatarUrl(freshRecord.avatar_url) || prev.avatarUrl
+        } : null);
+        return freshRole;
+      }
+    } catch (err) {
+      console.warn('[AuthContext] refreshUserRole error:', err);
+    }
+    return user.role;
+  };
+
   // --- LOGIN ---
   const login = async (
     email: string, 
@@ -338,15 +353,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     rememberMe: boolean = false
   ): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
+    setAccessDeniedNotice(null);
     const cleanEmail = email.trim().toLowerCase();
-    const rawPass = pass; // Do not silently trim or modify password before auth
+    const rawPass = pass;
 
     if (!cleanEmail || !rawPass || !rawPass.trim()) {
       setIsLoading(false);
       return { success: false, error: 'Please enter both your email address and password.' };
     }
 
-    // Remember email preference (never store password)
     if (rememberMe) {
       localStorage.setItem(REMEMBER_EMAIL_KEY, cleanEmail);
       setSavedEmail(cleanEmail);
@@ -355,7 +370,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSavedEmail('');
     }
 
-    // Authenticate exclusively using Supabase Auth
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -384,18 +398,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        // Retrieve trusted profile from Supabase
-        let profile = await fetchUserProfile(data.user);
+        // Retrieve authoritative user profile from Supabase
+        const profile = await fetchUserProfile(data.user);
 
-        // Ensure profile exists in public.users
-        await syncProfileToSupabase({
-          id: data.user.id,
-          fullName: profile.name,
-          email: cleanEmail,
-          role: profile.role
-        });
+        // Strict validation: Only super_admin accounts can access the Admin Dashboard
+        if (profile.role !== 'super_admin') {
+          await supabase.auth.signOut();
+          setUser(null);
+          setIsLoading(false);
+          const deniedMsg = 'Access denied. Only Super Admin accounts are authorized to access the Admin Dashboard.';
+          setAccessDeniedNotice(deniedMsg);
+          return {
+            success: false,
+            error: deniedMsg
+          };
+        }
 
         setUser(profile);
+        setAccessDeniedNotice(null);
         setIsLoading(false);
         return { success: true };
       }
@@ -416,8 +436,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     email: string;
     password: string;
-  }): Promise<{ success: boolean; requiresEmailConfirmation?: boolean; message?: string; error?: string }> => {
+  }): Promise<{ success: boolean; requiresEmailConfirmation?: boolean; message?: string; error?: string; role?: string }> => {
     setIsLoading(true);
+    setAccessDeniedNotice(null);
     const cleanName = userData.name.trim();
     const cleanEmail = userData.email.trim().toLowerCase();
     const rawPass = userData.password;
@@ -438,8 +459,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Password must be at least 8 characters long for administrative security.' };
     }
 
-    // Register user securely with Supabase Authentication
     try {
+      // 1. Register user with Supabase Auth (defaulting to standard user; server decides first Super Admin)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanEmail,
         password: rawPass,
@@ -455,7 +476,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
         const errLower = authError.message.toLowerCase();
 
-        // Check for duplicate account
         if (
           errLower.includes('already registered') || 
           errLower.includes('already exists') || 
@@ -489,7 +509,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // Supabase returns identities: [] when email already exists and email confirmations are enabled
       if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
         setIsLoading(false);
         return {
@@ -500,13 +519,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const userId = authData.user.id;
 
-      // Persist profile into Supabase public.users table with super_admin role
-      await syncProfileToSupabase({
-        id: userId,
-        fullName: cleanName,
-        email: cleanEmail,
-        role: 'super_admin'
-      });
+      // 2. Secure Server-Side First-Super-Admin Role Assignment Check
+      let assignedRole: AuthUser['role'] = 'super_admin';
+      let isFirstSuperAdmin = false;
+
+      try {
+        const verifyRes = await fetch('/api/auth/verify-role', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            email: cleanEmail,
+            fullName: cleanName,
+            role: 'super_admin'
+          })
+        });
+
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.role) {
+            assignedRole = verifyData.role;
+            isFirstSuperAdmin = Boolean(verifyData.isFirstSuperAdmin);
+          }
+        }
+      } catch (verifyErr) {
+        console.warn('[AuthContext] /api/auth/verify-role error:', verifyErr);
+      }
 
       // Check whether Supabase requires email confirmation before login
       const requiresEmailConfirmation = Boolean(
@@ -515,25 +553,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authData.user.identities.length > 0
       );
 
-      // Pre-seed remembered email for login convenience
       try {
         localStorage.setItem(REMEMBER_EMAIL_KEY, cleanEmail);
         setSavedEmail(cleanEmail);
       } catch (_) {}
 
-      // Ensure user signs in explicitly
       try {
         await supabase.auth.signOut();
       } catch (_) {}
       setUser(null);
       setIsLoading(false);
 
+      const successNotice = 'Super Admin account created successfully! Please sign in with your credentials.';
+
       return {
         success: true,
         requiresEmailConfirmation,
+        role: assignedRole,
         message: requiresEmailConfirmation
           ? 'Registration received! Please check your email to confirm your account before signing in.'
-          : 'Administrative account created successfully! Please sign in with your credentials.'
+          : successNotice
       };
     } catch (err: any) {
       setIsLoading(false);
@@ -547,6 +586,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- LOGOUT ---
   const logout = async () => {
     setIsLoading(true);
+    setAccessDeniedNotice(null);
     try {
       await supabase.auth.signOut();
     } catch (e) {
@@ -643,7 +683,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const customTitle = profileData.title !== undefined ? profileData.title.trim() : user.title;
       const nextAvatarUrl = profileData.avatarUrl !== undefined ? profileData.avatarUrl : user.avatarUrl;
 
-      // 1. Update Supabase Auth user metadata (permanent cloud metadata)
+      // 1. Update Supabase Auth user metadata
       if (isSupabaseConfigured) {
         try {
           const authMetaData: Record<string, any> = {
@@ -655,48 +695,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authMetaData.avatar_url = nextAvatarUrl;
           }
 
-          const { data: authUpdateData, error: authUpdateErr } = await supabase.auth.updateUser({
+          await supabase.auth.updateUser({
             data: authMetaData
           });
-
-          if (authUpdateErr) {
-            console.warn('[AuthContext] Supabase auth.updateUser notice:', authUpdateErr.message);
-          } else if (authUpdateData?.user) {
-            console.info('[AuthContext] Supabase auth metadata updated with avatar successfully.');
-          }
-        } catch (authMetaErr) {
-          console.warn('[AuthContext] Supabase auth metadata update notice:', authMetaErr);
-        }
+        } catch (_) {}
 
         // 2. Update public.users database table
-        let updatedRows: any[] | null = null;
-        let updateErr: any = null;
-
         try {
           const cleanEmail = user.email.trim().toLowerCase();
-          let targetRecordId = user.dbId || user.id;
+          const targetRecordId = user.dbId || user.id;
 
-          // Locate existing record in public.users by auth ID or verified email
-          const { data: existingProfile } = await supabase
-            .from('users')
-            .select('id, email, avatar_url')
-            .or(`id.eq.${user.id},email.eq.${cleanEmail}`)
-            .maybeSingle();
-
-          if (existingProfile?.id) {
-            targetRecordId = existingProfile.id;
-          }
-
-          // Step 2a: Try updating avatar via SECURITY DEFINER RPC function (completely immune to RLS recursion)
           if (nextAvatarUrl !== undefined) {
             try {
-              const { data: rpcData, error: rpcErr } = await supabase.rpc('update_user_avatar', {
+              await supabase.rpc('update_user_avatar', {
                 p_avatar_url: nextAvatarUrl
               });
-              if (!rpcErr && rpcData) {
-                updatedRows = [rpcData];
-                updateErr = null;
-              }
             } catch (_) {}
           }
 
@@ -710,102 +723,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             dbPayload.avatar_url = nextAvatarUrl;
           }
 
-          // Primary attempt: update by targetRecordId using authenticated client
-          const res1 = await supabase
+          await supabase
             .from('users')
             .update(dbPayload)
-            .eq('id', targetRecordId)
-            .select();
-
-          updatedRows = res1.data;
-          updateErr = res1.error;
-
-          // Secondary attempt: if 0 rows modified and email exists, update by email
-          if ((!updatedRows || updatedRows.length === 0) && cleanEmail) {
-            const res2 = await supabase
-              .from('users')
-              .update(dbPayload)
-              .ilike('email', cleanEmail)
-              .select();
-            if (res2.data && res2.data.length > 0) {
-              updatedRows = res2.data;
-              updateErr = null;
-            }
-          }
-
-          // Tertiary attempt: if blocked by RLS (e.g. auth.uid() != public.users.id), use supabaseAdmin
-          if ((updateErr || !updatedRows || updatedRows.length === 0) && supabaseAdmin) {
-            console.warn('[AuthContext] Standard client update did not modify rows, attempting elevated update...');
-            try {
-              const resAdmin = await supabaseAdmin
-                .from('users')
-                .update(dbPayload)
-                .or(`id.eq.${targetRecordId},email.eq.${cleanEmail}`)
-                .select();
-              if (resAdmin.data && resAdmin.data.length > 0) {
-                updatedRows = resAdmin.data;
-                updateErr = null;
-              }
-            } catch (adminErr) {
-              console.warn('[AuthContext] Admin client update notice:', adminErr);
-            }
-          }
-
-          // If no existing record was found, insert new profile record
-          if (!updateErr && (!updatedRows || updatedRows.length === 0)) {
-            const insertPayload: Record<string, any> = {
-              id: targetRecordId,
-              email: cleanEmail,
-              role: user.role,
-              full_name: trimmedName,
-              avatar_url: nextAvatarUrl,
-              phone: trimmedPhone,
-              title: customTitle,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            const insertRes = await supabase
-              .from('users')
-              .insert(insertPayload)
-              .select();
-            if (insertRes.data && insertRes.data.length > 0) {
-              updatedRows = insertRes.data;
-            } else if (insertRes.error && supabaseAdmin) {
-              const adminInsertRes = await supabaseAdmin
-                .from('users')
-                .upsert(insertPayload)
-                .select();
-              if (adminInsertRes.data && adminInsertRes.data.length > 0) {
-                updatedRows = adminInsertRes.data;
-              }
-            }
-          }
+            .or(`id.eq.${targetRecordId},email.eq.${cleanEmail}`);
         } catch (dbErr: any) {
-          console.warn('[AuthContext] Supabase public.users update exception:', dbErr);
-          updateErr = dbErr;
-        }
-
-        // Verify database persistence if avatarUrl was being updated
-        const dbPersisted = Boolean(updatedRows && updatedRows.length > 0);
-        if (profileData.avatarUrl !== undefined && !dbPersisted) {
-          const detail = updateErr?.message || 'Database update did not affect any rows in public.users.';
-          console.error('[AuthContext] Profile picture database persistence failed:', detail);
-
-          if (detail.toLowerCase().includes('infinite recursion')) {
-            return {
-              success: false,
-              error: 'Database policy recursion detected on "users" table. Please run the SQL migration in your Supabase SQL Editor to drop conflicting policies and enable the safe avatar function.'
-            };
-          }
-
-          return {
-            success: false,
-            error: `Failed to save profile picture in database: ${detail}`
-          };
+          console.warn('[AuthContext] Supabase public.users update notice:', dbErr);
         }
       }
 
-      // 3. Update local user state & cache
       if (nextAvatarUrl) {
         try {
           localStorage.setItem(`gardner_avatar_cache_${user.id}`, nextAvatarUrl);
@@ -816,7 +742,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!prev) return null;
         return {
           ...prev,
-          dbId: (user as any).dbId,
           name: trimmedName,
           avatarText: getInitials(trimmedName),
           avatarUrl: nextAvatarUrl,
@@ -844,6 +769,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const clearAccessDeniedNotice = () => {
+    setAccessDeniedNotice(null);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -851,13 +780,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       savedEmail,
       isSupabaseConnected: isSupabaseConfigured,
       isRecoverySession,
+      accessDeniedNotice,
       login,
       signup,
       logout,
       resetPassword,
       updatePassword,
       updateProfile,
-      clearRecoverySession
+      clearRecoverySession,
+      clearAccessDeniedNotice,
+      refreshUserRole
     }}>
       {children}
     </AuthContext.Provider>

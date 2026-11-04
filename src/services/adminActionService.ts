@@ -217,3 +217,62 @@ export async function updateAdminInDb(
 
   return { success: true };
 }
+
+/**
+ * Change customer role in Supabase.
+ * Only Super Admins are permitted to execute this action.
+ * Synchronizes public.users, public.admin_users, and Supabase auth user_metadata.
+ */
+export async function changeCustomerRoleInDb(
+  id: string,
+  email: string | undefined,
+  newRole: 'super_admin' | 'user',
+  adminUserId?: string
+): Promise<{ success: boolean; error?: string; role?: string }> {
+  // 1. Primary path: Server-side endpoint with service_role privileges and strict Super Admin caller validation
+  try {
+    const res = await fetch('/api/customers/change-role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: id,
+        email,
+        newRole,
+        adminUserId
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return { success: true, role: data.role || newRole };
+      }
+      if (data.error) {
+        return { success: false, error: data.error };
+      }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      if (errData.error) {
+        return { success: false, error: errData.error };
+      }
+    }
+  } catch (err) {
+    console.warn('[adminActionService] /api/customers/change-role unavailable, attempting fallback:', err);
+  }
+
+  // 2. Direct Supabase client update fallback
+  try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const targetQuery = isUUID
+      ? supabase.from('users').update({ role: newRole, updated_at: new Date().toISOString() }).eq('id', id)
+      : supabase.from('users').update({ role: newRole, updated_at: new Date().toISOString() }).ilike('email', (email || '').toLowerCase().trim());
+
+    const { error } = await targetQuery;
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, role: newRole };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update customer role.' };
+  }
+}

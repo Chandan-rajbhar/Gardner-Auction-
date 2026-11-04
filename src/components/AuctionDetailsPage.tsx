@@ -1,566 +1,940 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import './AuctionDetailsPage.css';
 import {
   ArrowLeft,
   Calendar,
-  Clock,
   MapPin,
   ShieldCheck,
   Truck,
   Share2,
   ExternalLink,
   BookOpen,
-  Lock,
   Globe,
   FileText,
-  RotateCcw,
-  ChevronDown,
-  ChevronUp,
-  Printer,
   Info,
-  DollarSign
+  CreditCard,
+  AlertCircle,
+  Clock,
+  ChevronRight,
+  Sparkles,
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
-import { getPastAuctionById } from '../data/pastCatalogsData';
-import type { PastLotItem } from '../data/pastCatalogsData';
-import { PastLotDetailModal } from './PastLotDetailModal';
+import { supabase } from '../lib/supabase';
 
 interface AuctionDetailsPageProps {
   auctionId: string;
   onShowToast: (type: 'success' | 'info' | 'warning', title: string, message: string) => void;
+  onNavigate?: (path: string) => void;
+}
+
+// System, metadata, or already-rendered fields that should not appear in generic extra fields list
+const INTERNAL_SYSTEM_FIELDS = new Set([
+  'id',
+  'name',
+  'description',
+  'code',
+  'status',
+  'start_date',
+  'end_date',
+  'auction_type',
+  'currency',
+  'terms',
+  'short_bp_explanation',
+  'payment_info',
+  'address1',
+  'address2',
+  'city',
+  'state',
+  'zip',
+  'country',
+  'shipping_availability',
+  'shipping_account',
+  'add_handling_charge',
+  'handling_charge_type',
+  'handling_amount',
+  'use_consolidated_invoicing',
+  'tax_exempt_all',
+  'live_starting_bid_card',
+  'created_at',
+  'updated_at',
+  'day_stats',
+  'featured_images',
+  'auction_links',
+  'lot_defaults',
+  'upload_settings'
+]);
+
+function formatDisplayDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+    return dateStr;
+  } catch {
+    return dateStr || '';
+  }
 }
 
 export const AuctionDetailsPage: React.FC<AuctionDetailsPageProps> = ({
   auctionId,
-  onShowToast
+  onShowToast,
+  onNavigate
 }) => {
-  const auction = getPastAuctionById(auctionId);
-  const [activeLotModal, setActiveLotModal] = useState<PastLotItem | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [auction, setAuction] = useState<any | null>(null);
+  const [lots, setLots] = useState<any[]>([]);
+  const [activeImgIndex, setActiveImgIndex] = useState<number>(0);
 
-  // Notice expand toggles (matching Highlander Show More / Show Less pattern)
-  const [isBiddingNoticeExpanded, setIsBiddingNoticeExpanded] = useState<boolean>(false);
-  const [isAuctionNoticeExpanded, setIsAuctionNoticeExpanded] = useState<boolean>(false);
-  const [isDescExpanded, setIsDescExpanded] = useState<boolean>(false);
+  // Fetch auction details dynamically from Supabase as single source of truth
+  useEffect(() => {
+    let isMounted = true;
 
-  // Collapsible Accordions state (matching HiBid Auction Details layout)
-  const [accordionsOpen, setAccordionsOpen] = useState<{
-    info: boolean;
-    terms: boolean;
-    payment: boolean;
-    shipping: boolean;
-  }>({
-    info: true,
-    terms: false,
-    payment: false,
-    shipping: false
-  });
+    async function fetchAuctionDossier() {
+      setLoading(true);
+      try {
+        // Query Supabase auctions table by id or code
+        const { data: aucData, error: aucError } = await supabase
+          .from('auctions')
+          .select('*')
+          .or(`id.eq.${auctionId},code.eq.${auctionId}`)
+          .maybeSingle();
 
-  const toggleAccordion = (key: 'info' | 'terms' | 'payment' | 'shipping') => {
-    setAccordionsOpen((prev) => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
+        if (aucError) {
+          console.error('[AuctionDetailsPage] Supabase error:', aucError);
+        }
 
+        if (!isMounted) return;
+
+        if (aucData) {
+          setAuction(aucData);
+
+          // Fetch cataloged lots strictly for this auction
+          const lotFilter = aucData.code
+            ? `auction_id.eq.${aucData.id},auction_id.eq.${aucData.code}`
+            : `auction_id.eq.${aucData.id}`;
+
+          const { data: lotsData } = await supabase
+            .from('lots')
+            .select('*')
+            .or(lotFilter)
+            .order('lot_number', { ascending: true });
+
+          if (isMounted) {
+            setLots(Array.isArray(lotsData) ? lotsData : []);
+          }
+        } else {
+          setAuction(null);
+          setLots([]);
+        }
+      } catch (err) {
+        console.error('[AuctionDetailsPage] Error fetching auction dossier:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    fetchAuctionDossier();
+
+    // Supabase Realtime synchronization
+    const channel = supabase
+      .channel(`auction-details-sync-${auctionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'auctions' },
+        (payload: any) => {
+          if (payload.new && (payload.new.id === auctionId || payload.new.code === auctionId)) {
+            setAuction(payload.new);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lots' },
+        () => {
+          fetchAuctionDossier();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [auctionId]);
+
+  // Dynamic helper properties derived strictly from Supabase record
+  const title = (auction?.name || '').trim();
+  const code = (auction?.code || '').trim();
+  const description = (auction?.description || '').trim();
+  const auctionType = (auction?.auction_type || '').trim();
+  const statusRaw = (auction?.status || '').trim();
+  const currency = (auction?.currency || '').trim();
+
+  // Dynamic date range
+  const dateRange = useMemo(() => {
+    if (auction?.start_date && auction?.end_date) {
+      return `${formatDisplayDate(auction.start_date)} – ${formatDisplayDate(auction.end_date)}`;
+    }
+    if (auction?.start_date) return `Opens ${formatDisplayDate(auction.start_date)}`;
+    if (auction?.end_date) return `Closing ${formatDisplayDate(auction.end_date)}`;
+    return '';
+  }, [auction]);
+
+  // Dynamic aggregate lot count
+  const lotCount = useMemo(() => {
+    if (lots.length > 0) return lots.length;
+    if (auction?.day_stats?.lotCount) return Number(auction.day_stats.lotCount);
+    if (Array.isArray(auction?.day_stats?.lotStats)) return auction.day_stats.lotStats.length;
+    return 0;
+  }, [lots, auction]);
+
+  // Dynamic aggregate estimate calculated from lots
+  const aggregateEstimate = useMemo(() => {
+    let low = 0;
+    let high = 0;
+    lots.forEach((l) => {
+      low += Number(l.estimate_low) || 0;
+      high += Number(l.estimate_high) || 0;
+    });
+    if (low > 0 || high > 0) {
+      return `$${low.toLocaleString()} – $${high.toLocaleString()}`;
+    }
+    return '';
+  }, [lots]);
+
+  // Dynamic gallery images strictly from Supabase record & associated lots
+  const images = useMemo<string[]>(() => {
+    const list: string[] = [];
+    if (Array.isArray(auction?.featured_images)) {
+      auction.featured_images.forEach((img: any) => {
+        if (img?.url && typeof img.url === 'string' && !list.includes(img.url)) {
+          list.push(img.url);
+        }
+      });
+    }
+    if (lots.length > 0) {
+      lots.forEach((l) => {
+        if (l.image && typeof l.image === 'string' && !list.includes(l.image)) {
+          list.push(l.image);
+        }
+      });
+    }
+    return list;
+  }, [auction, lots]);
+
+  const activeImage = images[activeImgIndex] || images[0] || '';
+
+  // Dynamic notices strictly from database columns
+  const biddingNotice = (
+    auction?.short_bp_explanation ||
+    auction?.upload_settings?.biddingNotice ||
+    ''
+  ).trim();
+
+  const auctionNotice = (
+    auction?.payment_info ||
+    auction?.upload_settings?.auctionNotice ||
+    ''
+  ).trim();
+
+  const termsOfSale = (auction?.terms || '').trim();
+
+  // Dynamic location strictly from database columns
+  const streetAddress = [auction?.address1, auction?.address2]
+    .filter(Boolean)
+    .map((s: string) => s.trim())
+    .join(', ');
+
+  const cityStateZip = [auction?.city, auction?.state, auction?.zip]
+    .filter(Boolean)
+    .map((s: string) => s.trim())
+    .join(' ');
+
+  const fullLocation = [streetAddress, cityStateZip, auction?.country]
+    .filter(Boolean)
+    .join(', ');
+
+  const mapQuery = fullLocation ? encodeURIComponent(fullLocation) : '';
+  const hasLocation = Boolean(streetAddress || cityStateZip || auction?.country);
+
+  // Dynamic Schedule fields
+  const timezone = auction?.upload_settings?.timezone || '';
+  const previewTimes = auction?.upload_settings?.previewDateTimes || '';
+  const sessionTimes = auction?.upload_settings?.auctionDateTimes || '';
+  const checkoutTimes = auction?.upload_settings?.checkoutDateTimes || '';
+  const softCloseSeconds = auction?.upload_settings?.softCloseSeconds;
+  const hasSchedule = Boolean(dateRange || timezone || previewTimes || sessionTimes || checkoutTimes || softCloseSeconds);
+
+  // Dynamic shipping & logistics
+  const shippingPolicy = (
+    auction?.shipping_availability ||
+    auction?.shipping_account ||
+    auction?.upload_settings?.shippingPickup ||
+    ''
+  ).trim();
+
+  // Dynamic accepted credit cards
+  const acceptedCards = useMemo<string[]>(() => {
+    const cardsObj = auction?.upload_settings?.acceptedCards;
+    if (!cardsObj || typeof cardsObj !== 'object') return [];
+    return Object.entries(cardsObj)
+      .filter(([_, val]) => Boolean(val))
+      .map(([key]) => key);
+  }, [auction]);
+
+  // Dynamic handling fee
+  const handlingText = useMemo(() => {
+    if (!auction?.add_handling_charge) return '';
+    const amt = Number(auction.handling_amount) || 0;
+    const type = auction.handling_charge_type || 'Fixed';
+    return `$${amt.toFixed(2)} (${type})`;
+  }, [auction]);
+
+  // Dynamic Status Badge
+  const statusBadgeInfo = useMemo(() => {
+    if (!statusRaw) return null;
+    const st = statusRaw.toLowerCase();
+    if (st.includes('progress') || st.includes('live')) {
+      return { text: 'LIVE WEBCAST AUCTION', color: 'red' as const, isPulse: true };
+    }
+    if (st.includes('open')) {
+      return { text: 'CATALOG OPEN', color: 'green' as const, isPulse: false };
+    }
+    if (st.includes('closing') || st.includes('today')) {
+      return { text: 'CLOSING TODAY', color: 'gold' as const, isPulse: false };
+    }
+    if (st.includes('concluded') || st.includes('closed') || st.includes('ended')) {
+      return { text: 'SESSION CONCLUDED', color: 'gold' as const, isPulse: false };
+    }
+    return { text: statusRaw.toUpperCase(), color: 'green' as const, isPulse: false };
+  }, [statusRaw]);
+
+  // Dynamic extra fields
+  const dynamicExtraFields = useMemo(() => {
+    if (!auction) return [];
+    return Object.entries(auction).filter(([key, val]) => {
+      if (INTERNAL_SYSTEM_FIELDS.has(key)) return false;
+      if (val === null || val === undefined || val === '') return false;
+      if (typeof val === 'object' && Object.keys(val).length === 0) return false;
+      return true;
+    });
+  }, [auction]);
+
+  const hasLogistics = Boolean(
+    shippingPolicy ||
+    auction?.shipping_account ||
+    handlingText ||
+    auction?.use_consolidated_invoicing !== undefined ||
+    acceptedCards.length > 0
+  );
+
+  const hasGovernance = Boolean(
+    auctionType ||
+    auction?.tax_exempt_all !== undefined ||
+    auction?.live_starting_bid_card !== undefined ||
+    auction?.lot_defaults?.buyerPremium ||
+    auction?.lot_defaults?.commission ||
+    dynamicExtraFields.length > 0
+  );
+
+  // Share action
   const handleShare = () => {
     const url = window.location.href;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
     }
-    onShowToast('success', 'Link Copied', `Direct archival link for "${auction?.title}" copied to clipboard.`);
+    onShowToast('success', 'Link Copied', `Direct archival link for "${title || 'Auction'}" copied to clipboard.`);
   };
 
-  const handlePrint = () => {
-    window.print();
+  // Navigate to catalog lots for this specific auction
+  const handleOpenCatalog = () => {
+    const targetId = auction?.id || auctionId;
+    const path = `#current-auction?auction=${targetId}&tab=lots`;
+    if (onNavigate) {
+      onNavigate(path);
+    } else {
+      window.location.hash = path;
+    }
   };
 
-  // Error / Not Found State
-  if (!auction) {
+  // Back Navigation directly to Current Auctions
+  const handleBack = () => {
+    const targetPath = '#current-auction?tab=auctions';
+    if (onNavigate) {
+      onNavigate(targetPath);
+    } else {
+      window.location.hash = targetPath;
+    }
+  };
+
+  // Loading State
+  if (loading) {
     return (
-      <div className="auction-details-page not-found-page">
-        <div className="container-fluid">
-          <div className="past-catalogs-empty-state">
-            <h2 className="empty-title">Auction Archive Not Found</h2>
-            <p className="empty-desc">
-              The requested auction catalog for ID "{auctionId}" does not exist in our historical archive.
-            </p>
-            <a href="#catalogs" className="empty-reset-btn">
-              <RotateCcw size={16} />
-              <span>Return to Past Catalogs</span>
-            </a>
+      <main className="g-dossier-page-root" role="main" aria-label="Loading Auction Dossier">
+        <div className="g-dossier-loading-container">
+          <div className="g-dossier-spinner-ring" />
+          <div className="g-dossier-loading-text">
+            <span className="g-dossier-loading-title">GARDNER AUCTION ARCHIVE</span>
+            <span className="g-dossier-loading-sub">Accessing verified saleroom ledger...</span>
           </div>
         </div>
-      </div>
+      </main>
+    );
+  }
+
+  // Not Found State
+  if (!auction) {
+    return (
+      <main className="g-dossier-page-root" role="main" aria-label="Auction Not Found">
+        <div className="g-dossier-container">
+          <div className="g-dossier-not-found-panel">
+            <div className="g-not-found-icon-wrap">
+              <AlertCircle size={40} />
+            </div>
+            <span className="g-not-found-eyebrow">AUCTION DOSSIER UNRESOLVED</span>
+            <h1 className="g-not-found-heading">Auction Record Not Found</h1>
+            <p className="g-not-found-desc">
+              The requested auction ledger identifier <strong>"{auctionId}"</strong> could not be located in the current database repository.
+            </p>
+            <button type="button" className="g-btn-back-link" onClick={handleBack} id="btn-ad-notfound-back">
+              <ArrowLeft size={16} />
+              <span>Return to Current Auctions</span>
+            </button>
+          </div>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="auction-details-page">
-      {/* 1. Breadcrumbs Navigation Strip */}
-      <section className="auction-details-header-strip">
-        <div className="container-fluid">
-          <div className="auction-details-nav-row">
-            <a href="#catalogs" className="btn-back-catalogs large" title="Return to past catalogs directory">
-              <ArrowLeft size={18} />
-              <span>Back to Past Catalogs</span>
-            </a>
+    <main className="g-dossier-page-root" role="main" aria-label={`Auction Details - ${title || 'Saleroom Dossier'}`}>
+      {/* Fixed Back Navigation Button (Positioned at marked location, fixed while scrolling) */}
+      <div className="g-dossier-fixed-back-wrap">
+        <button
+          type="button"
+          className="g-bar-btn-return"
+          onClick={handleBack}
+          title="Return to Current Auctions"
+          id="btn-ad-back"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Current Auctions</span>
+        </button>
+      </div>
 
-            <nav className="breadcrumbs-nav" aria-label="Breadcrumb">
-              <a href="#auctions" className="breadcrumb-link">Home</a>
-              <span className="breadcrumb-separator">/</span>
-              <a href="#catalogs" className="breadcrumb-link">Past Catalogs</a>
-              <span className="breadcrumb-separator">/</span>
-              <span className="breadcrumb-current">{auction.title}</span>
-            </nav>
-          </div>
-        </div>
-      </section>
+      {/* Main Content Area — Expansive Responsive Layout */}
+      <div className="g-dossier-layout-wrapper">
+        <div className="g-dossier-container">
 
-      {/* 2. Main Auction Card (Matching Highlander Gold & Silver / HiBid Layout) */}
-      <section className="auction-details-main-section">
-        <div className="container-fluid">
-          <article className="past-auction-card auction-details-hero-card">
-            {/* Header: Title & Auction Type Banner */}
-            <header className="past-auction-card-header">
-              <div className="header-title-box">
-                <h1 className="auction-card-title">{auction.title}</h1>
-                <div className="auction-type-strip">
-                  <Globe size={13} className="globe-icon" />
-                  <span>{auction.auctionType}</span>
-                  <span className="strip-divider">·</span>
-                  <span className="auction-header-status-badge">
-                    <Lock size={12} />
-                    <span>Concluded</span>
-                  </span>
-                </div>
-              </div>
-              <div className="header-realized-tag">
-                <span>Total Realized: <strong>{auction.totalRealized}</strong></span>
-              </div>
-            </header>
+          {/* 2. Panoramic Auction Showcase Hero (Two-Column Asymmetrical Stage) */}
+          <section className="g-showcase-hero-stage" aria-label="Auction Overview and Media Showcase">
+            {/* Left Media Stage: Museum Gallery Display */}
+            <div className="g-gallery-column">
+              <div className="g-gallery-frame">
+                {/* Floating Status Pill */}
+                {statusBadgeInfo && (
+                  <div className={`g-gallery-floating-badge ${statusBadgeInfo.color}`}>
+                    {statusBadgeInfo.isPulse && <span className="g-gallery-pulse-dot" />}
+                    <span>{statusBadgeInfo.text}</span>
+                  </div>
+                )}
 
-            {/* 3-Column Body: Media, Location & Schedule, Badges */}
-            <div className="past-auction-card-body">
-              {/* Left Column: Cover Image & Actions */}
-              <div className="auction-body-left">
-                <div className="auction-img-frame">
+                {/* Main Visual Display */}
+                {activeImage ? (
                   <img
-                    src={auction.image}
-                    alt={auction.title}
-                    className="auction-featured-img"
+                    src={activeImage}
+                    alt={title || 'Auction'}
+                    className="g-gallery-primary-image"
                   />
-                  <div className="auction-closed-flag">
-                    <Lock size={12} />
-                    <span>Concluded</span>
+                ) : (
+                  <div className="g-gallery-placeholder">
+                    <div className="g-placeholder-emblem">
+                      <Sparkles size={32} />
+                    </div>
+                    <span className="g-placeholder-title">GARDNER AUCTION</span>
+                    <span className="g-placeholder-sub">{code || 'CERTIFIED SALEROOM DOSSIER'}</span>
+                  </div>
+                )}
+
+                {/* Photo Count Tag */}
+                {images.length > 0 && (
+                  <div className="g-gallery-counter-pill">
+                    <span>Photo {activeImgIndex + 1} of {images.length}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Horizontal Filmstrip Thumbnail Ribbon */}
+              {images.length > 1 && (
+                <div className="g-gallery-filmstrip" aria-label="Auction Images Gallery">
+                  {images.map((imgUrl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`g-gallery-thumb-cell ${activeImgIndex === idx ? 'active' : ''}`}
+                      onClick={() => setActiveImgIndex(idx)}
+                      title={`View Photo ${idx + 1}`}
+                      aria-label={`Photo ${idx + 1}`}
+                    >
+                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
+                      {activeImgIndex === idx && <span className="g-thumb-active-indicator" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right Information & Command Center */}
+            <div className="g-masthead-column">
+              {/* Category & Identification Badges */}
+              <div className="g-masthead-identity-row">
+                <span className="g-badge-category">
+                  <Globe size={13} />
+                  <span>{auctionType || 'CERTIFIED AUCTION'}</span>
+                </span>
+
+                {code && (
+                  <span className="g-badge-code">
+                    <span className="g-badge-code-label">CODE:</span>
+                    <span className="g-badge-code-val">{code}</span>
+                  </span>
+                )}
+
+                {currency && (
+                  <span className="g-badge-currency">
+                    <span>SETTLEMENT: {currency}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Primary Auction Title */}
+              <h1 className="g-masthead-title">{title || 'Official Saleroom Auction'}</h1>
+
+              {/* Official Run Dates Banner */}
+              {dateRange && (
+                <div className="g-masthead-dates-ribbon">
+                  <Calendar size={17} className="g-dates-icon" />
+                  <div className="g-dates-meta">
+                    <span className="g-dates-label">SESSION TIMEFRAME</span>
+                    <span className="g-dates-val">{dateRange}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Verbatim Description */}
+              {description && (
+                <p className="g-masthead-description">{description}</p>
+              )}
+
+              {/* Key Metrics Highlight Dashboard */}
+              <div className="g-metrics-ribbon">
+                <div className="g-metric-box">
+                  <span className="g-metric-title">TOTAL CATALOGED</span>
+                  <div className="g-metric-value-wrap">
+                    <Layers size={16} className="g-metric-icon" />
+                    <span className="g-metric-val">{lotCount} Lots</span>
                   </div>
                 </div>
 
-                <div className="hibid-media-actions-row">
-                  <button
-                    type="button"
-                    className="auction-share-btn"
-                    onClick={handlePrint}
-                    title="Print auction catalogue"
-                  >
-                    <Printer size={14} />
-                    <span>Print</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="auction-share-btn"
-                    onClick={handleShare}
-                    title="Share auction catalog link"
-                  >
-                    <Share2 size={14} />
-                    <span>Share</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Center Column: Company, Location, Schedule & Description */}
-              <div className="auction-body-center">
-                <h2 className="auction-company-name">{auction.companyName}</h2>
-
-                <div className="auction-location-row">
-                  <span className="address-text">{auction.address}</span>
-                  <span className="address-text">{auction.cityStateZip}</span>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${auction.mapQuery}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="auction-map-link"
-                    title="Open gallery venue in Google Maps"
-                  >
-                    <MapPin size={13} />
-                    <span>Map</span>
-                    <ExternalLink size={11} />
-                  </a>
-                </div>
-
-                <div className="auction-dates-block">
-                  <p className="auction-dates-line">
-                    <Calendar size={14} className="gold-icon inline-icon" />
-                    <strong>Date(s) {auction.dateRange}</strong>
-                  </p>
-                  <p className="auction-schedule-line">
-                    <Clock size={13} className="inline-icon" />
-                    <span>{auction.scheduleText}</span>
-                  </p>
-                </div>
-
-                <div className="auction-description-box">
-                  <p className={`auction-desc-text ${isDescExpanded ? 'expanded' : 'clamped'}`}>
-                    {auction.description}
-                  </p>
-                  <button
-                    type="button"
-                    className="desc-expand-toggle"
-                    onClick={() => setIsDescExpanded((prev) => !prev)}
-                    aria-expanded={isDescExpanded}
-                  >
-                    <span>{isDescExpanded ? 'Show Less' : 'Show More'}</span>
-                    {isDescExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Status, Type & Shipping Badges */}
-              <div className="auction-body-right">
-                <div className="attribute-badge status-closed-badge">
-                  <Lock size={15} className="attr-icon" />
-                  <span>Status: <strong>Concluded</strong></span>
-                </div>
-
-                <div className="attribute-badge type-badge">
-                  <Globe size={15} className="attr-icon" />
-                  <span>{auction.auctionType}</span>
-                </div>
-
-                <div className="attribute-badge shipping-badge">
-                  <Truck size={15} className="attr-icon" />
-                  <span>{auction.shipping}</span>
-                </div>
-
-                <div className="lots-count-indicator">
-                  <BookOpen size={14} className="gold-icon" />
-                  <span><strong>{auction.lots.length}</strong> Lots Documented</span>
-                </div>
-
-                <div className="realized-total-indicator">
-                  <DollarSign size={14} className="gold-icon" />
-                  <span>Total Realized: <strong>{auction.totalRealized}</strong></span>
-                </div>
-              </div>
-            </div>
-
-            {/* Prominent Action Button: View Catalog (Matches HiBid Full-Width Primary Action) */}
-            <div className="hibid-prominent-action-bar">
-              <a
-                href={`#catalog/${auction.id}`}
-                className="btn-hibid-view-catalog"
-                title={`Open catalog lots for ${auction.title}`}
-              >
-                <BookOpen size={17} />
-                <span>View Catalog ({auction.lots.length} Lots)</span>
-              </a>
-            </div>
-
-            {/* Notices Section: Bidding Notice & Auction Notice (Highlander Red-Label Callouts) */}
-            <div className="past-auction-notices-container">
-              {/* Bidding Notice */}
-              <div className="hibid-notice-card">
-                <p className="hibid-notice-text">
-                  <strong className="hibid-notice-label">Bidding Notice:</strong>{' '}
-                  {isBiddingNoticeExpanded
-                    ? auction.biddingNotice
-                    : `${auction.biddingNotice.slice(0, 190)}... `}
-                  <button
-                    type="button"
-                    className="hibid-notice-toggle-btn"
-                    onClick={() => setIsBiddingNoticeExpanded((prev) => !prev)}
-                  >
-                    {isBiddingNoticeExpanded ? 'Show Less' : 'Show More'}
-                  </button>
-                </p>
-              </div>
-
-              {/* Auction Notice */}
-              <div className="hibid-notice-card">
-                <p className="hibid-notice-text">
-                  <strong className="hibid-notice-label">Auction Notice:</strong>{' '}
-                  {isAuctionNoticeExpanded
-                    ? auction.auctionNotice
-                    : `${auction.auctionNotice.slice(0, 190)}... `}
-                  <button
-                    type="button"
-                    className="hibid-notice-toggle-btn"
-                    onClick={() => setIsAuctionNoticeExpanded((prev) => !prev)}
-                  >
-                    {isAuctionNoticeExpanded ? 'Show Less' : 'Show More'}
-                  </button>
-                </p>
-              </div>
-            </div>
-          </article>
-
-          {/* 3. HiBid Collapsible Accordion Dossiers */}
-          <div className="hibid-full-width-dossier-section" style={{ marginTop: 24 }}>
-            {/* Accordion 1: Auction Information */}
-            <div className="hibid-accordion-panel">
-              <button
-                type="button"
-                className="hibid-accordion-header"
-                onClick={() => toggleAccordion('info')}
-                aria-expanded={accordionsOpen.info}
-              >
-                <div className="accordion-title-wrap">
-                  <Info size={17} className="gold-icon" />
-                  <span className="accordion-title-text">Auction Information</span>
-                </div>
-                {accordionsOpen.info ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-
-              {accordionsOpen.info && (
-                <div className="hibid-accordion-body">
-                  <table className="hibid-info-table">
-                    <tbody>
-                      <tr>
-                        <td className="info-cell-label">Auction Title</td>
-                        <td className="info-cell-val">
-                          <a href={`#catalog/${auction.id}`} className="info-link-gold">
-                            {auction.title}
-                          </a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Auctioneer / House</td>
-                        <td className="info-cell-val">
-                          <strong>{auction.companyName}</strong> (PA License #AY-002004)
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Auction Type</td>
-                        <td className="info-cell-val">{auction.auctionType}</td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Session Dates</td>
-                        <td className="info-cell-val">{auction.dateRange}</td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Schedule Window</td>
-                        <td className="info-cell-val">{auction.scheduleText}</td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Preview &amp; Location</td>
-                        <td className="info-cell-val">
-                          {auction.address}, {auction.cityStateZip}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Fiduciary Guarantee</td>
-                        <td className="info-cell-val">
-                          Bonded Sterling $500,000+ Approved Tier A Surety Guarantee
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="info-cell-label">Curatorial Summary</td>
-                        <td className="info-cell-val">{auction.description}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Accordion 2: Terms and Conditions */}
-            <div className="hibid-accordion-panel">
-              <button
-                type="button"
-                className="hibid-accordion-header"
-                onClick={() => toggleAccordion('terms')}
-                aria-expanded={accordionsOpen.terms}
-              >
-                <div className="accordion-title-wrap">
-                  <FileText size={17} className="gold-icon" />
-                  <span className="accordion-title-text">Terms and Conditions</span>
-                </div>
-                {accordionsOpen.terms ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-
-              {accordionsOpen.terms && (
-                <div className="hibid-accordion-body">
-                  <p className="spec-body-paragraph">
-                    All lots in this concluded session were cataloged, authenticated, and sold strictly in accordance with Pennsylvania Auctioneers Board statutes and Gardner Auction standard condition criteria.
-                  </p>
-                  <p className="spec-body-paragraph">
-                    Published hammer figures reflect final knock-down gavel transactions plus standard 15% Buyer's Premium. Title passed immediately upon fall of the hammer to the registered winning bidder. All coin and precious metal specimens were authenticated by NGC, PCGS, or certified third-party numismatic graders prior to cataloging.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Accordion 3: Payment Information */}
-            <div className="hibid-accordion-panel">
-              <button
-                type="button"
-                className="hibid-accordion-header"
-                onClick={() => toggleAccordion('payment')}
-                aria-expanded={accordionsOpen.payment}
-              >
-                <div className="accordion-title-wrap">
-                  <ShieldCheck size={17} className="gold-icon" />
-                  <span className="accordion-title-text">Payment Information</span>
-                </div>
-                {accordionsOpen.payment ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-
-              {accordionsOpen.payment && (
-                <div className="hibid-accordion-body">
-                  <p className="spec-body-paragraph">
-                    Accepted settlement methods: Domestic and international wire transfers, certified bank cashier's checks, and approved credit cards (Visa, MasterCard, American Express, Discover with 3% card processing fee).
-                  </p>
-                  <p className="spec-body-paragraph">
-                    Invoices were dispatched via email within 24 hours of session adjournment. Title deeds and certified provenance dossiers were released upon full ledger verification.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Accordion 4: Shipping/Pickup */}
-            <div className="hibid-accordion-panel">
-              <button
-                type="button"
-                className="hibid-accordion-header"
-                onClick={() => toggleAccordion('shipping')}
-                aria-expanded={accordionsOpen.shipping}
-              >
-                <div className="accordion-title-wrap">
-                  <Truck size={17} className="gold-icon" />
-                  <span className="accordion-title-text">Shipping / Pickup</span>
-                </div>
-                {accordionsOpen.shipping ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-
-              {accordionsOpen.shipping && (
-                <div className="hibid-accordion-body">
-                  <p className="spec-body-paragraph">
-                    <strong>Shipping Available:</strong> Worldwide insured transit via USPS Registered Priority Mail, FedEx Insured Armored Freight, or specialized fine-art white-glove handlers.
-                  </p>
-                  <p className="spec-body-paragraph">
-                    <strong>Local Collection:</strong> In-person gallery collection from our Pittsburgh showroom (4200 Commercial Boulevard, Suite 100, Pittsburgh, PA 15201) was accommodated by appointment with government-issued photo ID.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 4. Featured Catalog Lots Showcase */}
-          <div className="auction-lots-preview-section">
-            <div className="preview-section-header">
-              <div>
-                <span className="section-eyebrow">CONCLUDED CATALOG LOTS</span>
-                <h3 className="preview-main-title">Lots from this Auction ({auction.lots.length})</h3>
-              </div>
-              <a
-                href={`#catalog/${auction.id}`}
-                className="btn-open-full-catalog"
-                title={`Open complete catalog for ${auction.title}`}
-              >
-                <span>Browse Full Catalog</span>
-                <BookOpen size={15} />
-              </a>
-            </div>
-
-            {/* Lots Grid for this Auction */}
-            <div className="past-lots-grid">
-              {auction.lots.map((lot) => (
-                <div key={lot.id} className="past-lot-card">
-                  <a
-                    href={`#lot/${lot.id}`}
-                    className="past-lot-media"
-                    title={`View ${lot.lotNumber}: ${lot.title}`}
-                  >
-                    <img src={lot.image} alt={lot.title} className="past-lot-img" loading="lazy" />
-                    <div className="lot-closed-bar">
-                      <Lock size={13} className="closed-icon" />
-                      <span>Closed</span>
+                {aggregateEstimate && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">ESTIMATE RANGE</span>
+                    <div className="g-metric-value-wrap">
+                      <span className="g-metric-icon-curr">$</span>
+                      <span className="g-metric-val gold">{aggregateEstimate}</span>
                     </div>
-                  </a>
+                  </div>
+                )}
 
-                  <div className="past-lot-body">
-                    <div className="lot-number-type-row">
-                      <span className="past-lot-num">{lot.lotNumber}</span>
-                      <span className="past-lot-type">
-                        <Globe size={12} />
-                        <span>Online Only</span>
+                {Boolean(softCloseSeconds) && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">SOFT CLOSE</span>
+                    <div className="g-metric-value-wrap">
+                      <Clock size={16} className="g-metric-icon" />
+                      <span className="g-metric-val">{softCloseSeconds}s Window</span>
+                    </div>
+                  </div>
+                )}
+
+                {shippingPolicy && (
+                  <div className="g-metric-box">
+                    <span className="g-metric-title">LOGISTICS</span>
+                    <div className="g-metric-value-wrap">
+                      <Truck size={16} className="g-metric-icon" />
+                      <span className="g-metric-val truncate" title={shippingPolicy}>
+                        {shippingPolicy.length > 24 ? `${shippingPolicy.slice(0, 24)}…` : shippingPolicy}
                       </span>
                     </div>
+                  </div>
+                )}
+              </div>
 
-                    <h4 className="past-lot-title" title={lot.title}>
-                      <a href={`#lot/${lot.id}`} className="lot-card-title-link">
-                        {lot.title}
-                      </a>
-                    </h4>
+              {/* Primary Conversion & Action Hub */}
+              <div className="g-masthead-action-deck">
+                <button
+                  type="button"
+                  className="g-btn-gold-master"
+                  onClick={handleOpenCatalog}
+                  title={`Browse Catalog Lots (${lotCount})`}
+                  id="btn-ad-browse-catalog"
+                >
+                  <BookOpen size={18} />
+                  <span>Browse Catalog Lots ({lotCount})</span>
+                  <ChevronRight size={18} className="g-btn-arrow" />
+                </button>
 
-                    {/* Price Realized */}
-                    <div className="past-lot-price-block">
-                      <span className="price-realized-text">{lot.priceRealized}</span>
+                <button
+                  type="button"
+                  className="g-btn-secondary-share"
+                  onClick={handleShare}
+                  title="Share Auction Dossier"
+                  id="btn-ad-share-dossier"
+                >
+                  <Share2 size={16} />
+                  <span>Share Dossier</span>
+                </button>
+              </div>
+
+              {/* Licensure Assurance Tag */}
+              <div className="g-licensure-guarantee">
+                <ShieldCheck size={16} className="g-guarantee-icon" />
+                <span>Commonwealth of Pennsylvania Registered &amp; Bonded Auction House • License #AY-002004</span>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. Priority Saleroom Notices (Bidding & Payment Notices) */}
+          {(biddingNotice || auctionNotice) && (
+            <section className="g-notices-banner-section" aria-label="Official Saleroom Notices">
+              {biddingNotice && (
+                <div className="g-notice-card urgent" role="alert">
+                  <div className="g-notice-badge red">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div className="g-notice-body">
+                    <div className="g-notice-header-row">
+                      <span className="g-notice-eyebrow red">CRITICAL BIDDING NOTICE</span>
                     </div>
-
-                    {/* Meta Details */}
-                    <div className="past-lot-meta-block">
-                      <div className="meta-line">
-                        <span className="meta-label">Date Sold:</span>
-                        <span className="meta-val">{lot.dateSold}</span>
-                      </div>
-                      <div className="meta-line company-line">
-                        <span>{lot.auctionHouse}</span>
-                      </div>
-                      <div className="meta-line location-line">
-                        <MapPin size={12} />
-                        <span>{lot.location}</span>
-                      </div>
-                      <div className="meta-line shipping-line">
-                        <Truck size={12} />
-                        <span>{lot.shipping}</span>
-                      </div>
-                    </div>
-
-                    {/* View Lot Button */}
-                    <div className="past-lot-action-wrap">
-                      <a
-                        href={`#lot/${lot.id}`}
-                        className="btn-view-past-lot"
-                        title={`View lot details for ${lot.lotNumber}`}
-                      >
-                        <span>View Lot</span>
-                      </a>
-                    </div>
+                    <p className="g-notice-message red">{biddingNotice}</p>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {auctionNotice && (
+                <div className="g-notice-card informational">
+                  <div className="g-notice-badge gold">
+                    <Info size={20} />
+                  </div>
+                  <div className="g-notice-body">
+                    <div className="g-notice-header-row">
+                      <span className="g-notice-eyebrow gold">PAYMENT &amp; AUCTION SETTLEMENT PROTOCOL</span>
+                    </div>
+                    <p className="g-notice-message">{auctionNotice}</p>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 4. Deep-Dive Asymmetric Command Grid (65% Stage / 35% Sidebar) */}
+          <div className="g-dossier-main-grid">
+
+            {/* Left Column (65%): Chronological Timeline & Terms of Sale */}
+            <div className="g-dossier-stage-column">
+
+              {/* Block A: Complete Auction Schedule & Event Details */}
+              {hasSchedule && (
+                <section className="g-dossier-block-card" aria-label="Auction Schedule and Event Details">
+                  <div className="g-block-header">
+                    <div className="g-block-icon-wrap">
+                      <Calendar size={18} />
+                    </div>
+                    <div>
+                      <h2 className="g-block-title">Schedule &amp; Event Milestones</h2>
+                      <p className="g-block-subtitle">Complete schedule for auction run, inspection preview, live bidding, and post-sale settlement</p>
+                    </div>
+                  </div>
+
+                  {/* Unified Event Schedule Grid */}
+                  <div className="g-schedule-grid">
+                    {/* 1. Auction Window */}
+                    {dateRange && (
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Auction Window</span>
+                          <h3 className="g-schedule-title">Official Auction Run</h3>
+                        </div>
+                        <div className="g-schedule-card-body">
+                          <div className="g-schedule-date-highlight">{dateRange}</div>
+                          {timezone && (
+                            <div className="g-schedule-meta-badge">
+                              <Globe size={12} />
+                              <span>Timezone: {timezone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. Exhibition & Preview */}
+                    {previewTimes && (
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Exhibition &amp; Preview</span>
+                          <h3 className="g-schedule-title">Preview &amp; In-Person Inspection</h3>
+                        </div>
+                        <div className="g-schedule-card-body">
+                          <p className="g-schedule-desc">{previewTimes}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Simulcast Bidding & Closing Session */}
+                    {(sessionTimes || Boolean(softCloseSeconds)) && (
+                      <div className="g-schedule-card is-bidding">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Simulcast Bidding &amp; Closing</span>
+                          <h3 className="g-schedule-title">Simulcast Bidding &amp; Closing Session</h3>
+                        </div>
+                        <div className="g-schedule-card-body">
+                          {sessionTimes && <p className="g-schedule-desc">{sessionTimes}</p>}
+                          {Boolean(softCloseSeconds) && (
+                            <div className="g-schedule-softclose-pill">
+                              <Clock size={12} />
+                              <span>Soft-Close Protection: {softCloseSeconds} Seconds Extended Window</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. Post-Auction Settlement & Removal */}
+                    {checkoutTimes && (
+                      <div className="g-schedule-card">
+                        <div className="g-schedule-card-header">
+                          <span className="g-schedule-category">Post-Auction Settlement</span>
+                          <h3 className="g-schedule-title">Checkout, Settlement &amp; Removal</h3>
+                        </div>
+                        <div className="g-schedule-card-body">
+                          <p className="g-schedule-desc">{checkoutTimes}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Block B: Official Terms of Sale */}
+              {termsOfSale && (
+                <section className="g-dossier-block-card terms-block" aria-label="Official Terms of Sale">
+                  <div className="g-block-header">
+                    <div className="g-block-icon-wrap">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <h2 className="g-block-title">Official Terms of Sale</h2>
+                      <p className="g-block-subtitle">Standard legal conditions and bidder fiduciary contract</p>
+                    </div>
+                  </div>
+
+                  <div className="g-terms-parchment-box">
+                    <div className="g-terms-text-content">
+                      {termsOfSale}
+                    </div>
+                    <div className="g-terms-footer-seal">
+                      <CheckCircle2 size={14} />
+                      <span>Certified Saleroom Protocol • Gardner Auction Master Catalog</span>
+                    </div>
+                  </div>
+                </section>
+              )}
+
             </div>
 
-            {/* Bottom Catalog Action */}
-            <div className="preview-bottom-cta">
-              <a
-                href={`#catalog/${auction.id}`}
-                className="btn-view-catalog-gold btn-large"
-              >
-                <BookOpen size={18} />
-                <span>Open Full Catalog ({auction.lots.length} Lots)</span>
-              </a>
+            {/* Right Sidebar Column (35%): Saleroom Venue, Payment Protocol & Governance */}
+            <div className="g-dossier-sidebar-column">
+
+              {/* Sidebar Card 1: Saleroom & Physical Inspection Venue (Dark Navy Contrast Card) */}
+              {hasLocation && (
+                <section className="g-sidebar-card navy-luxury" aria-label="Saleroom Venue Location">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap gold">
+                      <MapPin size={17} />
+                    </div>
+                    <div>
+                      <span className="g-sidebar-card-tag">PHYSICAL SALEROOM</span>
+                      <h3 className="g-sidebar-card-title">Venue &amp; Gallery</h3>
+                    </div>
+                  </div>
+
+                  <div className="g-venue-address-block">
+                    {streetAddress && <div className="g-address-line primary">{streetAddress}</div>}
+                    {cityStateZip && <div className="g-address-line secondary">{cityStateZip}</div>}
+                    {auction?.country && <div className="g-address-line country">{auction.country}</div>}
+                  </div>
+
+                  {mapQuery && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="g-btn-venue-maps"
+                      id="btn-ad-venue-maps"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Locate on Google Maps</span>
+                    </a>
+                  )}
+                </section>
+              )}
+
+              {/* Sidebar Card 2: Logistics, Shipping & Payment Protocols */}
+              {hasLogistics && (
+                <section className="g-sidebar-card white-crisp" aria-label="Logistics and Payment Details">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap dark">
+                      <CreditCard size={17} />
+                    </div>
+                    <div>
+                      <span className="g-sidebar-card-tag">SETTLEMENT PROTOCOL</span>
+                      <h3 className="g-sidebar-card-title">Logistics &amp; Payment</h3>
+                    </div>
+                  </div>
+
+                  <div className="g-sidebar-kv-group">
+                    {shippingPolicy && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Shipping Availability</span>
+                        <span className="g-kv-data">{shippingPolicy}</span>
+                      </div>
+                    )}
+
+                    {auction?.shipping_account && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Shipping Account</span>
+                        <span className="g-kv-data">{auction.shipping_account}</span>
+                      </div>
+                    )}
+
+                    {handlingText && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Handling Charge</span>
+                        <span className="g-kv-data gold-accent">{handlingText}</span>
+                      </div>
+                    )}
+
+                    {auction?.use_consolidated_invoicing !== undefined && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Consolidated Invoicing</span>
+                        <span className="g-kv-data">
+                          {auction.use_consolidated_invoicing ? 'Consolidated Statement' : 'Per-Lot Invoicing'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Accepted Credit Cards Chips */}
+                  {acceptedCards.length > 0 && (
+                    <div className="g-cards-accepted-block">
+                      <span className="g-cards-title">Accepted Payment Cards:</span>
+                      <div className="g-cards-pills-wrap">
+                        {acceptedCards.map((card) => (
+                          <span key={card} className="g-card-pill">
+                            <CreditCard size={12} />
+                            <span>{card.toUpperCase()}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Sidebar Card 3: Governance, Premiums & Consignor Policy */}
+              {hasGovernance && (
+                <section className="g-sidebar-card cream-refined" aria-label="Governance and Fiduciary Policy">
+                  <div className="g-sidebar-card-header">
+                    <div className="g-sidebar-icon-wrap gold-border">
+                      <ShieldCheck size={17} />
+                    </div>
+                    <div>
+                      <span className="g-sidebar-card-tag">GOVERNANCE PROTOCOL</span>
+                      <h3 className="g-sidebar-card-title">Fiduciary Standards</h3>
+                    </div>
+                  </div>
+
+                  <div className="g-sidebar-kv-group">
+                    {auctionType && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Bidding System</span>
+                        <span className="g-kv-data">{auctionType}</span>
+                      </div>
+                    )}
+
+                    {auction?.lot_defaults?.buyerPremium && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Standard Buyer's Premium</span>
+                        <span className="g-kv-data gold-accent">{auction.lot_defaults.buyerPremium}%</span>
+                      </div>
+                    )}
+
+                    {auction?.lot_defaults?.commission && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Consignor Commission</span>
+                        <span className="g-kv-data">{auction.lot_defaults.commission}%</span>
+                      </div>
+                    )}
+
+                    {auction?.tax_exempt_all !== undefined && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Tax Policy</span>
+                        <span className="g-kv-data">
+                          {auction.tax_exempt_all ? 'All Lots Tax Exempt' : 'Applicable Sales Tax Applied'}
+                        </span>
+                      </div>
+                    )}
+
+                    {auction?.live_starting_bid_card !== undefined && auction?.live_starting_bid_card !== null && (
+                      <div className="g-sidebar-kv-item">
+                        <span className="g-kv-term">Starting Bid Card</span>
+                        <span className="g-kv-data">#{auction.live_starting_bid_card}</span>
+                      </div>
+                    )}
+
+                    {/* Dynamically render any extra database columns */}
+                    {dynamicExtraFields.map(([key, val]) => (
+                      <div key={key} className="g-sidebar-kv-item">
+                        <span className="g-kv-term" style={{ textTransform: 'capitalize' }}>
+                          {key.replace(/_/g, ' ')}
+                        </span>
+                        <span className="g-kv-data">
+                          {typeof val === 'boolean'
+                            ? val ? 'Enabled' : 'Disabled'
+                            : String(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Lot Specimen Dossier Modal */}
-      {activeLotModal && (
-        <PastLotDetailModal
-          lot={activeLotModal}
-          onClose={() => setActiveLotModal(null)}
-        />
-      )}
-    </div>
+          {/* 5. Bottom Navigation & Action Terminal */}
+
+
+        </div>
+      </div>
+    </main>
   );
 };
+
+export default AuctionDetailsPage;

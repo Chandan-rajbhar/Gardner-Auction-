@@ -60,7 +60,7 @@ export function parsePaymentsFromNotes(notes?: string): SettlementPayment[] {
           status: (p.status as any) || 'Successful'
         }));
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Fallback: parse legacy tags: [Payment Cashier] Check Written: $100.00
@@ -173,16 +173,16 @@ export class SettlementService {
   /**
    * Map a raw invoices DB row to SettlementCustomer, resolving lots and charges.
    */
-    /**
-   * Recalculate dynamic financials for a specific invoice using live records from Supabase:
-   * - invoice_lots entries (hammer, buyer's premium, taxes, fees)
-   * - invoice_charges (shipping & handling, storage, custom charges)
-   * - bidder_deposits (matching paddle/bidder, active only)
-   * - recorded payments from invoice notes
-   * 
-   * Outstanding Balance = Total Charges - Deposits Applied - Successful Payments
-   * Updates Supabase invoices table with the calculated total_due, balance, and payment_status.
-   */
+  /**
+ * Recalculate dynamic financials for a specific invoice using live records from Supabase:
+ * - invoice_lots entries (hammer, buyer's premium, taxes, fees)
+ * - invoice_charges (shipping & handling, storage, custom charges)
+ * - bidder_deposits (matching paddle/bidder, active only)
+ * - recorded payments from invoice notes
+ * 
+ * Outstanding Balance = Total Charges - Deposits Applied - Successful Payments
+ * Updates Supabase invoices table with the calculated total_due, balance, and payment_status.
+ */
   public async recalculateInvoiceFinancials(invoiceId: string): Promise<{
     lotSubtotal: number;
     additionalCharges: number;
@@ -241,7 +241,7 @@ export class SettlementService {
           );
           totalDepositAvailable = matchedDepRows.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const payments = parsePaymentsFromNotes(inv.notes);
       const isDepositPayment = (p: SettlementPayment) => {
@@ -282,7 +282,7 @@ export class SettlementService {
                 status: newDepStatus,
                 updated_at: new Date().toISOString()
               }).eq('id', depRow.id);
-            } catch (_) {}
+            } catch (_) { }
           }
           remainingToApply = Math.round((remainingToApply - appliedForThis) * 100) / 100;
         }
@@ -384,7 +384,7 @@ export class SettlementService {
           audit_details: 'Recorded ' + paymentData.paymentType + ' payment of $' + newPayment.amount.toFixed(2) + ' on invoice ' + customerId + '. Remaining balance: $' + (financials?.balance ?? 0).toFixed(2) + '.',
           status: 'SUCCESS'
         }]);
-      } catch (_) {}
+      } catch (_) { }
 
       return {
         success: true,
@@ -439,13 +439,13 @@ export class SettlementService {
       if (depRows && depRows.length > 0) {
         const pLower = (row.paddle_number || '').trim().toLowerCase();
         const bLower = (row.buyer_name || '').trim().toLowerCase();
-        const matched = depRows.filter((d: any) => 
+        const matched = depRows.filter((d: any) =>
           (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
           (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
         );
         totalDepositAvailable = matched.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const payments = parsePaymentsFromNotes(row.notes);
     const isDepositPayment = (p: SettlementPayment) => {
@@ -482,7 +482,7 @@ export class SettlementService {
           payment_status: invoiceStatus,
           updated_at: new Date().toISOString()
         }).eq('id', row.id);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     return {
@@ -605,7 +605,7 @@ export class SettlementService {
             }));
             await client.from('auctions').update({ day_stats: dayStats, updated_at: new Date().toISOString() }).eq('id', auctionId);
           }
-        } catch (_) {}
+        } catch (_) { }
 
         return;
       }
@@ -891,7 +891,7 @@ export class SettlementService {
           }));
           await client.from('auctions').update({ day_stats: dayStats, updated_at: new Date().toISOString() }).eq('id', auctionId);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 12. Process Seller Settlements (Consignor Statements)
       const lotsByConsignor = new Map<string, any[]>();
@@ -1097,7 +1097,7 @@ export class SettlementService {
         audit_details: `Set isCashBuyer=${isCashBuyer} on invoice ${customerId} (auction ${auctionId}).`,
         status: 'SUCCESS'
       }]);
-    } catch (_) {}
+    } catch (_) { }
 
     return true;
   }
@@ -1176,7 +1176,7 @@ export class SettlementService {
         audit_details: `Dispatched ${customerIds.length} settlement orders via ${carrier}. Tracking: ${tracking}.`,
         status: 'SUCCESS'
       }]);
-    } catch (_) {}
+    } catch (_) { }
 
     return true;
   }
@@ -1226,12 +1226,11 @@ export class SettlementService {
         category: 'FINANCE',
         event_action: `Invoice Updated #${invoiceId}`,
         operator_service: 'AF360 Invoice Management',
-        audit_details: `Status: ${updates.paymentStatus}, Method: ${updates.paymentMethod || 'N/A'}, Balance: $${
-          updates.balance !== undefined ? updates.balance.toFixed(2) : (updates.paymentStatus === 'Paid' ? '0.00' : 'Unchanged')
-        }. ${updates.notes || ''}`,
+        audit_details: `Status: ${updates.paymentStatus}, Method: ${updates.paymentMethod || 'N/A'}, Balance: $${updates.balance !== undefined ? updates.balance.toFixed(2) : (updates.paymentStatus === 'Paid' ? '0.00' : 'Unchanged')
+          }. ${updates.notes || ''}`,
         status: 'SUCCESS'
       }]);
-    } catch (_) {}
+    } catch (_) { }
 
     return true;
   }
@@ -1441,7 +1440,7 @@ export class SettlementService {
           audit_details: 'Added ' + chargeData.account + ' charge of $' + chargeAmt.toFixed(2) + ' (' + chargeData.description + ') to invoice ' + customerId + '.',
           status: 'SUCCESS'
         }]);
-      } catch (_) {}
+      } catch (_) { }
 
       return {
         id: chargeId,
@@ -1497,7 +1496,7 @@ export class SettlementService {
           audit_details: 'Removed charge ' + chargeId + ' ($' + chargeAmt.toFixed(2) + ') from invoice ' + customerId + ' (auction ' + auctionId + ').',
           status: 'SUCCESS'
         }]);
-      } catch (_) {}
+      } catch (_) { }
 
       return true;
     } catch (err) {
@@ -1552,7 +1551,7 @@ export class SettlementService {
           audit_details: 'Refunded entry ' + entryId + ' (' + (entryToRemove.label || '') + ') on lot ' + lotId + ' for invoice ' + customerId + ' (auction ' + auctionId + ').',
           status: 'SUCCESS'
         }]);
-      } catch (_) {}
+      } catch (_) { }
 
       return true;
     } catch (err) {
@@ -1613,7 +1612,7 @@ export class SettlementService {
         audit_details: `Card authorization batch run for ${customerIds.length} settlement(s).`,
         status: 'SUCCESS'
       }]);
-    } catch (_) {}
+    } catch (_) { }
 
     return true;
   }
@@ -1772,7 +1771,7 @@ export class SettlementService {
           return { success: false, error: edgeError };
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 3. Neither endpoint succeeded: Return actionable error
     return {

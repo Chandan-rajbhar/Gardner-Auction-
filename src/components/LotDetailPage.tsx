@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import { resolveLotData } from '../data/pastCatalogsData';
 import type { ResolvedLotData } from '../data/pastCatalogsData';
+import { supabase } from '../lib/supabase';
+import { formatAuctionDates, formatCurrency } from '../lib/auctionHelpers';
+import type { PastLotItem, PastAuction } from './PastCatalogsPage';
 
 interface LotDetailPageProps {
   lotId: string;
@@ -64,8 +67,118 @@ export const LotDetailPage: React.FC<LotDetailPageProps> = ({
   const [inquiryNotes, setInquiryNotes] = useState<string>('');
 
   useEffect(() => {
+    let isMounted = true;
     const resolved = resolveLotData(lotId, auctionId);
-    setData(resolved);
+    if (resolved) {
+      setData(resolved);
+  
+      setSelectedImageIndex(0);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    async function loadFromDb() {
+      try {
+        const { data: lotData } = await supabase
+          .from('lots')
+          .select('*')
+          .eq('id', lotId)
+          .maybeSingle();
+
+        if (lotData && isMounted) {
+          const { data: parentAuc } = await supabase
+            .from('auctions')
+            .select('*')
+            .eq('id', lotData.auction_id)
+            .maybeSingle();
+
+          const { data: sibLots } = await supabase
+            .from('lots')
+            .select('*')
+            .eq('auction_id', lotData.auction_id)
+            .order('lot_number', { ascending: true });
+
+          const siblings = Array.isArray(sibLots) ? sibLots : [];
+          const currentIndex = siblings.findIndex((s) => s.id === lotData.id);
+          const prevLotRaw = currentIndex > 0 ? siblings[currentIndex - 1] : null;
+          const nextLotRaw = currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
+
+          const toPastLot = (l: any): PastLotItem => ({
+            id: l.id,
+            auctionId: l.auction_id,
+            auctionTitle: parentAuc?.name || 'Gardner Auction',
+            lotNumber: l.lot_number ? (String(l.lot_number).toLowerCase().startsWith('lot') ? String(l.lot_number) : `Lot ${l.lot_number}`) : 'Lot',
+            categoryTag: (l.category || 'RARE NUMISMATICS').toUpperCase(),
+            department: l.category || 'Coins & Currency',
+            title: l.title || `Lot ${l.lot_number || ''}`,
+            description: (l.condition_report || l.description || l.title || '').trim(),
+            details: (l.description || l.condition_report || '').trim(),
+            image: l.image || '/images/hero_coin.jpg',
+            priceRealized: formatCurrency(Number(l.hammer_price) || Number(l.sold_price) || Number(l.current_bid) || 0),
+            startingBid: Number(l.starting_bid) || 0,
+            estimateLow: Number(l.estimate_low) || 0,
+            estimateHigh: Number(l.estimate_high) || 0,
+            bidsCount: Number(l.bids_count) || 0,
+            dateSold: parentAuc?.end_date || 'Concluded',
+            auctionHouse: parentAuc?.name || 'Gardner Auction Appraisers',
+            location: [parentAuc?.city, parentAuc?.state].filter(Boolean).join(', ') || 'Pittsburgh, PA',
+            shipping: parentAuc?.shipping_availability || 'Shipping Available',
+            provenance: l.provenance || 'Private Collection; Gardner Verified.',
+            conditionReport: l.condition_report || 'Verified condition inspection completed.',
+            specialistNote: l.grade ? `Graded: ${l.grade}` : '',
+            certification: l.certification || '',
+            grade: l.grade || '',
+            certNumber: l.cert_number || ''
+          });
+
+          const street = [parentAuc?.address1, parentAuc?.address2].filter(Boolean).join(', ') || '4200 Commercial Boulevard, Suite 100';
+          const cityStateZip = [parentAuc?.city, parentAuc?.state, parentAuc?.zip].filter(Boolean).join(' ') || 'Pittsburgh, PA 15201';
+          const fullLocation = [street, cityStateZip, parentAuc?.country].filter(Boolean).join(', ');
+
+          const parentPastAuction: PastAuction = {
+            id: parentAuc?.id || lotData.auction_id,
+            code: parentAuc?.code,
+            title: parentAuc?.name || 'Auction Catalog',
+            auctionType: parentAuc?.auction_type || 'Online Only Auction',
+            status: 'Concluded',
+            companyName: parentAuc?.company_name || 'Gardner Auction Appraisers',
+            address: street,
+            cityStateZip,
+            mapQuery: encodeURIComponent(fullLocation || 'Pittsburgh PA'),
+            dateRange: formatAuctionDates(parentAuc?.start_date, parentAuc?.end_date),
+            scheduleText: parentAuc?.upload_settings?.auctionDateTimes || (parentAuc?.end_date ? `Session concluded ${parentAuc.end_date}` : 'All lots completed'),
+            description: parentAuc?.description || 'Verified authentic curated collectibles.',
+            biddingNotice: parentAuc?.upload_settings?.biddingNotice || parentAuc?.bidding_notice || 'All lots in this catalog have concluded and closed for live bidding.',
+            auctionNotice: parentAuc?.upload_settings?.auctionNotice || parentAuc?.auction_notice || 'PA Auctioneer Lic. # AY-002004.',
+            image: parentAuc?.featured_images?.[0]?.url || lotData.image || '/images/hero_coin.jpg',
+            category: parentAuc?.category || lotData.category || 'Coins & Currency',
+            lotsCount: siblings.length,
+            totalRealized: formatCurrency(siblings.reduce((sum, s) => sum + (Number(s.hammer_price) || Number(s.current_bid) || 0) * 1.15, 0)),
+            shipping: parentAuc?.shipping_availability || 'Shipping Available',
+            lots: siblings.map(toPastLot)
+          };
+
+          const thisLot = toPastLot(lotData);
+
+          setData({
+            lot: thisLot as any,
+            parentAuction: parentPastAuction as any,
+            prevLot: prevLotRaw ? (toPastLot(prevLotRaw) as any) : null,
+            nextLot: nextLotRaw ? (toPastLot(nextLotRaw) as any) : null,
+            galleryImages: [thisLot.image],
+            isLive: false
+          });
+          setSelectedImageIndex(0);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (err) {
+        console.error('[LotDetailPage] Error fetching Supabase lot:', err);
+      }
+    }
+
+    loadFromDb();
+    return () => { isMounted = false; };
+
     setSelectedImageIndex(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [lotId, auctionId]);

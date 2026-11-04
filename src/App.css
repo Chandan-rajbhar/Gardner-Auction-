@@ -1897,6 +1897,7 @@ section[id] {
 }
 
 .detail-image-frame {
+  position: relative;
   background-color: #0c0e12;
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -5454,11 +5455,94 @@ section[id] {
 }
 
 .email-page-error-msg {
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 13.5px;
   color: #f87171;
   text-align: left;
-  padding-left: 4px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error-text-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.btn-error-signin {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #dfba52 0%, #cba135 100%);
+  color: #0c0e12;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 2px;
+}
+
+.btn-error-signin:hover {
+  background: linear-gradient(135deg, #f5cb50 0%, #dfba52 100%);
+  transform: translateY(-1px);
+}
+
+.email-page-auth-status {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+
+.auth-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(203, 161, 53, 0.25);
+  border-radius: 30px;
+  font-size: 13px;
+  color: #c4cbda;
+}
+
+.auth-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #dfba52;
+  box-shadow: 0 0 8px rgba(223, 186, 82, 0.8);
+  flex-shrink: 0;
+}
+
+.auth-status-dot.guest {
+  background-color: #94a3b8;
+  box-shadow: none;
+}
+
+.guest-login-link {
+  background: none;
+  border: none;
+  color: #dfba52;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font-size: inherit;
+  transition: color 0.15s ease;
+}
+
+.guest-login-link:hover {
+  color: #f5cb50;
 }
 
 .email-page-privacy-container {

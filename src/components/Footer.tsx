@@ -97,6 +97,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 src={brand.logo?.url || '/images/gardner_logo.png'}
                 alt={brand.logo?.alt || 'Gardner Auction Since 1960'}
                 className="footer-logo-img"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/images/gardner_logo.png';
+                }}
               />
               <div>
                 <span className="footer-brand-name">{brand.name || 'GARDNER AUCTION'}</span>

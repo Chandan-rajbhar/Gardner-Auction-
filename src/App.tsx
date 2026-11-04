@@ -1170,7 +1170,8 @@ const AppRoot: React.FC = () => {
     );
   }
 
-  if (!user) {
+  // Strict Super Admin route protection across all dashboard views
+  if (!user || user.role !== 'super_admin') {
     return <AuthPage />;
   }
 
