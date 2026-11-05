@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SettlementCustomer } from '../../types/auctionDetail';
 import { settlementService } from '../../services/settlementService';
-import { Save, X, AlertCircle, Loader2, Check } from 'lucide-react';
+import { paymentService, PAYPAL_ME_BASE_URL } from '../../services/paymentService';
+import { Save, X, AlertCircle, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
 
 export interface PaymentCashierModalProps {
   isOpen: boolean;
@@ -25,6 +26,11 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // PayPal Specific State
+  const [paypalRef, setPaypalRef] = useState('');
+  const [paypalStatus, setPaypalStatus] = useState<'Pending' | 'Successful'>('Pending');
+  const [paypalOpened, setPaypalOpened] = useState(false);
+
   // Initialize values when opened
   useEffect(() => {
     if (isOpen && customer) {
@@ -35,10 +41,14 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
       } else {
         setPaymentType('Select Account');
       }
-      setPaymentAmount(due > 0 ? due.toFixed(2) : '0.00');
+      const initialAmt = due > 0 ? due.toFixed(2) : '0.00';
+      setPaymentAmount(initialAmt);
       setRounding('N/A');
       setNotes('');
       setErrorMsg(null);
+      setPaypalOpened(false);
+      setPaypalStatus('Pending');
+      setPaypalRef(paymentService.generateReferenceNumber('INV', customer.bidderNumber));
     }
   }, [isOpen, customer]);
 
@@ -56,6 +66,13 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
   if (!isOpen || !customer) return null;
 
   const amountDue = (customer.balance !== undefined ? customer.balance : 0).toFixed(2);
+  const parsedAmt = parseFloat(paymentAmount) || 0;
+  const isPayPal = paymentType === 'PayPal (Online Payment)';
+
+  const handlePaypalClick = () => {
+    paymentService.openPayPalPaymentWindow(parsedAmt > 0 ? parsedAmt : parseFloat(amountDue));
+    setPaypalOpened(true);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,8 +84,8 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
     }
 
     const amt = parseFloat(paymentAmount);
-    if (isNaN(amt) || amt < 0) {
-      setErrorMsg('Please enter a valid payment amount.');
+    if (isNaN(amt) || amt <= 0) {
+      setErrorMsg('Please enter a valid payment amount greater than $0.00.');
       return;
     }
 
@@ -82,33 +99,73 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const resolvedPaymentType = paymentType === 'check written' ? 'Check Written' : (paymentType === 'cash' ? 'Cash' : paymentType);
-      const res = await settlementService.recordCustomerPayment(auctionId, customer.id, {
-        amount: amt,
-        paymentType: resolvedPaymentType,
-        notes: notes || ''
-      });
+      if (isPayPal) {
+        // --- PAYPAL ONLINE PAYMENT WORKFLOW ---
+        const refToUse = paypalRef.trim() || paymentService.generateReferenceNumber('INV', customer.bidderNumber);
+        const res = await paymentService.recordInvoicePayPalPayment({
+          auctionId,
+          invoiceId: customer.id,
+          customerId: customer.id,
+          amount: amt,
+          referenceNumber: refToUse,
+          notes: notes,
+          status: paypalStatus,
+          adminName: 'Cashier Desk'
+        });
 
-      if (res && res.balance !== undefined) {
-        customer.balance = res.balance;
-        customer.invoiceStatus = res.invoiceStatus as any;
-        if (res.depositApplied !== undefined) {
-          customer.depositApplied = res.depositApplied;
+        if (!res.success) {
+          setErrorMsg(res.error || 'Failed to record PayPal payment.');
+          setIsSubmitting(false);
+          return;
         }
-        if (res.depositRemaining !== undefined) {
-          customer.depositRemaining = res.depositRemaining;
-        }
-        if (res.paymentsReceived !== undefined) {
-          customer.paymentsReceived = res.paymentsReceived;
-        }
-        if (res.payment) {
-          customer.payments = [...(customer.payments || []), res.payment];
+
+        if (res.balance !== undefined) {
+          customer.balance = res.balance;
+          customer.invoiceStatus = res.invoiceStatus as any;
+          if (res.depositApplied !== undefined) {
+            customer.depositApplied = res.depositApplied;
+          }
+          if (res.depositRemaining !== undefined) {
+            customer.depositRemaining = res.depositRemaining;
+          }
+          if (res.paymentsReceived !== undefined) {
+            customer.paymentsReceived = res.paymentsReceived;
+          }
+          if (res.payment) {
+            customer.payments = [...(customer.payments || []), res.payment];
+          }
         }
       } else {
-        const remainingBalance = Math.max(0, (customer.balance || 0) - amt);
-        customer.balance = remainingBalance;
-        if (remainingBalance <= 0) {
-          customer.invoiceStatus = 'Paid';
+        // --- STANDARD PAYMENT METHODS WORKFLOW ---
+        const resolvedPaymentType = paymentType === 'check written' ? 'Check Written' : (paymentType === 'cash' ? 'Cash' : paymentType);
+        const res = await settlementService.recordCustomerPayment(auctionId, customer.id, {
+          amount: amt,
+          paymentType: resolvedPaymentType,
+          notes: notes || '',
+          status: 'Successful'
+        });
+
+        if (res && res.balance !== undefined) {
+          customer.balance = res.balance;
+          customer.invoiceStatus = res.invoiceStatus as any;
+          if (res.depositApplied !== undefined) {
+            customer.depositApplied = res.depositApplied;
+          }
+          if (res.depositRemaining !== undefined) {
+            customer.depositRemaining = res.depositRemaining;
+          }
+          if (res.paymentsReceived !== undefined) {
+            customer.paymentsReceived = res.paymentsReceived;
+          }
+          if (res.payment) {
+            customer.payments = [...(customer.payments || []), res.payment];
+          }
+        } else {
+          const remainingBalance = Math.max(0, (customer.balance || 0) - amt);
+          customer.balance = remainingBalance;
+          if (remainingBalance <= 0) {
+            customer.invoiceStatus = 'Paid';
+          }
         }
       }
 
@@ -172,18 +229,35 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
             borderBottom: '1px solid #e2e8f0'
           }}
         >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 700,
-              color: '#334155',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase'
-            }}
-          >
-            PAYMENT
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#334155',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase'
+              }}
+            >
+              PAYMENT
+            </h2>
+            {isPayPal && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  background: '#003087',
+                  color: '#ffffff',
+                  letterSpacing: '0.02em'
+                }}
+              >
+                PayPal Online
+              </span>
+            )}
+          </div>
 
           <button
             type="button"
@@ -236,17 +310,19 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
               <select
                 value={paymentType}
                 onChange={(e) => setPaymentType(e.target.value)}
+                id="select-settlement-payment-type"
                 style={{
                   width: '100%',
                   height: 38,
                   padding: '0 12px',
                   borderRadius: 4,
-                  border: '1px solid #cbd5e1',
+                  border: isPayPal ? '1.5px solid #0070ba' : '1px solid #cbd5e1',
                   fontSize: 13,
-                  background: '#ffffff',
+                  background: isPayPal ? '#f0f9ff' : '#ffffff',
                   color: '#1e293b',
                   boxSizing: 'border-box',
-                  outline: 'none'
+                  outline: 'none',
+                  fontWeight: isPayPal ? 600 : 400
                 }}
               >
                 <option value="Select Account">Select Account</option>
@@ -255,6 +331,9 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
                     Apply Deposit Credit (${customer.depositRemaining?.toFixed(2)} Available)
                   </option>
                 )}
+                <option value="PayPal (Online Payment)" style={{ fontWeight: 700, color: '#0070ba' }}>
+                  PayPal (Online Payment)
+                </option>
                 <option value="check written">check written</option>
                 <option value="cash">cash</option>
                 <option value="credit card">credit card</option>
@@ -293,9 +372,11 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 required
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
+                id="input-settlement-payment-amount"
                 placeholder="0.00"
                 style={{
                   width: '100%',
@@ -307,10 +388,157 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
                   background: '#ffffff',
                   color: '#1e293b',
                   boxSizing: 'border-box',
-                  outline: 'none'
+                  outline: 'none',
+                  fontFamily: 'var(--font-mono, monospace)',
+                  fontWeight: 600
                 }}
               />
             </div>
+
+            {/* PAYPAL SPECIAL WORKFLOW CONTAINER */}
+            {isPayPal && (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1.5px solid #bae6fd',
+                  borderRadius: 6,
+                  padding: '14px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{
+                        background: '#003087',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontStyle: 'italic',
+                        fontSize: 12,
+                        padding: '2px 8px',
+                        borderRadius: 3,
+                        fontFamily: 'Arial, sans-serif'
+                      }}
+                    >
+                      P
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>
+                        PayPal.me / HighlanderGoldSilver
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>
+                        Highlander Gold &amp; Silver Official Saleroom Account
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pay Now Button */}
+                  <button
+                    type="button"
+                    onClick={handlePaypalClick}
+                    id="btn-paypal-pay-now"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: '#0070ba',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '7px 14px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#003087')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#0070ba')}
+                  >
+                    <span>Pay Now (${(parsedAmt > 0 ? parsedAmt : parseFloat(amountDue)).toFixed(2)})</span>
+                    <ExternalLink size={13} />
+                  </button>
+                </div>
+
+                {paypalOpened && (
+                  <div
+                    style={{
+                      background: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      borderRadius: 4,
+                      padding: '6px 10px',
+                      fontSize: 11.5,
+                      color: '#065f46',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <CheckCircle2 size={14} color="#059669" />
+                    <span>PayPal link opened in new tab. Verify transaction status below.</span>
+                  </div>
+                )}
+
+                {/* PayPal Transaction Reference */}
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', alignItems: 'center', gap: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                    Reference / Ref #
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={paypalRef}
+                    onChange={(e) => setPaypalRef(e.target.value)}
+                    placeholder="e.g. PP-INV-..."
+                    id="input-paypal-invoice-ref"
+                    style={{
+                      width: '100%',
+                      height: 34,
+                      padding: '0 10px',
+                      borderRadius: 4,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 12,
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      boxSizing: 'border-box',
+                      fontFamily: 'var(--font-mono, monospace)'
+                    }}
+                  />
+                </div>
+
+                {/* Payment Verification Status */}
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', alignItems: 'center', gap: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                    Payment Status
+                  </label>
+                  <select
+                    value={paypalStatus}
+                    onChange={(e) => setPaypalStatus(e.target.value as any)}
+                    id="select-paypal-payment-status"
+                    style={{
+                      width: '100%',
+                      height: 34,
+                      padding: '0 10px',
+                      borderRadius: 4,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 12,
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="Pending">Pending Verification (Default for PayPal Link)</option>
+                    <option value="Successful">Verified &amp; Successful (Deducts Balance Immediately)</option>
+                  </select>
+                </div>
+
+                <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4 }}>
+                  ℹ️ <strong>Admin Verification Policy:</strong> Selecting <em>Pending Verification</em> stores this payment in history without adjusting customer balance until funds are verified. Selecting <em>Verified &amp; Successful</em> immediately deducts the payment from customer balance and updates settlement ledger.
+                </div>
+              </div>
+            )}
 
             {/* Rounding */}
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', alignItems: 'center', gap: 16 }}>
@@ -344,7 +572,8 @@ export const PaymentCashierModal: React.FC<PaymentCashierModalProps> = ({
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes"
+                placeholder="Receipt details, transaction ID, cashier memo..."
+                id="textarea-settlement-payment-notes"
                 style={{
                   width: '100%',
                   padding: '8px 12px',

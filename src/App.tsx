@@ -213,7 +213,22 @@ const AuctionDaySection: React.FC<{
 const AdminConsole: React.FC = () => {
   const { user } = useAuth();
   const [currentSection, setCurrentSection] = useState<NavigationSection>('overview');
-  const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc-001');
+  const [selectedAuctionId, setSelectedAuctionId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gardner_selected_auction_id');
+      if (saved) return saved;
+    }
+    return 'auc-1792654367075';
+  });
+
+  const handleSelectAuction = (id: string) => {
+    setSelectedAuctionId(id);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gardner_selected_auction_id', id);
+      }
+    } catch (_) {}
+  };
   const [activeAuctionDetailId, setActiveAuctionDetailId] = useState<string | null>(null);
   const [auctionStage, setAuctionStage] = useState<StageType>('pre-auction');
   const [auctionSubTab, setAuctionSubTab] = useState<string | undefined>(undefined);
@@ -272,7 +287,10 @@ const AdminConsole: React.FC = () => {
           if (mapped.length > 0) {
             setSelectedAuctionId(prev => {
               if (prev && mapped.some(a => a.id === prev)) return prev;
-              return mapped[0].id;
+              const saved = typeof window !== 'undefined' ? localStorage.getItem('gardner_selected_auction_id') : null;
+              if (saved && mapped.some(a => a.id === saved)) return saved;
+              const preferred = mapped.find(a => a.id === 'auc-1792654367075') || mapped[0];
+              return preferred.id;
             });
           }
         }
@@ -860,7 +878,7 @@ const AdminConsole: React.FC = () => {
           currentSection={currentSection}
           auctions={auctions}
           selectedAuctionId={selectedAuctionId}
-          onSelectAuction={setSelectedAuctionId}
+          onSelectAuction={handleSelectAuction}
           onToggleSidebar={handleToggleSidebar}
           onOpenMobileMenu={handleToggleSidebar}
           isSidebarOpen={isSidebarOpen}
@@ -903,7 +921,7 @@ const AdminConsole: React.FC = () => {
             <AuctionsView
               auctions={auctions}
               selectedAuctionId={selectedAuctionId}
-              onSelectAuction={setSelectedAuctionId}
+              onSelectAuction={handleSelectAuction}
               onAddAuction={(newAuc) => setAuctions(prev => [newAuc, ...prev])}
               onNavigate={handleNavigateSection}
               onSyncHiBid={triggerHiBidSync}
@@ -984,7 +1002,7 @@ const AdminConsole: React.FC = () => {
               setLots={setLots}
               availableAuctions={auctions}
               selectedAuctionId={selectedAuctionId}
-              onSelectAuction={setSelectedAuctionId}
+              onSelectAuction={handleSelectAuction}
               onNavigateReports={() => handleNavigateSection('reports')}
             />
           )}
@@ -1001,7 +1019,7 @@ const AdminConsole: React.FC = () => {
               }}
               selectedAuctionId={selectedAuctionId}
               availableAuctions={auctions}
-              onSelectAuction={setSelectedAuctionId}
+              onSelectAuction={handleSelectAuction}
               onNavigateAuctions={() => handleNavigateSection('auctions')}
               onNavigateSection={handleNavigateSection}
             />
@@ -1013,7 +1031,7 @@ const AdminConsole: React.FC = () => {
               lots={lots}
               selectedAuctionId={selectedAuctionId}
               availableAuctions={auctions}
-              onSelectAuction={setSelectedAuctionId}
+              onSelectAuction={handleSelectAuction}
             />
           )}
 

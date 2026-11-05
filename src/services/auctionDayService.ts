@@ -718,6 +718,22 @@ class AuctionDayService {
     depositData: Omit<BidderDeposit, 'id' | 'createdAt'>
   ): Promise<{ success: boolean; deposit?: BidderDeposit; error?: string }> {
     try {
+      // Prevent duplicate deposit creation if reference number is provided
+      if (depositData.referenceNumber && depositData.referenceNumber.trim()) {
+        const { data: existingDep } = await supabaseAdmin
+          .from('bidder_deposits')
+          .select('id, reference_number')
+          .eq('auction_id', auctionId)
+          .eq('reference_number', depositData.referenceNumber.trim())
+          .maybeSingle();
+
+        if (existingDep) {
+          return {
+            success: false,
+            error: `A deposit with reference "${depositData.referenceNumber.trim()}" already exists.`
+          };
+        }
+      }
       const depId = `dep-${Date.now()}`;
       const nowIso = new Date().toISOString();
       const amount = Number(depositData.amount) || 0;
@@ -1261,7 +1277,18 @@ class AuctionDayService {
    */
   public async deleteDeposit(auctionId: string, depositId: string): Promise<boolean> {
     try {
+      // Prevent deleting deposits already applied to invoices
       try {
+        const { data: depCheck } = await supabaseAdmin
+          .from('bidder_deposits')
+          .select('amount_applied, status')
+          .eq('id', depositId)
+          .maybeSingle();
+
+        if (depCheck && (Number(depCheck.amount_applied) > 0 || depCheck.status === 'Applied')) {
+          console.warn('[AuctionDayService] Cannot delete deposit: already applied to an invoice.');
+          return false;
+        }
         await supabaseAdmin.from('bidder_deposits').delete().eq('id', depositId);
       } catch (_) {}
 

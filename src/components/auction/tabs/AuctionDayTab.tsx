@@ -13,6 +13,7 @@ import { FormField } from '../../Common/FormField';
 import { auctionDayService, AuctionDayMetrics } from '../../../services/auctionDayService';
 import { lotsService } from '../../../services/lotsService';
 import { settlementService } from '../../../services/settlementService';
+import { paymentService, PAYPAL_ME_BASE_URL } from '../../../services/paymentService';
 import { supabase, supabaseAdmin } from '../../../lib/supabase';
 import {
   Loader2,
@@ -2205,19 +2206,34 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
 
     setIsRecordingDeposit(true);
     try {
-      const res = await auctionDayService.recordDeposit(auction.id, {
-        auctionId: auction.id,
-        registrationId: matchedReg?.id,
-        bidCardNumber: matchedReg?.bidCardNumber || 'Walk-In',
-        bidderName: matchedReg?.bidderName || 'Walk-In Customer',
-        amount: parsedAmount,
-        paymentMethod: newDepMethod,
-        status: newDepStatus,
-        date: new Date().toISOString().split('T')[0],
-        referenceNumber: newDepRef.trim(),
-        notes: newDepNotes.trim(),
-        receivedBy: user?.name || 'Staff'
-      });
+      let res: { success: boolean; deposit?: BidderDeposit; error?: string };
+      if (newDepMethod === 'PayPal (Online Payment)' || (newDepMethod as any) === 'PayPal') {
+        res = await paymentService.recordPayPalDeposit({
+          auctionId: auction.id,
+          registrationId: matchedReg?.id,
+          bidCardNumber: matchedReg?.bidCardNumber || 'Walk-In',
+          bidderName: matchedReg?.bidderName || 'Walk-In Customer',
+          amount: parsedAmount,
+          referenceNumber: newDepRef.trim(),
+          notes: newDepNotes.trim(),
+          status: newDepStatus as any,
+          receivedBy: user?.name || 'Staff'
+        });
+      } else {
+        res = await auctionDayService.recordDeposit(auction.id, {
+          auctionId: auction.id,
+          registrationId: matchedReg?.id,
+          bidCardNumber: matchedReg?.bidCardNumber || 'Walk-In',
+          bidderName: matchedReg?.bidderName || 'Walk-In Customer',
+          amount: parsedAmount,
+          paymentMethod: newDepMethod,
+          status: newDepStatus,
+          date: new Date().toISOString().split('T')[0],
+          referenceNumber: newDepRef.trim(),
+          notes: newDepNotes.trim(),
+          receivedBy: user?.name || 'Staff'
+        });
+      }
 
       if (res.success && res.deposit) {
         setDeposits(prev => [res.deposit!, ...prev]);
@@ -2717,17 +2733,32 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
       if (depositDrawer.mode === 'add') {
         const targetRegId = canonicalRegIdMap.get(drawerDepBidderId) || drawerDepBidderId;
         const matchedReg = uniqueRegisteredBidders.find(r => r.id === targetRegId) || uniqueRegisteredBidders.find(r => r.id === drawerDepBidderId) || registrations.find(r => r.id === targetRegId);
-        const res = await auctionDayService.recordDeposit(auction.id, {
-          registrationId: matchedReg?.id,
-          bidCardNumber: matchedReg?.bidCardNumber || 'WALK-IN',
-          bidderName: matchedReg?.bidderName || 'Walk-In Customer',
-          amount: parsedAmount,
-          paymentMethod: drawerDepMethod,
-          status: drawerDepStatus,
-          referenceNumber: drawerDepRef.trim() || undefined,
-          notes: drawerDepNotes.trim() ? `${drawerDepNotes.trim()} (Recorded by ${user?.name || 'Staff'})` : `Deposit logged by ${user?.name || 'Staff'}.`,
-          receivedBy: user?.name || 'Admin Clerk'
-        });
+        let res: { success: boolean; deposit?: BidderDeposit; error?: string };
+        if (drawerDepMethod === 'PayPal (Online Payment)' || (drawerDepMethod as any) === 'PayPal') {
+          res = await paymentService.recordPayPalDeposit({
+            auctionId: auction.id,
+            registrationId: matchedReg?.id,
+            bidCardNumber: matchedReg?.bidCardNumber || 'WALK-IN',
+            bidderName: matchedReg?.bidderName || 'Walk-In Customer',
+            amount: parsedAmount,
+            referenceNumber: drawerDepRef.trim() || undefined,
+            notes: drawerDepNotes.trim() ? `${drawerDepNotes.trim()} (Recorded by ${user?.name || 'Staff'})` : `PayPal deposit logged by ${user?.name || 'Staff'}.`,
+            status: drawerDepStatus as any,
+            receivedBy: user?.name || 'Admin Clerk'
+          });
+        } else {
+          res = await auctionDayService.recordDeposit(auction.id, {
+            registrationId: matchedReg?.id,
+            bidCardNumber: matchedReg?.bidCardNumber || 'WALK-IN',
+            bidderName: matchedReg?.bidderName || 'Walk-In Customer',
+            amount: parsedAmount,
+            paymentMethod: drawerDepMethod,
+            status: drawerDepStatus,
+            referenceNumber: drawerDepRef.trim() || undefined,
+            notes: drawerDepNotes.trim() ? `${drawerDepNotes.trim()} (Recorded by ${user?.name || 'Staff'})` : `Deposit logged by ${user?.name || 'Staff'}.`,
+            receivedBy: user?.name || 'Admin Clerk'
+          });
+        }
 
         if (res.success && res.deposit) {
           setDeposits(prev => [res.deposit!, ...prev]);
@@ -2831,6 +2862,18 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
     id: string,
     label: string
   ) => {
+    // Prevent deleting deposits already applied to invoices
+    if (entityType === 'deposit') {
+      const dep = deposits.find(d => d.id === id);
+      if (dep && ((Number(dep.amountApplied) || 0) > 0 || dep.status === 'Applied')) {
+        showToast(
+          'error',
+          'Cannot Delete Deposit',
+          `This deposit of ${formatCurrency(dep.amount)} has already been applied (${formatCurrency(dep.amountApplied || 0)}) to an invoice. Deposited funds applied to invoices cannot be deleted.`
+        );
+        return;
+      }
+    }
     const titles: Record<string, string> = {
       bidder: 'Delete Bidder Registration',
       altBid: 'Delete Alternate Bid',
@@ -2879,6 +2922,12 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
           showToast('error', 'Error', 'Could not remove portal node.');
         }
       } else if (deleteConfirm.entityType === 'deposit') {
+        const targetDep = deposits.find(d => d.id === deleteConfirm.id);
+        if (targetDep && ((Number(targetDep.amountApplied) || 0) > 0 || targetDep.status === 'Applied')) {
+          showToast('error', 'Cannot Delete Deposit', 'This deposit has already been applied to an invoice.');
+          setDeleteConfirm(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          return;
+        }
         const ok = await auctionDayService.deleteDeposit(auction.id, deleteConfirm.id);
         if (ok) {
           setDeposits(prev => prev.filter(d => d.id !== deleteConfirm.id));
@@ -8343,11 +8392,38 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                         }}
                       >
                         <td style={{ padding: '8px 12px', fontWeight: 700, color: '#0f172a' }}>
-                          <span style={{ color: '#0f172a', fontFamily: 'var(--font-mono)' }}>#{dep.bidCardNumber}</span>
-                          <span style={{ marginLeft: 6, fontWeight: 500, color: '#475569' }}>— {dep.bidderName}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ color: '#0f172a', fontFamily: 'var(--font-mono)' }}>#{dep.bidCardNumber}</span>
+                            <span style={{ fontWeight: 500, color: '#475569' }}>— {dep.bidderName}</span>
+                            {dep.paymentMethod?.toLowerCase().includes('paypal') && (
+                              <span style={{
+                                fontSize: 9.5,
+                                fontWeight: 800,
+                                background: '#003087',
+                                color: '#ffffff',
+                                padding: '1px 5px',
+                                borderRadius: 3,
+                                letterSpacing: '0.02em'
+                              }}>
+                                PAYPAL
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ padding: '8px 12px', color: '#64748b' }}>
-                          {dep.date || '—'}
+                          <div>{dep.date || '—'}</div>
+                          <div style={{ marginTop: 2 }}>
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 10,
+                              background: dep.status === 'Collected' ? '#dcfce7' : dep.status === 'Pending' ? '#fef3c7' : dep.status === 'Applied' ? '#e0f2fe' : '#fee2e2',
+                              color: dep.status === 'Collected' ? '#15803d' : dep.status === 'Pending' ? '#b45309' : dep.status === 'Applied' ? '#0369a1' : '#b91c1c'
+                            }}>
+                              {dep.status || 'Collected'}
+                            </span>
+                          </div>
                         </td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#0f172a' }}>
                           {formatCurrency(amount)}
@@ -8366,6 +8442,22 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                                 icon: <Eye size={14} />,
                                 onClick: () => handleOpenDepositDrawer('view', dep)
                               },
+                              ...(dep.status === 'Pending' ? [
+                                {
+                                  label: 'Verify Payment (Collected)',
+                                  icon: <CheckCircle2 size={14} color="#059669" />,
+                                  onClick: async () => {
+                                    const res = await paymentService.verifyPayPalDeposit(auction.id, dep.id, user?.name || 'Saleroom Admin');
+                                    if (res.success) {
+                                      setDeposits(prev => prev.map(d => d.id === dep.id ? { ...d, status: 'Collected', amountRemaining: (Number(d.amount) - (Number(d.amountApplied) || 0)) } : d));
+                                      showToast('success', 'Deposit Verified', `PayPal deposit for #${dep.bidCardNumber} marked Collected & active.`);
+                                      try { await settlementService.syncSettlementsFromSoldLots(auction.id); } catch (_) {}
+                                    } else {
+                                      showToast('error', 'Verification Failed', res.error || 'Failed to verify PayPal deposit.');
+                                    }
+                                  }
+                                }
+                              ] : []),
                               {
                                 label: 'Edit Deposit',
                                 icon: <Edit size={14} />,
@@ -8500,6 +8592,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 size="md"
                 options={[
                   { value: 'Credit Card', label: 'Credit Card' },
+                  { value: 'PayPal (Online Payment)', label: 'PayPal (Online Payment)' },
                   { value: 'Cash', label: 'Cash' },
                   { value: 'Wire Transfer', label: 'Wire Transfer' },
                   { value: 'Check', label: 'Check' },
@@ -8523,6 +8616,70 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
               />
             </FormField>
           </div>
+
+          {newDepMethod === 'PayPal (Online Payment)' && (
+            <div style={{
+              background: '#f8fafc',
+              border: '1.5px solid #bae6fd',
+              borderRadius: 6,
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    background: '#003087',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontStyle: 'italic',
+                    fontSize: 11,
+                    padding: '2px 7px',
+                    borderRadius: 3
+                  }}>
+                    P
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>
+                      PayPal.me / HighlanderGoldSilver
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                      Official Saleroom Bidder Deposit Link
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const amt = parseFloat(newDepAmount) || 1000;
+                    paymentService.openPayPalPaymentWindow(amt);
+                  }}
+                  id="btn-paypal-deposit-pay-now"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#0070ba',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 4,
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>Pay Now (${parseFloat(newDepAmount || '0').toFixed(2)})</span>
+                  <ExternalLink size={13} />
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4 }}>
+                ℹ️ <strong>Online Deposit Policy:</strong> PayPal deposits remain <em>Pending</em> until verified by cashier staff. Once marked <em>Collected</em>, deposit credit becomes immediately available to apply toward bidder invoices.
+              </div>
+            </div>
+          )}
 
           <div className="responsive-form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             <FormField label="Reference / Check #">
@@ -9632,6 +9789,7 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                   size="md"
                   options={[
                     { value: 'Credit Card', label: 'Credit Card' },
+                    { value: 'PayPal (Online Payment)', label: 'PayPal (Online Payment)' },
                     { value: 'Cash', label: 'Cash' },
                     { value: 'Wire Transfer', label: 'Wire Transfer' },
                     { value: 'Check', label: 'Company / Personal Check' },
@@ -9668,6 +9826,70 @@ export const AuctionDayTab: React.FC<AuctionDayTabProps> = ({
                 />
               </FormField>
             </div>
+
+            {drawerDepMethod === 'PayPal (Online Payment)' && (
+              <div style={{
+                background: '#f8fafc',
+                border: '1.5px solid #bae6fd',
+                borderRadius: 6,
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      background: '#003087',
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      fontStyle: 'italic',
+                      fontSize: 11,
+                      padding: '2px 7px',
+                      borderRadius: 3
+                    }}>
+                      P
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>
+                        PayPal.me / HighlanderGoldSilver
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>
+                        Official Saleroom Bidder Deposit Link
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const amt = parseFloat(drawerDepAmount) || 1000;
+                      paymentService.openPayPalPaymentWindow(amt);
+                    }}
+                    id="btn-drawer-paypal-pay-now"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: '#0070ba',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '6px 14px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>Pay Now (${parseFloat(drawerDepAmount || '0').toFixed(2)})</span>
+                    <ExternalLink size={13} />
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4 }}>
+                  ℹ️ <strong>Online Deposit Policy:</strong> PayPal deposits remain <em>Pending</em> until verified by cashier staff. Once marked <em>Collected</em>, deposit credit becomes immediately available to apply toward bidder invoices.
+                </div>
+              </div>
+            )}
 
             <FormField label="Notes">
               <textarea

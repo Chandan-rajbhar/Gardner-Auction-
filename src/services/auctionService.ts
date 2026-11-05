@@ -127,7 +127,9 @@ class AuctionService {
 
   private persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.auctions));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.auctions));
+      }
     } catch (e) {
       console.error('[AuctionService] Failed to persist auctions to localStorage:', e);
     }

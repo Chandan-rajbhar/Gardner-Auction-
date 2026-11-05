@@ -57,7 +57,8 @@ export function parsePaymentsFromNotes(notes?: string): SettlementPayment[] {
           method: String(p.method || 'Credit Card'),
           date: String(p.date || new Date().toISOString().split('T')[0]),
           notes: String(p.notes || ''),
-          status: (p.status as any) || 'Successful'
+          status: (p.status as any) || 'Successful',
+          referenceNumber: p.referenceNumber ? String(p.referenceNumber) : undefined
         }));
       }
     } catch (_) { }
@@ -236,8 +237,9 @@ export class SettlementService {
           const pLower = (inv.paddle_number || '').trim().toLowerCase();
           const bLower = (inv.buyer_name || '').trim().toLowerCase();
           matchedDepRows = depRows.filter((d: any) =>
-            (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
-            (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+            (d.status === 'Collected' || d.status === 'Applied') &&
+            ((d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+             (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower))
           );
           totalDepositAvailable = matchedDepRows.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
         }
@@ -329,6 +331,8 @@ export class SettlementService {
       amount: number;
       paymentType: string;
       notes?: string;
+      referenceNumber?: string;
+      status?: 'Successful' | 'Pending' | 'Failed' | 'Refunded' | 'Cancelled';
     }
   ): Promise<{
     success: boolean;
@@ -358,7 +362,8 @@ export class SettlementService {
         method: paymentData.paymentType || 'Credit Card',
         date: new Date().toISOString().split('T')[0],
         notes: paymentData.notes || '',
-        status: 'Successful'
+        status: paymentData.status || 'Successful',
+        referenceNumber: paymentData.referenceNumber
       };
 
       const updatedPayments = [...existingPayments, newPayment];
@@ -440,8 +445,9 @@ export class SettlementService {
         const pLower = (row.paddle_number || '').trim().toLowerCase();
         const bLower = (row.buyer_name || '').trim().toLowerCase();
         const matched = depRows.filter((d: any) =>
-          (d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
-          (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower)
+          (d.status === 'Collected' || d.status === 'Applied') &&
+          ((d.bid_card_number && String(d.bid_card_number).trim().toLowerCase() === pLower) ||
+           (d.bidder_name && String(d.bidder_name).trim().toLowerCase() === bLower))
         );
         totalDepositAvailable = matched.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
       }
@@ -728,9 +734,9 @@ export class SettlementService {
         const itemsCount = paddleLots.length;
         const totalPurchaseAmount = Math.round((lotSubtotal + existingChargesTotal + taxAmount + shippingFee) * 100) / 100;
 
-        // Find available deposits for this paddle
+        // Find available deposits for this paddle (only cleared/collected deposits)
         const bidderDeposits = allDeposits.filter((d: any) => {
-          if (d.status === 'Refunded') return false;
+          if (d.status !== 'Collected' && d.status !== 'Applied') return false;
           const depPaddle = String(d.bid_card_number || '').trim().toLowerCase();
           const depName = String(d.bidder_name || '').trim().toLowerCase();
           return depPaddle === paddleLower || (depName && depName === buyerName.toLowerCase());

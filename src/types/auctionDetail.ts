@@ -92,8 +92,8 @@ export interface BidderDeposit {
   amount: number;
   amountApplied?: number;
   amountRemaining?: number;
-  paymentMethod: 'Credit Card' | 'Cash' | 'Wire Transfer' | 'Check' | "Cashier's Check" | 'ACH';
-  status: 'Collected' | 'Pending' | 'Refunded' | 'Applied';
+  paymentMethod: 'Credit Card' | 'Cash' | 'Wire Transfer' | 'Check' | "Cashier's Check" | 'ACH' | 'PayPal' | 'PayPal (Online Payment)';
+  status: 'Collected' | 'Pending' | 'Refunded' | 'Applied' | 'Failed' | 'Cancelled';
   date: string;
   referenceNumber?: string;
   notes?: string;
@@ -161,7 +161,8 @@ export interface SettlementPayment {
   method: string;
   date: string;
   notes?: string;
-  status: 'Successful' | 'Pending' | 'Failed' | 'Refunded';
+  status: 'Successful' | 'Pending' | 'Failed' | 'Refunded' | 'Cancelled';
+  referenceNumber?: string;
 }
 
 export interface SettlementCustomer {

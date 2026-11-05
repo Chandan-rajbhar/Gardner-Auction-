@@ -647,13 +647,44 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         gap: 14,
         marginBottom: 20
       }}>
-        {/* Left: Auction Code & Return to All Auctions */}
+        {/* Left: Auction Code & Switcher & Return to All Auctions */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--gold-primary, #a37a3b)', fontSize: 18, lineHeight: 1 }}>❖</span>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-main, #0f172a)', letterSpacing: '-0.01em' }}>
-              {currentAuction.code || 'GA-2026-10-GOLD'}
-            </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--gold-primary, #a37a3b)', fontSize: 18, lineHeight: 1 }}>❖</span>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-main, #0f172a)', letterSpacing: '-0.01em' }}>
+                {currentAuction.code || 'GA-2026-10-GOLD'}
+              </h1>
+            </div>
+
+            {availableAuctions && availableAuctions.length > 0 && onSelectAuction && (
+              <div style={{ minWidth: 260 }}>
+                <select
+                  value={currentAuctionId}
+                  onChange={(e) => onSelectAuction(e.target.value)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    border: '1.5px solid var(--border-color, #cbd5e1)',
+                    background: '#ffffff',
+                    color: 'var(--text-main, #0f172a)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                  title="Switch Auction"
+                  aria-label="Switch Auction"
+                >
+                  {availableAuctions.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.title || a.code} ({a.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <button
             type="button"

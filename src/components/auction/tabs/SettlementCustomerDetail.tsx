@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SettlementCustomer, SettlementEntry } from '../../../types/auctionDetail';
 import { settlementService, ShipmentRecord } from '../../../services/settlementService';
+import { paymentService } from '../../../services/paymentService';
 import { FormModal } from '../../Common/FormModal';
 import { FormField } from '../../Common/FormField';
 import { EmailSettlementModal } from '../../Common/EmailSettlementModal';
@@ -134,8 +135,62 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
     }
   };
 
+  const reloadCurrentCustomer = async () => {
+    try {
+      const refreshedList = await settlementService.getBidderSettlements(auctionId);
+      const updated = refreshedList?.find(c => c.id === localCustomer.id);
+      if (updated) {
+        setLocalCustomer(updated);
+      }
+    } catch (_) {}
+  };
+
+  // Verify pending online payment
+  const handleVerifyInvoicePayment = async (paymentId: string) => {
+    setIsProcessing(true);
+    setErrorMsg(null);
+    try {
+      const res = await paymentService.verifyInvoicePayment(localCustomer.id, paymentId, 'Saleroom Admin');
+      if (res.success) {
+        setPaySuccessMsg('Payment successfully verified! Customer balance updated.');
+        setTimeout(() => setPaySuccessMsg(null), 4000);
+        await reloadCurrentCustomer();
+        onRefresh();
+      } else {
+        setErrorMsg(res.error || 'Failed to verify payment.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error verifying payment.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Cancel pending online payment
+  const handleCancelInvoicePayment = async (paymentId: string) => {
+    if (!window.confirm('Cancel this payment transaction?')) return;
+    setIsProcessing(true);
+    setErrorMsg(null);
+    try {
+      const res = await paymentService.cancelInvoicePayment(localCustomer.id, paymentId, 'Admin cancelled');
+      if (res.success) {
+        setPaySuccessMsg('Payment marked cancelled.');
+        setTimeout(() => setPaySuccessMsg(null), 4000);
+        await reloadCurrentCustomer();
+        onRefresh();
+      } else {
+        setErrorMsg(res.error || 'Failed to cancel payment.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error cancelling payment.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Pay customer / Record payment — via PaymentCashierModal
   const handlePaymentSuccess = () => {
+    reloadCurrentCustomer();
     setPaySuccessMsg(`Payment and cashier settlement confirmed for ${localCustomer.name}.`);
     setTimeout(() => setPaySuccessMsg(null), 4000);
     setLocalCustomer(prev => ({
@@ -719,6 +774,162 @@ export const SettlementCustomerDetail: React.FC<SettlementCustomerDetailProps> =
               </div>
             </div>
           )}
+
+          {/* Payment History & Transactions Section */}
+          <div style={{ marginTop: 28, borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CreditCard size={18} color="var(--gold-primary, #a37a3b)" />
+                <h4 className="font-serif" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-main, #0f172a)', margin: 0 }}>
+                  Payment History &amp; Online Transactions
+                </h4>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  background: (localCustomer.payments && localCustomer.payments.length > 0) ? '#e0f2fe' : '#f1f5f9',
+                  color: (localCustomer.payments && localCustomer.payments.length > 0) ? '#0284c7' : '#64748b'
+                }}>
+                  {localCustomer.payments ? localCustomer.payments.length : 0} {localCustomer.payments?.length === 1 ? 'Record' : 'Records'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsPaymentModalOpen(true)}
+                disabled={isProcessing}
+                id="btn-add-payment-history"
+                style={{ height: 32, padding: '0 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={13} />
+                <span>Add Payment / PayPal</span>
+              </button>
+            </div>
+
+            {(!localCustomer.payments || localCustomer.payments.length === 0) ? (
+              <div style={{ padding: '24px 16px', textAlign: 'center', background: '#f8fafc', borderRadius: 6, border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 12.5 }}>
+                No payment transactions recorded for this invoice yet. Click <strong>Add Payment / PayPal</strong> or <strong>PAY CUSTOMER / CASHIER</strong> above to process a payment.
+              </div>
+            ) : (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+                <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <tr>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Date</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Payment Method</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Reference / Transaction #</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#475569' }}>Amount</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#475569' }}>Status</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Notes</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#475569', width: 140 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localCustomer.payments.map((p) => {
+                      const isPending = p.status === 'Pending';
+                      const isSuccess = p.status === 'Successful';
+                      const isPaypal = (p.method || '').toLowerCase().includes('paypal');
+
+                      return (
+                        <tr key={p.id} style={{ borderTop: '1px solid #f1f5f9', background: isPending ? '#fffdf7' : '#ffffff' }}>
+                          <td style={{ padding: '8px 12px', color: '#475569', whiteSpace: 'nowrap' }}>
+                            {p.date}
+                          </td>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              {isPaypal ? (
+                                <span style={{
+                                  background: '#003087',
+                                  color: '#ffffff',
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  padding: '1px 6px',
+                                  borderRadius: 3
+                                }}>
+                                  PAYPAL
+                                </span>
+                              ) : null}
+                              <span>{p.method}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono, monospace)', color: '#0284c7', fontSize: 12 }}>
+                            {p.referenceNumber || (p.notes && p.notes.includes('[Ref:') ? p.notes.split('[Ref:')[1].split(']')[0] : '—')}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)', color: isSuccess ? '#15803d' : '#0f172a' }}>
+                            {formatCurrency(p.amount)}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: isSuccess ? '#dcfce7' : isPending ? '#fef3c7' : '#fee2e2',
+                              color: isSuccess ? '#15803d' : isPending ? '#b45309' : '#b91c1c'
+                            }}>
+                              {isSuccess ? 'Successful' : isPending ? 'Pending Verification' : (p.status || 'Processed')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 12px', color: '#64748b', fontSize: 12, maxWidth: 220 }}>
+                            {p.notes || '—'}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            {isPending ? (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyInvoicePayment(p.id)}
+                                  disabled={isProcessing}
+                                  title="Confirm payment received in PayPal account & deduct from balance"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    background: '#15803d',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: 4,
+                                    padding: '4px 8px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Check size={12} />
+                                  <span>Verify</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelInvoicePayment(p.id)}
+                                  disabled={isProcessing}
+                                  title="Cancel or mark this pending payment as rejected"
+                                  style={{
+                                    background: '#f1f5f9',
+                                    color: '#b91c1c',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 4,
+                                    padding: '4px 6px',
+                                    fontSize: 11,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: '#94a3b8' }}>Cleared</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
