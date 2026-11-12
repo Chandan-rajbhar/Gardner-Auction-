@@ -9,6 +9,53 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Suppress Vercel Toolbar & Feedback Injected Floating Menu Icon -->
+    <style>
+      vercel-live-feedback,
+      vercel-toolbar,
+      #__vercel-toolbar,
+      #vercel-live-feedback,
+      div[data-vercel-toolbar],
+      [id*="vercel-toolbar"],
+      [class*="vercel-toolbar"],
+      [data-vercel-toolbar],
+      iframe[src*="vercel.live"],
+      iframe[src*="_next-live"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        clip-path: inset(100%) !important;
+        position: fixed !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        width: 0 !important;
+        height: 0 !important;
+        z-index: -99999 !important;
+      }
+    </style>
+    <script>
+      (function() {
+        var removeVercelWidgets = function() {
+          var nodes = document.querySelectorAll(
+            'vercel-live-feedback, vercel-toolbar, #__vercel-toolbar, #vercel-live-feedback, [data-vercel-toolbar], iframe[src*="vercel.live"], iframe[src*="_next-live"]'
+          );
+          nodes.forEach(function(node) {
+            if (node && node.parentNode) {
+              node.parentNode.removeChild(node);
+            }
+          });
+        };
+        if (typeof MutationObserver !== 'undefined') {
+          var observer = new MutationObserver(function() {
+            removeVercelWidgets();
+          });
+          observer.observe(document.documentElement, { childList: true, subtree: true });
+        }
+        window.addEventListener('DOMContentLoaded', removeVercelWidgets);
+        window.addEventListener('load', removeVercelWidgets);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

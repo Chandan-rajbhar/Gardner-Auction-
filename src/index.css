@@ -10661,4 +10661,30 @@ body {
   transform: translateY(0);
 }
 
+/* ==========================================================================
+   Suppress Injected Vercel Toolbar & Feedback Menu Widget
+   ========================================================================== */
+vercel-live-feedback,
+vercel-toolbar,
+#__vercel-toolbar,
+#vercel-live-feedback,
+div[data-vercel-toolbar],
+[id*="vercel-toolbar"],
+[class*="vercel-toolbar"],
+[data-vercel-toolbar],
+iframe[src*="vercel.live"],
+iframe[src*="_next-live"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  clip-path: inset(100%) !important;
+  position: fixed !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  z-index: -99999 !important;
+}
+
 
